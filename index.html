@@ -431,8 +431,9 @@ const GIST_PAT_KEY  = 'jodal_gist_pat';
 const GIST_ID_KEY   = 'jodal_gist_id';
 const GIST_FILENAME = 'jodal_app_v2.json';
 
-function gistCreds(){return{pat:localStorage.getItem(GIST_PAT_KEY)||'',gid:localStorage.getItem(GIST_ID_KEY)||''};}
-function gistSaveCreds(pat,gid){localStorage.setItem(GIST_PAT_KEY,pat.trim());localStorage.setItem(GIST_ID_KEY,gid.trim());}
+function cleanAscii(s){return(s||'').replace(/[^\x20-\x7E]/g,'').trim();}
+function gistCreds(){return{pat:cleanAscii(localStorage.getItem(GIST_PAT_KEY)),gid:cleanAscii(localStorage.getItem(GIST_ID_KEY))};}
+function gistSaveCreds(pat,gid){localStorage.setItem(GIST_PAT_KEY,cleanAscii(pat));localStorage.setItem(GIST_ID_KEY,cleanAscii(gid));}
 
 function gistStatus(st,label){
   var btn=document.getElementById('btn-gist-sync');
@@ -461,10 +462,13 @@ function gistApplyData(obj){
 
 async function gistPull(){
   var c=gistCreds();if(!c.pat||!c.gid)return;
+  var pat=c.pat.replace(/[^\x20-\x7E]/g,'').trim();
+  var gid=c.gid.replace(/[^\x20-\x7E]/g,'').trim();
+  if(!pat||!gid)return;
   gistStatus('syncing');
   try{
-    var r=await fetch('https://api.github.com/gists/'+c.gid,{
-      headers:{'Authorization':'Bearer '+c.pat,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
+    var r=await fetch('https://api.github.com/gists/'+gid,{
+      headers:{'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
     });
     if(!r.ok){gistStatus('err','Pull '+r.status);return;}
     var data=await r.json();
@@ -480,13 +484,16 @@ async function gistPull(){
 var _gistTimer=null;
 async function gistPushNow(){
   var c=gistCreds();if(!c.pat||!c.gid)return;
+  var pat=c.pat.replace(/[^\x20-\x7E]/g,'').trim();
+  var gid=c.gid.replace(/[^\x20-\x7E]/g,'').trim();
+  if(!pat||!gid)return;
   gistStatus('syncing');
   try{
     var body={files:{}};
     body.files[GIST_FILENAME]={content:JSON.stringify(state)};
-    var r=await fetch('https://api.github.com/gists/'+c.gid,{
+    var r=await fetch('https://api.github.com/gists/'+gid,{
       method:'PATCH',
-      headers:{'Authorization':'Bearer '+c.pat,'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'},
+      headers:{'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'},
       body:JSON.stringify(body)
     });
     if(!r.ok){gistStatus('err','Push '+r.status);return;}
@@ -532,12 +539,12 @@ function openGistModal(){
   bk.addEventListener('click',function(e){if(e.target===bk)bk.remove();});
 
   document.getElementById('gist-btn-new').onclick=async function(){
-    var cr=cur();if(!cr.pat){msg('PAT를 먼저 입력하세요.','#dc2626');return;}
+    var cr=cur();var cpat=cleanAscii(cr.pat);if(!cpat){msg('PAT를 먼저 입력하세요.','#dc2626');return;}
     msg('Gist 생성 중…','#6b7280');
     try{
       var r=await fetch('https://api.github.com/gists',{
         method:'POST',
-        headers:{'Authorization':'Bearer '+cr.pat,'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'},
+        headers:{'Authorization':'Bearer '+cpat,'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'},
         body:JSON.stringify({description:'입찰적격심사 도구 데이터',public:false,files:{[GIST_FILENAME]:{content:JSON.stringify(state)}}})
       });
       if(!r.ok){msg('생성 실패 ('+r.status+')','#dc2626');return;}
