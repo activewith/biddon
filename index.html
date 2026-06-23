@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>입찰 적격심사 도구 v6.6</title>
+<title>입찰 적격심사 도구 v6.18</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -133,7 +133,7 @@ tr.hover:hover{background:#f8fafc}
 <div id="err-banner"></div>
 <header>
   <h1>입찰 적격심사 도구</h1>
-  <span class="small" style="color:#94a3b8">v6.15</span>
+  <span class="small" style="color:#94a3b8">v6.17</span>
   
   <button id="btn-gist-sync" title="GitHub Gist 클라우드 동기화"><span class="gist-icon">☁</span> <span id="gist-lbl">Gist</span></button>
   <button id="btn-settings" title="설정 (공고문분석 키워드)">⚙</button>
@@ -1134,21 +1134,23 @@ function calcSlot(combo,calc){
       신인도가점:calc.isJija?0:신인도*f,
       감점가점:calc.isJija?실효감점*f:감점*f,  // 지자체: 별표4/3/2 경영상태 감점 반영
       감점:calc.isJija?실효감점:감점,  // 표시용 감점도 동기화
-      over:(calc.jijaTier===1||calc.isDoRo)?false:(지분율_pct>최대지분율_pct+1e-9),
-      under:hasComp&&최하지분율_pct>0&&지분율_pct<최하지분율_pct-1e-9,
+      over:(calc.jijaTier===1||calc.isDoRo||s.grp==='분담'||s.grp==='소방'||s.grp==='통신')?false:(지분율_pct>최대지분율_pct+1e-9),
+      under:hasComp&&최하지분율_pct>0&&지분율_pct<최하지분율_pct-1e-9&&s.grp!=='분담'&&s.grp!=='소방'&&s.grp!=='통신',
       econ:econ
     });
   });
-  var 합산실적=ROW.reduce(function(a,r){return a+r.지분환산실적;},0);
-  var 합산시평=ROW.reduce(function(a,r){return a+r.지분환산시평;},0);
-  var 합산시평_raw=ROW.reduce(function(a,r){return a+(Number(r.시평액)||0);},0); // LH: 지분율 미적용 합산
-  var 신인도환산=ROW.reduce(function(a,r){return a+r.신인도가점;},0);
-  var 감점환산=ROW.reduce(function(a,r){return a+r.감점가점;},0);
+  // 분담/소방/통신은 적격계산에서 제외
+  var 적격계산ROW=ROW.filter(function(r){return r.grp!=='분담'&&r.grp!=='소방'&&r.grp!=='통신';});
+  var 합산실적=적격계산ROW.reduce(function(a,r){return a+r.지분환산실적;},0);
+  var 합산시평=적격계산ROW.reduce(function(a,r){return a+r.지분환산시평;},0);
+  var 합산시평_raw=적격계산ROW.reduce(function(a,r){return a+(Number(r.시평액)||0);},0); // LH: 지분율 미적용 합산
+  var 신인도환산=적격계산ROW.reduce(function(a,r){return a+r.신인도가점;},0);
+  var 감점환산=적격계산ROW.reduce(function(a,r){return a+r.감점가점;},0);
   var 순신인도=신인도환산-감점환산;
-  var 지분합_pct=ROW.reduce(function(a,r){return a+(Number(r.지분율)||0);},0);
-  var anyOver=ROW.some(function(r){return r.over;});
-  var anyUnder=ROW.some(function(r){return r.under;});
-  var used=ROW.filter(function(r){return(r.업체명||'').trim()!=='';}).length;
+  var 지분합_pct=적격계산ROW.reduce(function(a,r){return a+(Number(r.지분율)||0);},0);
+  var anyOver=적격계산ROW.some(function(r){return r.over;});
+  var anyUnder=적격계산ROW.some(function(r){return r.under;});
+  var used=적격계산ROW.filter(function(r){return(r.업체명||'').trim()!=='';}).length;
   var 지분율OK=Math.abs(지분합_pct-100)<1e-6&&!anyOver&&!anyUnder;
   var 적격=false,적격사유='';
   var lh데이터={};
@@ -1655,10 +1657,15 @@ function refreshDB(){
     if(only자사&&!c.is자사)return;
     if(fE||fT||fS){
       var jt=c.공사업종||'';
-      if(fE&&!fT&&!fS){if(jt!==''&&(jt.indexOf('전기')<0||jt.indexOf('통신')>=0||jt.indexOf('소방')>=0))return;}
-      else if(!fE&&fT&&!fS){if(jt.indexOf('통신')<0||jt.indexOf('전기')>=0||jt.indexOf('소방')>=0)return;}
-      else if(!fE&&!fT&&fS){if(jt.indexOf('소방')<0||jt.indexOf('전기')>=0||jt.indexOf('통신')>=0)return;}
-      else{if(fE&&jt!==''&&jt.indexOf('전기')<0)return;if(fT&&jt.indexOf('통신')<0)return;if(fS&&jt.indexOf('소방')<0)return;}
+      if(jt!==''){
+        var hasE=jt.indexOf('전기')>=0,hasT=jt.indexOf('통신')>=0,hasS=jt.indexOf('소방')>=0;
+        var matched=(fE&&hasE)||(fT&&hasT)||(fS&&hasS);
+        if(!matched)return;
+        if(!fE&&hasE)return;
+        if(!fT&&hasT)return;
+        if(!fS&&hasS)return;
+      }
+      // 빈 공사업종은 항상 통과
     }
     if(activeGrp&&!(c.groups&&c.groups.indexOf(activeGrp)>=0))return;
     if(search){var hay=(c.업체명+' '+(c.사업자번호||'')).toLowerCase();if(!hay.includes(search))return;}
@@ -3200,6 +3207,15 @@ function importXlsx(file,mode){
   reader.readAsArrayBuffer(file);
 }
 
+function shortCompName(nm){
+  return (nm||'')
+    .replace(/\(\s*주\s*\)|㈜|주식회사\s*/g,'')
+    .replace(/\([합유사]\)/g,'')
+    .replace(/\[\d+\]/g,'')
+    .replace(/기업|전력|전기|전설|공사/g,'')
+    .replace(/^[\s()]+|[\s()]+$/g,'')
+    .trim();
+}
 function exportCombosText(){
   var b=state.bid; var c=calcBid();
   // 1. 협정메세지 (<구성현황> 라인 제외, 끝 빈줄 제거)
@@ -3230,9 +3246,18 @@ function exportCombosText(){
     // 지분율 내림차순 정렬
     active.sort(function(a,b2){return (Number(b2.지분율)||0)-(Number(a.지분율)||0);});
     var line=active.map(function(row){
+      var nm=shortCompName(row.업체명);
+      if(row.grp==='분담'){
+        var _rest3=row.업체명||'',_pre3='';
+        if(_rest3.indexOf('(소방)')===0){_pre3='(소방)';_rest3=_rest3.slice(4);}
+        else if(_rest3.indexOf('(통신)')===0){_pre3='(통신)';_rest3=_rest3.slice(4);}
+        return _pre3+shortCompName(_rest3);
+      }
+      if(row.grp==='소방')return '(소방)'+nm;
+      if(row.grp==='통신')return '(통신)'+nm;
       var sn=FLOOR3((row.신인도||0)-(row.감점||0));
       var snSuffix=sn!==0?'('+(sn>0?'+':'')+sn.toFixed(1)+')':'';
-      return row.업체명+' '+Math.round(Number(row.지분율)||0)+snSuffix;
+      return nm+' '+Math.round(Number(row.지분율)||0)+snSuffix;
     }).join(' : ');
     comboLines.push(line);
   });
@@ -3254,7 +3279,7 @@ function exportCombosText(){
       }
       var sn2=FLOOR3((row.신인도||0)-(row.감점||0));
       var snSfx2=sn2!==0?'('+(sn2>0?'+':'')+sn2.toFixed(1)+')':'';
-      seen[nm]=true;maxLines.push(nm+' '+Math.floor(mx)+snSfx2);
+      seen[nm]=true;maxLines.push(shortCompName(nm)+' '+Math.floor(mx)+snSfx2);
     });
   });
   // 텍스트 조합
@@ -3381,8 +3406,8 @@ function exportTemplateXlsx(){
 
 // ████ SECTION: 조합-렌더링 (refreshCombos/renderSlotRow/updateSlotMath) ████
 // ── 조합 렌더링 ──────────────────────────────────────
-var TYPE_BG={'지역':'#dbeafe','실적':'#fef9c3','자사':'#dcfce7','검색':'#f5f3ff','1회':'#fff7ed','통신':'#ecfdf5','소방':'#fff1f2'};
-var TYPE_BD={'지역':'#93c5fd','실적':'#fde68a','자사':'#86efac','검색':'#c4b5fd','1회':'#fed7aa','통신':'#6ee7b7','소방':'#fda4af'};
+var TYPE_BG={'지역':'#dbeafe','실적':'#fef9c3','자사':'#dcfce7','검색':'#f5f3ff','1회':'#fff7ed','통신':'#ecfdf5','소방':'#fff1f2','분담':'#f1f5f9'};
+var TYPE_BD={'지역':'#93c5fd','실적':'#fde68a','자사':'#86efac','검색':'#c4b5fd','1회':'#fed7aa','통신':'#6ee7b7','소방':'#fda4af','분담':'#94a3b8'};
 
 function gradeTag(g){
   var bg={A:'#dcfce7',B:'#dbeafe',C:'#fef9c3',D:'#fef3c7',E:'#fee2e2'}[g]||'#f3f4f6';
@@ -3411,6 +3436,7 @@ function renderEconCell(r){
 
 function renderSlotRow(ci,si,r,calc){
   var grp=r.grp||'지역';
+  var isDam=grp==='분담'||grp==='소방'||grp==='통신'; // 분담계열: 적격계산 제외
   var bg=TYPE_BG[grp]||'#f3f4f6';
   var bd=TYPE_BD[grp]||'#d1d5db';
   var typeSelHtml=
@@ -3420,8 +3446,7 @@ function renderSlotRow(ci,si,r,calc){
       '<option value="실적" '+(grp==='실적'?'selected':'')+'>실적</option>'+
       '<option value="검색" '+(grp==='검색'?'selected':'')+'>검색</option>'+
       '<option value="1회" '+(grp==='1회'?'selected':'')+'>1회</option>'+
-      '<option value="통신" '+(grp==='통신'?'selected':'')+'>통신</option>'+
-      '<option value="소방" '+(grp==='소방'?'selected':'')+'>소방</option>'+
+      '<option value="분담" '+(grp==='분담'?'selected':'')+'>분담</option>'+
     '</select>';
   var compSelHtml;
   if(grp==='검색'){
@@ -3434,6 +3459,8 @@ function renderSlotRow(ci,si,r,calc){
       '</div>';
   }else if(grp==='1회'){
     compSelHtml='<input type="text" class="manual-inp" data-manual="'+ci+'-'+si+'" autocomplete="off" placeholder="업체명 직접입력" value="'+esc(r.업체명||'')+'" style="flex:1;min-width:0;box-sizing:border-box;font-size:11px;padding:2px 6px;border:1px solid #fed7aa;border-radius:3px;font-family:inherit;background:#fff7ed">';
+  }else if(grp==='분담'){
+    compSelHtml='<input type="text" class="manual-inp" data-manual="'+ci+'-'+si+'" data-dam="'+ci+'-'+si+'" autocomplete="off" placeholder="(소방)업체명" value="'+esc(r.업체명||'')+'" style="flex:1;min-width:0;box-sizing:border-box;font-size:11px;padding:2px 6px;border:1px solid #94a3b8;border-radius:3px;font-family:inherit;background:#f1f5f9">';
   }else{
     compSelHtml=
       '<select data-pick="'+ci+'-'+si+'" style="flex:1;min-width:0;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;font-family:inherit">'+
@@ -3445,15 +3472,15 @@ function renderSlotRow(ci,si,r,calc){
       '<div style="display:flex;gap:3px;align-items:center">'+typeSelHtml+compSelHtml+'</div>'+
     '</td>'+
     '<td><input type="number" class="rep" step="0.001" data-edit="'+ci+'-'+si+'-신인도"'+
-      (calc&&calc.isJija?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="지자체 모드: 신인도 미적용"':' value="'+FMT_REP(r.신인도||0)+'"')+
+      (isDam?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="분담: 적격계산 제외"':calc&&calc.isJija?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="지자체 모드: 신인도 미적용"':' value="'+FMT_REP(r.신인도||0)+'"')+
     '></td>'+
     '<td><input type="number" class="rep" step="0.001" min="0" data-edit="'+ci+'-'+si+'-감점"'+
-      (calc&&calc.isJija?' value="'+FMT_REP(r.감점||0)+'" readonly style="color:#1d4ed8;background:#eff6ff" title="지자체 경영상태 감점(별표4/3/2) 자동계산"':' value="'+FMT_REP(Math.abs(r.감점||0))+'"')+
+      (isDam?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="분담: 적격계산 제외"':calc&&calc.isJija?' value="'+FMT_REP(r.감점||0)+'" readonly style="color:#1d4ed8;background:#eff6ff" title="지자체 경영상태 감점(별표4/3/2) 자동계산"':' value="'+FMT_REP(Math.abs(r.감점||0))+'"')+
     '></td>'+
-    '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"></td>'+
-    '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"></td>'+
+    '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
+    '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
     '<td data-cell="'+ci+'-'+si+'-max">'+(r.최대지분율_pct||0).toFixed(1)+'%</td>'+
-    '<td><input type="number" class="pct '+(r.over?'over':(r.under?'under':(r.isRec?'isrec':'')))+'" step="0.1" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율" value="'+(r.지분율||0)+'"></td>'+
+    '<td>'+(grp==='분담'?'<input type="number" class="pct" step="0.1" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율'+'" value="0" disabled style="background:#f3f4f6;color:#9ca3af">':'<input type="number" class="pct '+(r.over?'over':(r.under?'under':(r.isRec?'isrec':'')))+('" step="0.1" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율'+'" value="'+(r.지분율||0)+'">'))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-환산실적">'+FMT_NUM(Math.round(r.지분환산실적))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-환산시평">'+FMT_NUM(Math.round(r.지분환산시평))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-신인도가점">'+FMT_REP(r.신인도가점)+'</td>'+
@@ -4043,9 +4070,22 @@ function bind(){
     }
     if(t.dataset&&t.dataset.grp){
       var parts=t.dataset.grp.split('-');var ci=Number(parts[0]),si=Number(parts[1]);
-      var oldPct=state.combos[ci].slots[si].지분율||0;
-      state.combos[ci].slots[si]=Object.assign(emptySlot(),{grp:t.value,지분율:oldPct});
-      save();refreshCombos();return;
+      var newGrp=t.value;
+      var oldPct=(newGrp==='분담')?0:(state.combos[ci].slots[si].지분율||0);
+      var newSlot=Object.assign(emptySlot(),{grp:newGrp,지분율:oldPct});
+      if(newGrp==='분담'){
+        var _gj=state.bid.공종||'전기';
+        newSlot.업체명=_gj==='전기+소방'?'(소방)':_gj==='전기+통신'?'(통신)':'';
+      }
+      state.combos[ci].slots[si]=newSlot;
+      save();refreshCombos();
+      if(newGrp==='분담'){
+        setTimeout(function(){
+          var _di=document.querySelector('[data-dam="'+ci+'-'+si+'"]');
+          if(_di){_di.focus();var _l=_di.value.length;_di.setSelectionRange(_l,_l);}
+        },60);
+      }
+      return;
     }
     if(!t.dataset||!t.dataset.pick)return;
     var pparts=t.dataset.pick.split('-');var pci=Number(pparts[0]),psi=Number(pparts[1]);
