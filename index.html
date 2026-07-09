@@ -765,6 +765,23 @@ function renderBackupPanel(){
   var elInterval=document.getElementById('bkp-interval');
   if(elInterval)elInterval.value=String(bs.intervalMin||0);
 }
+function restoreFromBackupFile(file){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var obj;
+    try{obj=JSON.parse(e.target.result);}catch(err){toast('백업 파일을 읽을 수 없습니다 (JSON 오류)','err');return;}
+    if(!obj||typeof obj!=='object'||(!obj.db&&!obj.bidScreens)){toast('올바른 백업 파일이 아닙니다','err');return;}
+    if(!confirm('현재 화면의 모든 데이터(업체DB·입찰정보·조합)를 이 백업 파일 내용으로 덮어씁니다. 계속할까요?'))return;
+    try{
+      gistApplyData(obj);
+      renderBidScreenTabs();restoreBidInputsFromState();refreshDB();refreshBidStats();refreshCombos();
+      toast('백업 파일 복원 완료: '+file.name,'ok');
+      var mr=$('#modal-root');if(mr)mr.innerHTML='';
+    }catch(err){console.warn('restore failed',err);toast('복원 실패: '+(err.message||err),'err');}
+  };
+  reader.onerror=function(){toast('파일을 읽는 중 오류가 발생했습니다','err');};
+  reader.readAsText(file,'utf-8');
+}
 // ████ END 로컬 폴더 백업 ████
 
 // ████ SECTION: LOCALSTORAGE (save/load/migrate v1~v5) ████
@@ -4940,6 +4957,11 @@ function bind(){
             '<button type="button" class="btn btn-sm" id="bkp-now" style="background:#0891b2">지금 백업</button>'+
             '<span style="font-size:11px;color:#6b7280">마지막 백업: <b id="bkp-last">'+(getBackupSettings().lastBackup?new Date(getBackupSettings().lastBackup).toLocaleString('ko-KR'):'없음')+'</b></span>'+
           '</div>'+
+          '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">'+
+            '<button type="button" class="btn btn-sm btn-ghost" id="bkp-restore-btn" style="border-color:#f59e0b;color:#b45309">📂 백업 파일 복원</button>'+
+            '<input type="file" id="bkp-restore-file" accept="application/json,.json" style="display:none">'+
+            '<span style="font-size:11px;color:#9ca3af">백업 json 파일을 선택하면 현재 데이터를 덮어씁니다</span>'+
+          '</div>'+
         '</div>'+
         '<div style="padding:0 16px 10px;overflow-x:auto">'+
           '<table class="settings-table">'+
@@ -4954,6 +4976,12 @@ function bind(){
         '</div></div>';
       document.getElementById('bkp-choose').onclick=pickBackupFolder;
       document.getElementById('bkp-now').onclick=function(){doBackupNow(false);};
+      document.getElementById('bkp-restore-btn').onclick=function(){document.getElementById('bkp-restore-file').click();};
+      document.getElementById('bkp-restore-file').addEventListener('change',function(ev){
+        var f=ev.target.files&&ev.target.files[0];
+        if(f)restoreFromBackupFile(f);
+        ev.target.value='';
+      });
       var _bkpAutoEl=document.getElementById('bkp-auto');
       var _bkpIntervalEl=document.getElementById('bkp-interval');
       var _bs0=getBackupSettings();
