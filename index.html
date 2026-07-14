@@ -1752,7 +1752,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi){
   var showPct=calc&&!calc.isDoRo&&(calc.E7>0||(calc.isLH&&calc.lh지분율기준));
   var srType=calc&&calc.isLH?(calc.is50억?'LH6':'LH7A'):calc&&calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc&&calc.isKW?(calc.is50억?'KW6':'KW7A'):(calc&&calc.is50억?'6':'7A');
   // 업체 옵션 HTML 생성 헬퍼
-  function makeOpt(c){
+  function makeOpt(c,extra){
     var label=esc(c.업체명);
     if(showPct){
       var _기2=calc.isLH&&calc.lh지분율기준?calc.lh지분율기준:calc.E7;
@@ -1824,7 +1824,41 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi){
       }
     }
     var _ue=usedEl.has(c.업체명);
-    return '<option value="'+esc(c.업체명)+'" '+(c.업체명===selected?'selected':'')+(_ue?' style="color:#9ca3af"':'')+'>'+label+(_ue?' [타조합]':'')+' </option>';
+    var _reasonTxt=(extra&&extra.reason)?(' ['+extra.reason+']'):'';
+    var _styleAttr=(extra&&extra.orange)?' style="color:#ff8c00"':(_ue?' style="color:#9ca3af"':'');
+    return '<option value="'+esc(c.업체명)+'" '+(c.업체명===selected?'selected':'')+_styleAttr+'>'+label+_reasonTxt+(_ue?' [타조합]':'')+' </option>';
+  }
+  // 자동목록 제외 사유 판정 (지역 유형 전용) - getDbByType의 '지역' 필터 로직과 동일 기준
+  function regionExclusionReason(c){
+    if(!calc)return '';
+    if(calc.E6>0){
+      var _pdR=getCompPerfData(c,calc.공종||'전기');
+      var 실적OKR=Number((calc.use3yr?_pdR.실적3:_pdR.실적5)||0)>=calc.E6;
+      var 시평OKR=(!calc.E3)||Number(_pdR.시평액||0)>=calc.E3;
+      var 감점없음R=getEffectiveDeduction(c,calc).value<=0;
+      if(감점없음R&&실적OKR&&시평OKR)return '단독가능';
+    }
+    if(calc.공종){
+      var jtR=c.공사업종||'';
+      var _공종필터R=calc.공종,공종OKR;
+      if(_공종필터R==='전기+통신')공종OKR=jtR.indexOf('전기')>=0||jtR.indexOf('통신')>=0;
+      else if(_공종필터R==='전기+소방')공종OKR=jtR.indexOf('전기')>=0||jtR.indexOf('소방')>=0;
+      else 공종OKR=jtR.indexOf(_공종필터R)>=0;
+      if(!공종OKR)return '공종불일치';
+    }
+    var 최하R=Number(state.bid.최소지분율)||0;
+    if(최하R>0&&!calc.isDoRo&&(calc.E7>0||calc.lh지분율기준)){
+      var 최대R;
+      if(c.개별최대지분율!=null&&!isNaN(c.개별최대지분율)){
+        최대R=Number(c.개별최대지분율);
+      } else {
+        var _기준E7R=calc.isLH&&calc.lh지분율기준?calc.lh지분율기준:calc.E7;
+        var _pd2R=getCompPerfData(c,calc.공종||'전기');
+        최대R=calc.isLH&&calc.lh지분율기준?Math.floor((Number(_pd2R.시평액)/_기준E7R)*1000)/10:FLOOR1((Number(_pd2R.시평액)/_기준E7R)*100);
+      }
+      if(최대R<최하R)return '지분율부족';
+    }
+    return '';
   }
   // 그룹별 optgroup 렌더링
   var groups=state.groups&&state.groups.length>0?state.groups:[];
@@ -1846,7 +1880,22 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi){
   } else {
     html+=list.map(makeOpt).join('');
   }
-  if(selected&&!list.find(function(c){return c.업체명===selected;})){
+  var renderedNames=new Set(list.map(function(c){return c.업체명;}));
+  // ── 공고문 분석(자동 필터링)으로 검출되지 않은 동일 지역 나머지 업체를 하단에 수동 선택용으로 노출 ──
+  if(grp==='지역'){
+    var _지역들Full=getRegionList();
+    var _fullRegionList=state.db.filter(function(c){return _지역들Full.length>0&&_지역들Full.indexOf(NFC(c.지역))>=0;});
+    var _remaining=_fullRegionList.filter(function(c){return !renderedNames.has(c.업체명);});
+    if(_remaining.length>0){
+      html+='<option value="" style="color:#ff8c00;">================</option>';
+      _remaining.forEach(function(c){
+        var _reason=regionExclusionReason(c)||'미검출';
+        html+=makeOpt(c,{reason:_reason,orange:true});
+        renderedNames.add(c.업체명);
+      });
+    }
+  }
+  if(selected&&!renderedNames.has(selected)){
     html+='<option value="'+esc(selected)+'" selected>'+esc(selected)+'</option>';
   }
   return html;
