@@ -723,9 +723,10 @@ async function restoreBackupHandle(){
     if(handle)backupDirHandle=handle;
   }catch(e){}
 }
-async function doBackupNow(silent){
+async function doBackupNow(silent,allowRequest){
+  if(allowRequest===undefined)allowRequest=!silent;
   if(!backupDirHandle){if(!silent)toast('백업 폴더를 먼저 선택하세요','err');return false;}
-  var ok=await verifyBackupPermission(backupDirHandle,!silent);
+  var ok=await verifyBackupPermission(backupDirHandle,allowRequest);
   if(!ok){if(!silent)toast('폴더 접근 권한이 필요합니다. 폴더를 다시 선택해주세요.','err');return false;}
   try{
     syncActiveBidScreen();
@@ -743,6 +744,20 @@ async function doBackupNow(silent){
     return true;
   }catch(e){console.warn('backup failed',e);if(!silent)toast('백업 실패: '+(e.message||e),'err');return false;}
 }
+var _firstGestureBackupArmed=false,_firstGestureBackupDone=false;
+function armFirstGestureAutoBackup(){
+  if(_firstGestureBackupArmed||_firstGestureBackupDone)return;
+  _firstGestureBackupArmed=true;
+  function trigger(){
+    if(_firstGestureBackupDone)return;
+    _firstGestureBackupDone=true;
+    document.removeEventListener('pointerdown',trigger,true);
+    document.removeEventListener('keydown',trigger,true);
+    doBackupNow(false,true); // 사용자 제스처 안에서 실행 → 권한 재요청 가능
+  }
+  document.addEventListener('pointerdown',trigger,true);
+  document.addEventListener('keydown',trigger,true);
+}
 function scheduleBackupTimer(){
   if(_backupTimer){clearInterval(_backupTimer);_backupTimer=null;}
   var bs=getBackupSettings();
@@ -754,7 +769,8 @@ async function initBackupOnBoot(){
   await restoreBackupHandle();
   var bs=getBackupSettings();
   if(backupDirHandle&&bs.autoOnLaunch){
-    await doBackupNow(true);
+    var ok=await doBackupNow(true,false);
+    if(!ok)armFirstGestureAutoBackup();
   }
   scheduleBackupTimer();
 }
