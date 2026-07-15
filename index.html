@@ -723,7 +723,7 @@ async function restoreBackupHandle(){
     if(handle)backupDirHandle=handle;
   }catch(e){}
 }
-async function doBackupNow(silent,allowRequest){
+async function doBackupNow(silent,allowRequest,source){
   if(allowRequest===undefined)allowRequest=!silent;
   if(!backupDirHandle){if(!silent)toast('백업 폴더를 먼저 선택하세요','err');return false;}
   var ok=await verifyBackupPermission(backupDirHandle,allowRequest);
@@ -733,7 +733,14 @@ async function doBackupNow(silent,allowRequest){
     var ts=new Date();
     var pad=function(n){return(n<10?'0':'')+n;};
     var stamp=ts.getFullYear()+'-'+pad(ts.getMonth()+1)+'-'+pad(ts.getDate())+'_'+pad(ts.getHours())+pad(ts.getMinutes())+pad(ts.getSeconds());
-    var fname='입찰적격도구_백업_'+stamp+'.json';
+    // 파일명 접두사: 수동('지금 백업')은 접두사 없음(기존 방식 유지), 앱실행 자동백업은 AUTO_, 주기 백업은 간격 기준(5분→5M_, 1시간→1H_)
+    var _prefix='';
+    if(source==='launch')_prefix='AUTO_';
+    else if(source==='interval'){
+      var _iv=getBackupSettings().intervalMin||0;
+      _prefix=(_iv>0?(_iv%60===0?(_iv/60)+'H':_iv+'M'):'AUTO')+'_';
+    }
+    var fname=_prefix+'입찰적격도구_백업_'+stamp+'.json';
     var fh=await backupDirHandle.getFileHandle(fname,{create:true});
     var ws=await fh.createWritable();
     await ws.write(JSON.stringify(state));
@@ -753,7 +760,7 @@ function armFirstGestureAutoBackup(){
     _firstGestureBackupDone=true;
     document.removeEventListener('pointerdown',trigger,true);
     document.removeEventListener('keydown',trigger,true);
-    doBackupNow(false,true); // 사용자 제스처 안에서 실행 → 권한 재요청 가능
+    doBackupNow(false,true,'launch'); // 사용자 제스처 안에서 실행 → 권한 재요청 가능
   }
   document.addEventListener('pointerdown',trigger,true);
   document.addEventListener('keydown',trigger,true);
@@ -762,14 +769,14 @@ function scheduleBackupTimer(){
   if(_backupTimer){clearInterval(_backupTimer);_backupTimer=null;}
   var bs=getBackupSettings();
   if(bs.intervalMin>0){
-    _backupTimer=setInterval(function(){doBackupNow(true);},bs.intervalMin*60*1000);
+    _backupTimer=setInterval(function(){doBackupNow(true,undefined,'interval');},bs.intervalMin*60*1000);
   }
 }
 async function initBackupOnBoot(){
   await restoreBackupHandle();
   var bs=getBackupSettings();
   if(backupDirHandle&&bs.autoOnLaunch){
-    var ok=await doBackupNow(true,false);
+    var ok=await doBackupNow(true,false,'launch');
     if(!ok)armFirstGestureAutoBackup();
   }
   scheduleBackupTimer();
@@ -1865,7 +1872,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi){
       if(_공종필터R==='전기+통신')공종OKR=jtR.indexOf('전기')>=0||jtR.indexOf('통신')>=0;
       else if(_공종필터R==='전기+소방')공종OKR=jtR.indexOf('전기')>=0||jtR.indexOf('소방')>=0;
       else 공종OKR=jtR.indexOf(_공종필터R)>=0;
-      if(!공종OKR)return '공종불일치';
+      if(!공종OKR)return jtR===''?'미참여':'공종불일치';
     }
     var 최하R=Number(state.bid.최소지분율)||0;
     if(최하R>0&&!calc.isDoRo&&(calc.E7>0||calc.lh지분율기준)){
@@ -1908,12 +1915,19 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi){
     var _fullRegionList=state.db.filter(function(c){return _지역들Full.length>0&&_지역들Full.indexOf(NFC(c.지역))>=0;});
     var _remaining=_fullRegionList.filter(function(c){return !renderedNames.has(c.업체명);});
     if(_remaining.length>0){
-      html+='<option value="" style="color:#ff8c00;">================</option>';
+      var _shown2=[];
       _remaining.forEach(function(c){
         var _reason=regionExclusionReason(c)||'미검출';
-        html+=makeOpt(c,{reason:_reason,orange:true});
-        renderedNames.add(c.업체명);
+        if(_reason==='공종불일치')return; // 다른 공종(예: 소방만 참여)으로 명시 등록된 업체는 수동 선택 후보에서도 완전히 제외
+        _shown2.push({c:c,reason:_reason});
       });
+      if(_shown2.length>0){
+        html+='<option value="" style="color:#ff8c00;">================</option>';
+        _shown2.forEach(function(o){
+          html+=makeOpt(o.c,{reason:o.reason,orange:true});
+          renderedNames.add(o.c.업체명);
+        });
+      }
     }
   }
   if(selected&&!renderedNames.has(selected)){
@@ -4336,7 +4350,53 @@ function recommendRegional(ci){
     return v<0?0:v;
   }
 
-  // 약정지분율 있으면 약정지분율, 없으면 기본지분율. 최대지분율 초과 시 5%단위 미만값으로 조정.
+  // DB 업체를 슬롯 데이터로 변환 (검색/드롭다운 선택 시와 동일한 방식)
+  function buildSlotFromDb(cc,지분율,grp){
+    var _type=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc.isKW?(calc.is50억?'KW6':'KW7A'):(calc.is50억?'6':'7A');
+    var _sb=calcSafetyBonus(cc.안전보건시스템||'',_type);
+    var _rj=Number(cc.일자리가점)||0;
+    var _ja=(_type==='6')?Math.round(_rj/3*100)/100:(_type==='DoRo6')?Math.round(_rj*0.3*100)/100:(_type==='KW6')?Math.round(_rj*0.5*100)/100:(_type==='LH6'||_type==='LH7A')?((_rj>=2.5?1.0:0)+(_rj===0.5||_rj===3.0?0.5:0)):_rj;
+    var _sinindo=(_type==='LH6'||_type==='LH7A')?Math.min(_ja+_sb,1.5):_ja+_sb;
+    var _eff=getEffectiveDeduction(cc,calc);var _pdc=getCompPerfData(cc,calc.공종||'전기');
+    return{업체명:cc.업체명,신인도:_sinindo,감점:_eff.value,실적:(calc.use3yr?(_pdc.실적3||0):(_pdc.실적5||0)),시평액:_pdc.시평액||0,지분율:지분율,grp:grp,isRec:true,개별최대지분율:cc.개별최대지분율!=null?cc.개별최대지분율:null};
+  }
+
+  // ── 지역업체가 정확히 1개일 때: 지역업체(약정/기본지분율) + 우선협정업체(잔여지분) 2사 조합으로 재정의 ──
+  var 지역목록=combo.slots.map(function(s,si){return{s:s,si:si};}).filter(function(o){return o.s.grp==='지역'&&(o.s.업체명||'').trim()!=='';});
+  if(지역목록.length===1){
+    var 지역si=지역목록[0].si,지역s=지역목록[0].s;
+    var dbEntry=state.db.find(function(x){return x.업체명===지역s.업체명;});
+    var 약정=지역s.개별최대지분율!=null&&지역s.개별최대지분율!==''&&!isNaN(Number(지역s.개별최대지분율))?Number(지역s.개별최대지분율):null;
+    var val=약정!=null?약정:기본지분율;
+    if(!최대무시){
+      var spMax=getSiPyeongMax(지역s);
+      if(val>spMax+1e-9)val=floor5Below(spMax);
+    }
+    지역s.지분율=val;지역s.isRec=true;
+
+    var _jongKey=(calc.공종||'전기').indexOf('전기')>=0?'전기':((calc.공종||'').indexOf('통신')>=0?'통신':'소방');
+    var 우선협정명=dbEntry?(dbEntry[_jongKey+'_우선협정']||'').trim():'';
+    if(!우선협정명){
+      toast('지역업체에 등록된 우선협정 업체가 없습니다','bad');
+      save();refreshCombos();
+      return;
+    }
+    var emptySi=-1;
+    combo.slots.forEach(function(s2,si2){if(si2!==지역si&&(s2.업체명||'').trim()===''&&emptySi<0)emptySi=si2;});
+    if(emptySi<0){
+      if(combo.slots.length<MAX_SLOTS){combo.slots.push(emptySlot());emptySi=combo.slots.length-1;}
+      else{toast('빈 슬롯이 없습니다 (최대 '+MAX_SLOTS+'개)','bad');save();refreshCombos();return;}
+    }
+    var 잔여지분=Math.max(0,100-val);
+    var ppCo=state.db.find(function(x){return x.업체명===우선협정명;});
+    combo.slots[emptySi]=ppCo?buildSlotFromDb(ppCo,잔여지분,'검색'):Object.assign(emptySlot(),{업체명:우선협정명,grp:'검색',지분율:잔여지분,isRec:true});
+
+    toast('자동분배 완료 (지역업체+우선협정업체)','ok');
+    save();refreshCombos();
+    return;
+  }
+
+  // ── 기존 로직: 약정지분율 있으면 약정지분율, 없으면 기본지분율. 최대지분율 초과 시 5%단위 미만값으로 조정. ──
   used.forEach(function(s){
     var 약정=s.개별최대지분율!=null&&s.개별최대지분율!==''&&!isNaN(Number(s.개별최대지분율))?Number(s.개별최대지분율):null;
     var val=약정!=null?약정:기본지분율;
