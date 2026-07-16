@@ -1320,12 +1320,10 @@ function jijaEffectiveDeduction(dbEntry,calc){
   var cr=parseCreditRating(dbEntry.신용평가||'');
   var creditDed=null;
   if(cr&&cr.isValid){
-    if(calc.jijaTier===2){
-      var cs15=creditGradeScore(cr.grade)>=35.0?15.0:(cr.grade==='BB-'?14.0:(['B+','B','B0','B-'].indexOf(cr.grade)>=0?13.0:10.0));
-      creditDed=Math.round((15-cs15)*10/15*1000)/1000;
-    } else if(creditGradeScore(cr.grade)>=35.0){
-      creditDed=0;
-    }
+    // 별표10 신용평가 점수표(15점 만점 기준): AAA~BB+/BB0=15.0, BB-=14.0, B+/B/B-=13.0, CCC+이하=10.0
+    // 별표3(jijaTier===2, 최종 10점 만점)만 ×10/15 환산, 나머지(별표4/2/1)는 15점 만점 그대로 적용
+    var cs15=creditGradeScore(cr.grade)>=35.0?15.0:(cr.grade==='BB-'?14.0:(['B+','B','B0','B-'].indexOf(cr.grade)>=0?13.0:10.0));
+    creditDed=Math.round((calc.jijaTier===2?(15-cs15)*10/15:(15-cs15))*1000)/1000;
   }
   if(creditDed!=null&&(ratioDed==null||creditDed<ratioDed)){
     return{value:creditDed,method:'credit',grade:cr.grade,ratioDed:ratioDed,ok:true};
@@ -1621,13 +1619,17 @@ function calcSlot(combo,calc){
         }
       }
     }
+    // 지자체 모드: 감점 수동 override 시 자동계산값 대신 사용자가 입력한 값 적용
+    var _감점Override=!!s.감점Override;
+    var _신인도적용=(calc.isJija&&calc.jijaTier===1)?0:신인도;
+    var _감점적용=calc.isJija?(_감점Override?감점:실효감점):감점;
     return Object.assign({},s,{
       최대지분율_pct:최대지분율_pct,
       지분환산실적:실적*f,지분환산시평:시평*f,
-      신인도:calc.isJija?0:신인도,  // INPUT 칸 재계산값 동기화
-      신인도가점:calc.isJija?0:신인도*f,
-      감점가점:calc.isJija?실효감점*f:감점*f,  // 지자체: 별표4/3/2 경영상태 감점 반영
-      감점:calc.isJija?실효감점:감점,  // 표시용 감점도 동기화
+      신인도:_신인도적용,  // INPUT 칸 재계산값 동기화 (지자체 30억미만만 미적용)
+      신인도가점:_신인도적용*f,
+      감점가점:_감점적용*f,  // 지자체: 별표4/3/2 자동계산 또는 수동 override
+      감점:_감점적용,  // 표시용 감점도 동기화
       over:(calc.jijaTier===1||calc.isDoRo||s.grp==='분담'||s.grp==='소방'||s.grp==='통신')?false:(지분율_pct>최대지분율_pct+1e-9),
       under:hasComp&&최하지분율_pct>0&&지분율_pct<최하지분율_pct-1e-9&&s.grp!=='분담'&&s.grp!=='소방'&&s.grp!=='통신',
       econ:econ,
@@ -1817,7 +1819,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi){
         var _jed3=jijaEffectiveDeduction(c,calc);
         var _crJ3=parseCreditRating(c.신용평가||'');
         var _gradeSuf3=(_crJ3&&_crJ3.isValid&&_crJ3.grade)?_crJ3.grade:'';
-        if(_jed3.value>0)label+=' ('+maxPct.toFixed(1)+'% | -'+TRIM3(_jed3.value)+(_gradeSuf3?_gradeSuf3:'')+')';
+        if(_jed3.value>0)label+=' ('+maxPct.toFixed(1)+'% | -'+TRIM3(_jed3.value)+(_gradeSuf3?' '+_gradeSuf3:'')+')';
         else label+=' ('+maxPct.toFixed(1)+'%'+(_gradeSuf3?' | '+_gradeSuf3:'')+')';
       } else {
         var _raw일자리=Number(c.일자리가점!=null?c.일자리가점:(c.신인도||0));
@@ -4207,10 +4209,14 @@ function renderSlotRow(ci,si,r,calc){
       '<div style="display:flex;gap:3px;align-items:center">'+typeSelHtml+compSelHtml+'</div>'+
     '</td>'+
     '<td><input type="number" class="rep" step="0.001" data-edit="'+ci+'-'+si+'-신인도"'+
-      (isDam?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="분담: 적격계산 제외"':calc&&calc.isJija?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="지자체 모드: 신인도 미적용"':' value="'+FMT_REP(r.신인도||0)+'"')+
+      (isDam?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="분담: 적격계산 제외"'
+        :(calc&&calc.isJija&&calc.jijaTier===1)?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="지자체 30억 미만(별표4): 신인도 항목 미적용"'
+        :' value="'+FMT_REP(r.신인도||0)+'"'+(calc&&calc.isJija?' title="지자체 신인도(가점) 직접 입력"':''))+
     '>'+_expWarnSlot+'</td>'+
     '<td><input type="number" class="rep" step="0.001" min="0" data-edit="'+ci+'-'+si+'-감점"'+
-      (isDam?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="분담: 적격계산 제외"':calc&&calc.isJija?' value="'+FMT_REP(r.감점||0)+'" readonly style="color:#1d4ed8;background:#eff6ff" title="지자체 경영상태 감점(별표4/3/2) 자동계산"':' value="'+FMT_REP(Math.abs(r.감점||0))+'"')+
+      (isDam?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="분담: 적격계산 제외"'
+        :calc&&calc.isJija?' value="'+FMT_REP(r.감점||0)+'"'+(r.감점Override?' title="수동 입력값 (자동계산 대신 사용)"':' style="color:#1d4ed8;background:#eff6ff" title="지자체 경영상태 감점(별표4/3/2) 자동계산 — 직접 수정 가능"')
+        :' value="'+FMT_REP(Math.abs(r.감점||0))+'"')+
     '></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
@@ -4790,7 +4796,9 @@ function bind(){
     var parts=t.dataset.edit.split('-');
     var ci=Number(parts[0]),si=Number(parts[1]),field=parts[2];
     var val=(field==='실적'||field==='시평액')?(readMoney(t)||0):(Number(t.value)||0);
-    state.combos[ci].slots[si][field]=val;save();updateSlotMath(ci);
+    state.combos[ci].slots[si][field]=val;
+    if(field==='감점')state.combos[ci].slots[si].감점Override=true;  // 수동 입력 시 자동계산 대신 사용
+    save();updateSlotMath(ci);
   });
   $('#combos').addEventListener('change',function(e){
     var t=e.target;
