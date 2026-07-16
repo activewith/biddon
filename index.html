@@ -4017,12 +4017,15 @@ function exportCombosText(){
   if(msgText)out.push(msgText);
   out.push('');out.push(summary);out.push('');
   out=out.concat(comboLines);
-  out.push('');out.push('--------------------');
-  out.push('-최대지분율-');
-  out=out.concat(maxLines);
-  if(remainLines.length){
-    out.push('');
-    out=out.concat(remainLines);
+  // 지자체 30억 미만(jijaTier===1)은 최대지분율 제한 예외이므로 최대지분율 섹션 자체를 생략
+  if(!(c.isJija&&c.jijaTier===1)){
+    out.push('');out.push('--------------------');
+    out.push('-최대지분율-');
+    out=out.concat(maxLines);
+    if(remainLines.length){
+      out.push('');
+      out=out.concat(remainLines);
+    }
   }
   var txt=out.join('\n');
   // 팝업으로 표시
