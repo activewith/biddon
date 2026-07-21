@@ -524,6 +524,17 @@ const jobAMonthTag=function(dbEntry,appliedScore){
 };
 const NFC=function(s){return String(s||'').trim().normalize('NFC');}; // 지역 등 한글 문자열 비교 시 NFC/NFD 정규화 차이로 인한 불일치 방지
 const $=function(sel){return document.querySelector(sel);};
+const MODAL_ROOT=document.getElementById('modal-root');
+function fv(id,v){var el=$('#'+id);if(el)el.value=v!=null?String(v):'';}
+function showRegYearBadge(gradeId,val){
+  var gr=$('#'+gradeId);if(!gr)return;
+  var yr=calcYears(val);
+  if(yr===null||val===''){gr.textContent='';gr.title='';return;}
+  var n=Math.floor(yr);
+  gr.textContent=n+'년';
+  gr.style.color='#374151';
+  gr.title='영업기간 약 '+yr.toFixed(1)+'년';
+}
 
 function copyToClipboard(text, successToastMsg) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -891,7 +902,7 @@ function restoreFromBackupFile(file){
       gistApplyData(obj);
       renderBidScreenTabs();restoreBidInputsFromState();refreshDB();refreshBidStats();refreshCombos();
       toast('백업 파일 복원 완료: '+file.name,'ok');
-      var mr=$('#modal-root');if(mr)mr.innerHTML='';
+      var mr=MODAL_ROOT;if(mr)mr.innerHTML='';
     }catch(err){console.warn('restore failed',err);toast('복원 실패: '+(err.message||err),'err');}
   };
   reader.onerror=function(){toast('파일을 읽는 중 오류가 발생했습니다','err');};
@@ -1742,7 +1753,7 @@ function showExpiryAlertModal(){
     var alerts=getExpiryAlerts(c);
     if(alerts.length)list.push({업체명:c.업체명,alerts:alerts,excluded:!!c.만료알림제외});
   });
-  var root=$('#modal-root');
+  var root=MODAL_ROOT;
   if(!list.length){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:360px">'+
       '<h3>⚠ 만료임박 확인</h3><p style="color:var(--muted);font-size:13px">신용평가(7일 이내)·안전보건(1개월 이내) 만료 예정 또는 일자리 A조건 유효월 불일치 업체가 없습니다.</p>'+
@@ -2794,7 +2805,7 @@ function openCompanyModal(idx){
   if(!canManageCompanyDB()){toast('업체 등록/수정 권한이 없습니다','bad');return;}
   var isNew=(idx==null);
   var c=isNew?{지역:'',일자리가점:0,일자리A유효월:null,감점:0,업체명:'',실적5:0,시평액:0,실적3:0,신용평가:'',안전보건시스템:'',사업자번호:'',참고:'',is실적:false,is자사:false,개별최대지분율:null,부채비율:null,유동비율:null,공사업등록일:'',대표자:'',공사업종:'',통신_시평액:0,통신_실적3:0,통신_실적5:0,통신_부채비율:null,통신_유동비율:null,통신_공사업등록일:'',소방_시평액:0,소방_실적3:0,소방_실적5:0,소방_부채비율:null,소방_유동비율:null,소방_공사업등록일:'',전기_우선협정:'',통신_우선협정:'',소방_우선협정:''}:Object.assign({},state.db[idx]);
-  var root=$('#modal-root');
+  var root=MODAL_ROOT;
   var _업종=(c.공사업종||'');
   var _chkE=_업종===''?(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0:_업종.indexOf('전기')>=0;
   var _chkT=_업종.indexOf('통신')>=0;
@@ -2905,15 +2916,7 @@ function openCompanyModal(idx){
     if(gin)gin.value=f7+'('+f6+')';
   };
   (function(){
-  function _showYr(val){
-    var gr=$('#m-공사업등록일-grade');if(!gr)return;
-    var yr=calcYears(val);
-    if(yr===null||val===''){gr.textContent='';gr.title='';return;}
-    var n=Math.floor(yr);
-    gr.textContent=n+'년';
-    gr.style.color='#374151';
-    gr.title='영업기간 약 '+yr.toFixed(1)+'년';
-  }
+  function _showYr(val){showRegYearBadge('m-공사업등록일-grade',val);}
   var _d=$('#m-공사업등록일');
   if(_d){
     _d.addEventListener('blur',function(){
@@ -2925,9 +2928,6 @@ function openCompanyModal(idx){
   }
 })();
   (function(){
-    var _GC={A:'#16a34a',B:'#2563eb',C:'#d97706',D:'#dc2626',E:'#7f1d1d'};
-    function _gD(r){return r<50?'A':r<75?'B':r<100?'C':r<125?'D':'E';}
-    function _gU(r){return r>=150?'A':r>=120?'B':r>=100?'C':r>=70?'D':'E';}
     (function(){
       function autoDate(id){
         var el=$('#'+id);if(!el)return;
@@ -2945,20 +2945,18 @@ function openCompanyModal(idx){
   (function(){
     var _gD2=function(r){return r<50?'A':r<75?'B':r<100?'C':r<125?'D':'E';};
     var _gU2=function(r){return r>=150?'A':r>=120?'B':r>=100?'C':r>=70?'D':'E';};
-    var _GC2={A:'#16a34a',B:'#2563eb',C:'#d97706',D:'#dc2626',E:'#7f1d1d'};
     function _addGsp(el){if(!el)return null;var sp=document.createElement('span');sp.style.cssText='font-weight:700;font-size:13px;margin-left:3px;min-width:16px;display:inline-block';el.parentNode.insertBefore(sp,el.nextSibling);return sp;}
     var bEl=$('#m-전기-부채비율'),uEl=$('#m-전기-유동비율');
     var bSp=_addGsp(bEl),uSp=_addGsp(uEl);
     function _upd(){
       var avgD=Number(state.bid['전기_평균부채'])||0,avgU=Number(state.bid['전기_평균유동'])||0;
-      if(bEl&&bSp){var bv=parseFloat(bEl.value);if(!isNaN(bv)&&avgD>0){var g=_gD2(bv/avgD*100);bSp.textContent=g;bSp.style.color=_GC2[g]||'';}else bSp.textContent='';}
-      if(uEl&&uSp){var uv=parseFloat(uEl.value);if(!isNaN(uv)&&avgU>0){var g=_gU2(uv/avgU*100);uSp.textContent=g;uSp.style.color=_GC2[g]||'';}else uSp.textContent='';}
+      if(bEl&&bSp){var bv=parseFloat(bEl.value);if(!isNaN(bv)&&avgD>0){var g=_gD2(bv/avgD*100);bSp.textContent=g;bSp.style.color=econGradeColor(g);}else bSp.textContent='';}
+      if(uEl&&uSp){var uv=parseFloat(uEl.value);if(!isNaN(uv)&&avgU>0){var g=_gU2(uv/avgU*100);uSp.textContent=g;uSp.style.color=econGradeColor(g);}else uSp.textContent='';}
     }
     if(bEl)bEl.addEventListener('input',_upd);if(uEl)uEl.addEventListener('input',_upd);_upd();
   })();
   $('#m-cancel').onclick=function(){root.innerHTML=''};
   attachCompanyAutocomplete('m-업체명',function(c){
-    function fv(id,v){var el=$('#'+id);if(el)el.value=v!=null?String(v):'';}
     fv('m-사업자번호',c.사업자번호||'');
     fv('m-대표자',c.대표자||'');
     fv('m-지역',c.지역||'');
@@ -3411,7 +3409,7 @@ function renderPdfPageAsImage(file, callback){
 
 // 이미지/스캔PDF를 보면서 직접 입력하는 모달
 function showCertImageModal(dataUrl, preloaded, rawText){
-  var root=$('#modal-root');
+  var root=MODAL_ROOT;
   var p=preloaded||{};
   root.innerHTML=
     '<div class="modal-back"><div class="modal" style="min-width:min(96vw,900px);max-width:96vw">'+
@@ -3478,15 +3476,7 @@ function showCertImageModal(dataUrl, preloaded, rawText){
   ['m-c-시평액','m-c-실적3','m-c-실적5'].forEach(function(id){attachCheonMoneyHandlers($('#'+id));});
   attachBiznoHandler($('#m-c-사업자번호'));
   (function(){
-  function _showYr(val){
-    var gr=$('#m-c-공사업등록일-grade');if(!gr)return;
-    var yr=calcYears(val);
-    if(yr===null||val===''){gr.textContent='';gr.title='';return;}
-    var n=Math.floor(yr);
-    gr.textContent=n+'년';
-    gr.style.color='#374151';
-    gr.title='영업기간 약 '+yr.toFixed(1)+'년';
-  }
+  function _showYr(val){showRegYearBadge('m-c-공사업등록일-grade',val);}
   var _d=$('#m-c-공사업등록일');
   if(_d){
     _d.addEventListener('blur',function(){
@@ -3498,7 +3488,6 @@ function showCertImageModal(dataUrl, preloaded, rawText){
   }
 })();
   (function(){
-    var _GC={A:'#16a34a',B:'#2563eb',C:'#d97706',D:'#dc2626',E:'#7f1d1d'};
     function _gD(r){return r<50?'A':r<75?'B':r<100?'C':r<125?'D':'E';}
     function _gU(r){return r>=150?'A':r>=120?'B':r>=100?'C':r>=70?'D':'E';}
     function calcCertRatio(rawId,dispId,avgKey,fbAvg){
@@ -3511,7 +3500,7 @@ function showCertImageModal(dataUrl, preloaded, rawText){
       if(v>0&&avg>0){
         var ratio=Math.round(v/avg*10000)/100;
         el.value=ratio;el.style.color='#7c3aed';el.title='해당업체÷업계평균('+avg+'%)×100';
-        if(gr){var g=isDebt?_gD(ratio):_gU(ratio);gr.textContent=g;gr.style.color=_GC[g]||'';}
+        if(gr){var g=isDebt?_gD(ratio):_gU(ratio);gr.textContent=g;gr.style.color=econGradeColor(g);}
       } else if(!isNaN(v)&&v>0){
         el.value='';el.placeholder='업계평균 미설정';el.style.color='#ef4444';el.title='DB탭에서 업계평균비율을 먼저 설정하세요';
         if(gr){gr.textContent='';gr.style.color='';}
@@ -3553,7 +3542,6 @@ function showCertImageModal(dataUrl, preloaded, rawText){
   })();
   $('#m-c-cancel').onclick=function(){root.innerHTML='';};
   attachCompanyAutocomplete('m-c-업체명',function(c){
-    function fv(id,v){var el=$('#'+id);if(el)el.value=v!=null?String(v):'';}
     fv('m-c-사업자번호',c.사업자번호||'');
     fv('m-c-지역',c.지역||'');
     fv('m-c-참고',c.참고||'');
@@ -3711,7 +3699,7 @@ function attachCompanyAutocomplete(inputId, fillFn){
     else if(e.key==='Escape'){hide();}
   });
   inp.addEventListener('blur',function(){setTimeout(hide,160);});
-  var mr=document.getElementById('modal-root')||document.body;
+  var mr=MODAL_ROOT||document.body;
   var obs=new MutationObserver(function(){if(!document.getElementById(inputId)){dd.remove();obs.disconnect();}});
   obs.observe(mr,{childList:true,subtree:false});
 }
@@ -3719,7 +3707,7 @@ function attachCompanyAutocomplete(inputId, fillFn){
 // ████ SECTION: 인증서-모달 (openCertModal/파일처리/텍스트분석) ████
 function openCertModal(){
   if(!canManageCompanyDB()){toast('업체 등록/수정 권한이 없습니다','bad');return;}
-  var root=$('#modal-root');
+  var root=MODAL_ROOT;
   root.innerHTML=
     '<div class="modal-back"><div class="modal" style="min-width:480px">'+
     '<h3>📋 경영상태확인서 등록 (전기공사협회)</h3>'+
@@ -4139,7 +4127,7 @@ function extractBidFields(t){
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
   var labels={기초금액:'기초금액 E4',추정가격:'추정가격 E5',시평제한:'시평제한 E3',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수 H6',투찰률:'투찰률 H7(%)'};
-  var root=$('#modal-root');
+  var root=MODAL_ROOT;
   if(keys.length===0){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:400px">'+
       '<h3>📄 공고문 분석 결과</h3><p style="color:var(--bad)">인식된 항목이 없습니다.</p>'+
@@ -4466,7 +4454,7 @@ function exportCombosText(){
   }
   var txt=out.join('\n');
   // 팝업으로 표시
-  var mr=$('#modal-root');
+  var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:480px;max-width:96vw;padding:0;overflow:hidden">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:2px solid var(--border)">'+
       '<span style="font-weight:700;font-size:15px;color:#1e293b">📄 조합결과 TXT</span>'+
@@ -5116,7 +5104,7 @@ function bind(){
   var _econLegendBtn=$('#btn-econ-legend');
   if(_econLegendBtn){
     _econLegendBtn.addEventListener('click',function(){
-      var root=$('#modal-root');
+      var root=MODAL_ROOT;
       root.innerHTML=
         '<div class="modal-back" id="econ-legend-back"><div class="modal" style="min-width:560px">'+
         '<h3>📊 경영상태 등급 기준표</h3>'+
@@ -5382,7 +5370,7 @@ function bind(){
       var summary=getOneLineSummary(b, c, true);
       // 협정메세지
       var msg=state.bid.협정메세지||'';
-      var mr=$('#modal-root');
+      var mr=MODAL_ROOT;
       mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:480px;max-width:96vw;padding:0;overflow:hidden">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:2px solid var(--border)">'+
           '<span style="font-weight:700;font-size:15px;color:#1e293b">📋 메세지/요약</span>'+
@@ -5448,7 +5436,7 @@ function bind(){
           '<td><input type="text" id="skw-'+f.key+'" value="'+esc(kw[f.key]||'')+'" placeholder="추가 키워드 (쉼표 구분)"></td>'+
           '</tr>';
       }).join('');
-      var mr=$('#modal-root');
+      var mr=MODAL_ROOT;
       mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:600px;max-width:96vw;padding:0;overflow:hidden">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:2px solid var(--border)">'+
           '<span style="font-weight:700;font-size:15px;color:#1e293b">⚙ 설정</span>'+
@@ -5584,7 +5572,7 @@ function bind(){
     });
   })();
   $('#btn-paste-text').addEventListener('click',function(){
-    var root=$('#modal-root');
+    var root=MODAL_ROOT;
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:420px">'+
       '<h3>📋 공고문 텍스트 붙여넣기</h3>'+
       '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">PDF를 브라우저에서 열고 전체 선택(Ctrl+A) → 복사(Ctrl+C) 후 붙여넣으세요.</p>'+
@@ -5719,7 +5707,7 @@ function bind(){
     if(mb){
       var midx=Number(mb.dataset.idx);
       var mc=state.db[midx];if(!mc)return;
-      var root2=$('#modal-root');
+      var root2=MODAL_ROOT;
       root2.innerHTML='<div class="modal-back"><div class="modal" style="min-width:340px;max-width:420px">'+
         '<h3>📝 메모 — '+esc(mc.업체명)+'</h3>'+
         '<textarea id="m-memo-txt" rows="5" style="width:100%;font-size:13px;resize:vertical;box-sizing:border-box">'+esc(mc.참고||'')+'</textarea>'+
@@ -6217,7 +6205,7 @@ function showConfirmPop(ci){
   }
   var _elig=getEligibilityChecklist(state.bid,_globalCalc);
   if(_elig)result+='\n\n'+_elig;
-  var mr=$('#modal-root');
+  var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:420px;max-width:96vw;padding:0;overflow:hidden">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:2px solid var(--border)">'+
       '<span style="font-weight:700;font-size:15px;color:#1e293b">📋 확정 메세지 — 조합 #'+(ci+1)+'</span>'+
@@ -6825,7 +6813,6 @@ function getSession(){
 function setSession(acc){sessionStorage.setItem(SESSION_KEY,JSON.stringify({id:acc.id,role:acc.role,name:acc.name||acc.id}));}
 function clearSession(){sessionStorage.removeItem(SESSION_KEY);}
 function currentRole(){var s=getSession();return s?s.role:null;}
-function isSuper(){return currentRole()==='super';}
 function isAdminOrAbove(){var r=currentRole();return r==='admin'||r==='super';}
 function canManageCompanyDB(){return isAdminOrAbove();}
 
