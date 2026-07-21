@@ -35,8 +35,6 @@ button.btn:disabled{opacity:0.4;cursor:not-allowed}
 button.btn-sm{padding:3px 8px;font-size:11px}
 button.btn-ghost{background:#f3f4f6;color:#374151}
 button.btn-ghost:hover:not(:disabled){background:#e5e7eb}
-button.btn-ghost.active{background:#dc2626;color:#fff;border-color:#dc2626}
-button.btn-ghost.active:hover:not(:disabled){background:#b91c1c}
   .star-tip{position:relative;cursor:help;display:inline-block}
   .star-tip[data-tip]::after{content:attr(data-tip);position:absolute;bottom:130%;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:5px 10px;border-radius:5px;font-size:11px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:9999;font-weight:400;line-height:1.5;box-shadow:0 2px 8px rgba(0,0,0,.35)}
   .star-tip[data-tip]:hover::after{opacity:1}
@@ -2679,7 +2677,7 @@ function refreshDB(){
       // 공사업종이 비어있으면(=아직 분류 안 됨) 실제 실적/시평 데이터 존재 여부로 참여 종목 추정 (업체등록정보 팝업과 동일 기준)
       var jt=c.공사업종||'';
       var hasE,hasT,hasS;
-      if(jt!==''){
+      if(jt!==''||c._공종수동설정){
         hasE=jt.indexOf('전기')>=0;hasT=jt.indexOf('통신')>=0;hasS=jt.indexOf('소방')>=0;
       } else {
         hasE=(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0;
@@ -2811,7 +2809,7 @@ function openCompanyModal(idx){
   var c=isNew?{지역:'',일자리가점:0,일자리A유효월:null,감점:0,업체명:'',실적5:0,시평액:0,실적3:0,신용평가:'',안전보건시스템:'',사업자번호:'',참고:'',is실적:false,is자사:false,개별최대지분율:null,부채비율:null,유동비율:null,공사업등록일:'',대표자:'',공사업종:'',통신_시평액:0,통신_실적3:0,통신_실적5:0,통신_부채비율:null,통신_유동비율:null,통신_공사업등록일:'',소방_시평액:0,소방_실적3:0,소방_실적5:0,소방_부채비율:null,소방_유동비율:null,소방_공사업등록일:'',전기_우선협정:'',통신_우선협정:'',소방_우선협정:''}:Object.assign({},state.db[idx]);
   var root=MODAL_ROOT;
   var _업종=(c.공사업종||'');
-  var _chkE=_업종===''?(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0:_업종.indexOf('전기')>=0;
+  var _chkE=(_업종===''&&!c._공종수동설정)?(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0:_업종.indexOf('전기')>=0;
   var _chkT=_업종.indexOf('통신')>=0;
   var _chkS=_업종.indexOf('소방')>=0;
   root.innerHTML=
@@ -2988,7 +2986,7 @@ function openCompanyModal(idx){
     setM('m-소방-시평액',c.소방_시평액);setM('m-소방-실적3',c.소방_실적3);setM('m-소방-실적5',c.소방_실적5);
     fv('m-소방-공사업등록일',c.소방_공사업등록일||'');
     var _업종=c.공사업종||'';
-    setC('m-chk-전기',_업종.indexOf('전기')>=0||(Number(c.시평액||0)+Number(c.실적5||0))>0);
+    setC('m-chk-전기',c._공종수동설정?_업종.indexOf('전기')>=0:(_업종.indexOf('전기')>=0||(Number(c.시평액||0)+Number(c.실적5||0))>0));
     setC('m-chk-통신',_업종.indexOf('통신')>=0);
     setC('m-chk-소방',_업종.indexOf('소방')>=0);
     toast(c.업체명+' 불러옴','ok');
@@ -3067,6 +3065,7 @@ function openCompanyModal(idx){
       대표자:$('#m-대표자').value.trim(),
       공사업종:(function(){var r='';var cE=$('#m-chk-전기'),cT=$('#m-chk-통신'),cS=$('#m-chk-소방');
         if(cE&&cE.checked)r+='전기';if(cT&&cT.checked)r+='통신';if(cS&&cS.checked)r+='소방';return r;})(),
+      _공종수동설정:true,
       참고:$('#m-참고').value.trim(),
       is실적:$('#m-is실적').checked,is자사:$('#m-is자사').checked,
       개별최대지분율:(function(){var v=$('#m-개별최대지분율').value.trim();return v===''?null:Number(v);})(),
@@ -5688,7 +5687,12 @@ function bind(){
   $('#file-import').addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;importXlsx(f,$('#import-mode').value);e.target.value='';});
   $('#btn-add-company').addEventListener('click',function(){openCompanyModal(null);});
   $('#btn-import-cert').addEventListener('click',openCertModal);
-  $('#btn-exp-alert').addEventListener('click',function(){this.classList.toggle('active');refreshDB();});
+  $('#btn-exp-alert').addEventListener('click',function(){
+    var nowActive=this.classList.toggle('active');
+    this.style.background=nowActive?'#dc2626':'';
+    this.style.color=nowActive?'#fff':'#dc2626';
+    refreshDB();
+  });
   $('#btn-export-db').addEventListener('click',exportDBXlsx);
   $('#btn-template-xlsx').addEventListener('click',exportTemplateXlsx);
   $('#db-search').addEventListener('input',refreshDB);
