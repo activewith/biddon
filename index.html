@@ -207,6 +207,7 @@ tr.hover:hover{background:#f8fafc}
             <option value="">— 적격기준 —</option>
             <option value="조달청">조달청</option>
             <option value="인천공항">인천공항(인천국제공항공사)</option>
+            <option value="철도공단">철도공단(국가철도공단)</option>
             <option value="지자체">지자체</option>
             <option value="LH">LH(토지주택공사)</option>
             <option value="도로공사">도로공사(한국도로공사)</option>
@@ -1127,6 +1128,8 @@ function calcSafetyBonus(system,type){
   if(type==='KW7A'){return (ps.type==='KOSHA-MS'||ps.type==='ISO-45001')?1.0:0;} // 수자원공사 10~50억(별표4): KOSHA-MS·ISO-45001 공통 +1.0
   if(type==='LH6'){return 1.0;} // LH 별표2(50억~100억): KOSHA-MS·ISO-45001 모두 +1
   if(type==='LH7A'){return 0;} // LH 별표3(10~50억): 안전보건 항목 삭제
+  if(type==='철도6'){return (ps.type==='KOSHA-MS'||ps.type==='ISO-45001')?0.3:0;} // 철도공단 100억~50억: 붙임7(건설안전) 인증항목 1점×0.9/3=0.3, KOSHA·ISO 구분없음
+  if(type==='철도7A'){return (ps.type==='KOSHA-MS'||ps.type==='ISO-45001')?0.17:0;} // 철도공단 50억~10억: 붙임7 인증항목 1점×0.5/3≈0.17, KOSHA·ISO 구분없음
   return ps.type==='KOSHA-MS'?2.0:ps.type==='ISO-45001'?1.6:0; // 별표7A
 }
 // 별표6 (추정가격 50억 이상): 부채22+유동21+영업2=45점 → ×15/45
@@ -1158,6 +1161,39 @@ function 유동등급7A(r){
 function 영업등급7(y){
   if(y>=3)return{g:'3년+',s:1.0};if(y>=1)return{g:'1~3년',s:0.9};
   return{g:'1년미만',s:0.8};
+}
+
+// ── 철도공단(국가철도공단) 경영상태 배점표 ────────────────────────────
+// 붙임3 (추정가격 100억원미만 50억원이상): 부채7.0+유동6.0+영업2.0=15점
+function 부채등급철도1(r){
+  if(r<50)return{g:'A',s:7.0};if(r<75)return{g:'B',s:6.3};
+  if(r<100)return{g:'C',s:5.6};if(r<125)return{g:'D',s:4.9};
+  return{g:'E',s:4.2};
+}
+function 유동등급철도1(r){
+  if(r>=150)return{g:'A',s:6.0};if(r>=120)return{g:'B',s:5.4};
+  if(r>=100)return{g:'C',s:4.8};if(r>=70)return{g:'D',s:4.2};
+  return{g:'E',s:3.6};
+}
+function 영업등급철도1(y){
+  if(y>=5)return{g:'5년+',s:2.0};if(y>=3)return{g:'5년미만~3년+',s:1.7};
+  if(y>=2)return{g:'3년미만~2년+',s:1.5};
+  return{g:'2년미만',s:1.3};
+}
+// 붙임4 A공사 (추정가격 50억원미만 10억원이상): 부채7.0+유동6.5+영업1.5=15점
+function 부채등급철도2(r){
+  if(r<50)return{g:'A',s:7.0};if(r<75)return{g:'B',s:6.3};
+  if(r<100)return{g:'C',s:5.6};if(r<125)return{g:'D',s:4.9};
+  return{g:'E',s:4.2};
+}
+function 유동등급철도2(r){
+  if(r>=150)return{g:'A',s:6.5};if(r>=120)return{g:'B',s:5.7};
+  if(r>=100)return{g:'C',s:5.0};if(r>=70)return{g:'D',s:4.3};
+  return{g:'E',s:3.6};
+}
+function 영업등급철도2(y){
+  if(y>=3)return{g:'3년+',s:1.5};if(y>=1)return{g:'3년미만~1년+',s:1.3};
+  return{g:'1년미만',s:1.1};
 }
 
 // dbEntry의 경영상태점수 계산. calcBid() 결과(calc)를 전달
@@ -1230,6 +1266,22 @@ function calcEconScore(dbEntry,calc){
   var yr=calcYears(_pd.공사업등록일);
   // ── 지자체 기준 분기 ──────────────────────────────────────────────
   if(isJija&&jijaTier>0)return calcEconScoreJija(rD,rU,yr,jijaTier);
+  // ── 철도공단 기준 (붙임3/붙임4-A공사, 조달청과 배점 다름) ──────────
+  var isRail=calc?calc.isRail:false;
+  if(isRail){
+    if(E5>=5000000000){
+      var bdR1=부채등급철도1(rD);var udR1=유동등급철도1(rU);
+      var odR1=yr!=null?영업등급철도1(yr):null;
+      var scR1=bdR1.s+udR1.s+(odR1?odR1.s:0);
+      return{type:'철도1',부채:bdR1,유동:udR1,영업:odR1,score:scR1,rD:rD,rU:rU,yr:yr};
+    } else if(E5>=1000000000){
+      var bdR2=부채등급철도2(rD);var udR2=유동등급철도2(rU);
+      var odR2=yr!=null?영업등급철도2(yr):null;
+      var scR2=bdR2.s+udR2.s+(odR2?odR2.s:0);
+      return{type:'철도2',부채:bdR2,유동:udR2,영업:odR2,score:scR2,rD:rD,rU:rU,yr:yr};
+    }
+    return null;
+  }
   // ── 조달청 기준 (별표6/7A) ────────────────────────────────────────
   if(E5>=5000000000){
     var bd6=부채등급6(rD);var ud6=유동등급6(rU);
@@ -1498,15 +1550,17 @@ function calcBid(){
   var isDoRo=(b.적격기준==='도로공사');
   // ── 수자원공사 기준 (한국수자원공사, 조달청과 시공경험/경영상태 산식 동일 — 신인도만 차이) ──
   var isKW=(b.적격기준==='수자원공사');
+  // ── 철도공단 기준 (국가철도공단, 조달청과 시공경험/입찰가격 산식 동일 — 경영상태 배점표/신인도만 차이) ──
+  var isRail=(b.적격기준==='철도공단');
   // E6 계산은 조달청과 동일 (이미 위에서 H6*E4_eff 로 계산됨)
   return{E3:E3,E4_eff:E4_eff,E5:E5,H4:H4,H6:H6,H7:H7,D7:D7,E6:E6,E7:E7,A값:A값,예정가격:예정가격,
-         is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,공종:state.bid.공종||'전기',
+         is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,공종:state.bid.공종||'전기',
          auto배수:auto배수,auto투찰률:auto투찰률};
 }
 
 // 적격기준 원본값 → 약칭 (마감일 표시, 한줄요약 등에서 공용 사용)
 function 기준약칭(v){
-  return v==='조달청'?'조달':v==='인천공항'?'인천':v==='지자체'?'지자체':v==='LH'?'LH':v==='도로공사'?'도로':v==='수자원공사'?'수자원':(v||'');
+  return v==='조달청'?'조달':v==='인천공항'?'인천':v==='철도공단'?'철도':v==='지자체'?'지자체':v==='LH'?'LH':v==='도로공사'?'도로':v==='수자원공사'?'수자원':(v||'');
 }
 function getOneLineSummary(b, c, hideLHNote) {
   var 기준=기준약칭(b.적격기준)||'?';
@@ -1613,9 +1667,9 @@ function calcSlot(combo,calc){
     //             ② ①로 부적격일 때만, 감점업체 중 신용등급이 재무비율보다 유리한 경우에 한해 신용등급으로 대체(2차 패스, 아래 recomputeWithCredit)
     var _rowEconDed=null,_rowCreditInfo=null;
     if(!calc.isJija&&dbEntry){
-      var _srTypeS=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc.isKW?(calc.is50억?'KW6':'KW7A'):(calc.is50억?'6':'7A');
+      var _srTypeS=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc.isKW?(calc.is50억?'KW6':'KW7A'):calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc.is50억?'6':'7A');
       var _rawS=Number(dbEntry.일자리가점!=null?dbEntry.일자리가점:(dbEntry.신인도||0));
-      var _jaS=(_srTypeS==='6')?Math.round(_rawS/3*100)/100:(_srTypeS==='DoRo6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='KW6')?Math.round(_rawS*0.5*100)/100:(_srTypeS==='LH6'||_srTypeS==='LH7A')?((_rawS>=2.5?1.0:0)+(_rawS===0.5||_rawS===3.0?0.5:0)):_rawS;
+      var _jaS=(_srTypeS==='6')?Math.round(_rawS/3*100)/100:(_srTypeS==='DoRo6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='KW6')?Math.round(_rawS*0.5*100)/100:(_srTypeS==='LH6'||_srTypeS==='LH7A')?((_rawS>=2.5?1.0:0)+(_rawS===0.5||_rawS===3.0?0.5:0)):(_srTypeS==='철도6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='철도7A')?Math.round(_rawS*(0.5/3)*100)/100:_rawS;
       신인도=_jaS+calcSafetyBonus(dbEntry.안전보건시스템||'',_srTypeS);
       if(_srTypeS==='LH6'||_srTypeS==='LH7A') 신인도=Math.min(신인도,1.5); // LH 신인도 배점한도 +1.5
       // ① 경영상태 감점: econ 실시간 계산 우선 (별표6/7A 자동 분기), fallback: 저장값 — 신용등급은 아직 미적용
@@ -3610,6 +3664,9 @@ function extractBidFields(t){
     // ── 인천공항(인천국제공항공사) 확인 ──────────────────────────────────
     var isICN_=/인\s*천\s*국\s*제\s*공\s*항\s*공\s*사/.test(t)||/인\s*천\s*공\s*항\s*공\s*사/.test(t);
     if(isICN_){r.적격기준='인천공항';return;}
+    // ── 철도공단(국가철도공단) 확인 ──────────────────────────────────────
+    var isRail_=/국\s*가\s*철\s*도\s*공\s*단/.test(t)||/한\s*국\s*철\s*도\s*시\s*설\s*공\s*단/.test(t)||/철\s*도\s*공\s*단/.test(t);
+    if(isRail_){r.적격기준='철도공단';return;}
     var isJodal=/조\s*달\s*청\s*시\s*설\s*공\s*사\s*적\s*격\s*심\s*사\s*세\s*부\s*기\s*준/.test(t);
     if(isJodal){r.적격기준='조달청';return;}
     // ── 지자체 확인 ──────────────────────────────────────────────────────
