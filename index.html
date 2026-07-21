@@ -206,6 +206,7 @@ tr.hover:hover{background:#f8fafc}
           <select id="in-적격기준" style="width:100px;background:#d1fae5;color:#065f46;font-weight:700;border-color:#6ee7b7">
             <option value="">— 적격기준 —</option>
             <option value="조달청">조달청</option>
+            <option value="인천공항">인천공항(인천국제공항공사)</option>
             <option value="지자체">지자체</option>
             <option value="LH">LH(토지주택공사)</option>
             <option value="도로공사">도로공사(한국도로공사)</option>
@@ -1505,7 +1506,7 @@ function calcBid(){
 
 // 적격기준 원본값 → 약칭 (마감일 표시, 한줄요약 등에서 공용 사용)
 function 기준약칭(v){
-  return v==='조달청'?'조달':v==='지자체'?'지자체':v==='LH'?'LH':v==='도로공사'?'도로':v==='수자원공사'?'수자원':(v||'');
+  return v==='조달청'?'조달':v==='인천공항'?'인천':v==='지자체'?'지자체':v==='LH'?'LH':v==='도로공사'?'도로':v==='수자원공사'?'수자원':(v||'');
 }
 function getOneLineSummary(b, c, hideLHNote) {
   var 기준=기준약칭(b.적격기준)||'?';
@@ -3606,6 +3607,9 @@ function extractBidFields(t){
     // ── 수자원공사 확인 ──────────────────────────────────────────────────
     var isKW_=/한\s*국\s*수\s*자\s*원\s*공\s*사/.test(t)||/K[\s-]*water/i.test(t)||/수\s*자\s*원\s*공\s*사[\s\S]{0,20}적\s*격\s*심\s*사/.test(t);
     if(isKW_){r.적격기준='수자원공사';return;}
+    // ── 인천공항(인천국제공항공사) 확인 ──────────────────────────────────
+    var isICN_=/인\s*천\s*국\s*제\s*공\s*항\s*공\s*사/.test(t)||/인\s*천\s*공\s*항\s*공\s*사/.test(t);
+    if(isICN_){r.적격기준='인천공항';return;}
     var isJodal=/조\s*달\s*청\s*시\s*설\s*공\s*사\s*적\s*격\s*심\s*사\s*세\s*부\s*기\s*준/.test(t);
     if(isJodal){r.적격기준='조달청';return;}
     // ── 지자체 확인 ──────────────────────────────────────────────────────
