@@ -1890,7 +1890,9 @@ function getOneLineSummary(b, c, hideLHNote) {
   parts.push(구성str);
   
   var summary=parts.join('/');
-  var _showSiPy=(b.적격기준==='지자체'||b.적격기준==='LH'||b.적격기준==='도로공사')?(c.E5>=LIMIT_30):true; // 지자체/LH/도로공사는 30억 미만 제외, 조달청·수자원공사 등은 규모 무관 항상 표시
+  // 시평 기반 최대지분율(=투찰금액 대비 시평) 계산 자체가 없는 기준은 문구 생략:
+  // 지자체 30억 미만(jijaTier===1)·철도공단·도로공사(최대지분율 제한 자체가 없음), LH(지분율기준 방식이라 투찰금액 미사용)
+  var _showSiPy=!((b.적격기준==='지자체'&&c.jijaTier===1)||b.적격기준==='LH'||b.적격기준==='도로공사'||b.적격기준==='철도공단');
   if(_showSiPy && !(hideLHNote && b.적격기준==='LH')){summary+='/시평>투찰금액*지분율';}
   return summary;
 }
@@ -1916,7 +1918,7 @@ function getEligibilityChecklist(b, c) {
   if(시평str)lines.push(시평str);
   lines.push(실적str);
   if(b.적격기준==='LH'&&b.lh지분율기준!=null&&Number(b.lh지분율기준)>0){var _지억=Math.ceil(Number(b.lh지분율기준)/10000000)/10;lines.push('지분기준 '+_지억.toFixed(1)+'억');}
-  var _showSiPy2=(b.적격기준==='지자체'||b.적격기준==='LH'||b.적격기준==='도로공사')?(c.E5>=LIMIT_30):true;
+  var _showSiPy2=!((b.적격기준==='지자체'&&c.jijaTier===1)||b.적격기준==='LH'||b.적격기준==='도로공사'||b.적격기준==='철도공단');
   if(_showSiPy2)lines.push('시평>투찰금액*지분율');
   var 공종=b.공종||'전기';
   if(공종!=='전기')lines.push(공종);
@@ -2003,7 +2005,7 @@ function calcSlot(combo,calc){
       신인도가점:_신인도적용*f,
       감점가점:_감점적용*f,  // 지자체: 별표4/3/2 자동계산 또는 수동 override
       감점:_감점적용,  // 표시용 감점도 동기화
-      over:(calc.jijaTier===1||calc.isDoRo||s.grp==='분담'||s.grp==='소방'||s.grp==='통신')?false:(지분율_pct>최대지분율_pct+1e-9),
+      over:(calc.jijaTier===1||calc.isDoRo||calc.isRail||s.grp==='분담'||s.grp==='소방'||s.grp==='통신')?false:(지분율_pct>최대지분율_pct+1e-9),
       under:hasComp&&최하지분율_pct>0&&지분율_pct<최하지분율_pct-1e-9&&s.grp!=='분담'&&s.grp!=='소방'&&s.grp!=='통신',
       econ:econ,
       지역매치:(hasComp&&dbEntry&&s.grp!=='분담'&&s.grp!=='소방'&&s.grp!=='통신')?(지역들.indexOf(NFC(dbEntry.지역))>=0):false,
@@ -4452,8 +4454,8 @@ function exportCombosText(){
   if(msgText)out.push(msgText);
   out.push('');out.push(summary);out.push('');
   out=out.concat(comboLines);
-  // 지자체 30억 미만(jijaTier===1)은 최대지분율 제한 예외이므로 최대지분율 섹션 자체를 생략
-  if(!(c.isJija&&c.jijaTier===1)){
+  // 지자체 30억 미만(jijaTier===1)·철도공단은 최대지분율 제한 예외이므로 최대지분율 섹션 자체를 생략
+  if(!((c.isJija&&c.jijaTier===1)||c.isRail)){
     out.push('');out.push('--------------------');
     out.push('-최대지분율-');
     out=out.concat(maxLines);
@@ -4658,7 +4660,7 @@ function renderSlotRow(ci,si,r,calc){
     '></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
-    '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':'')+'>'+(r.최대지분율_pct||0).toFixed(1)+'%</td>'+
+    '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':(calc&&calc.isRail?' style="color:#d1d5db" title="철도공단: 시평 기반 최대지분율 제한 미적용"':''))+'>'+(r.최대지분율_pct||0).toFixed(1)+'%</td>'+
     '<td>'+(grp==='분담'?'<input type="number" class="pct" step="0.1" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율'+'" value="0" disabled style="background:#f3f4f6;color:#9ca3af">':'<input type="number" class="pct '+(r.over?'over':(r.under?'under':(r.isRec?'isrec':'')))+('" step="0.1" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율'+'" value="'+(r.지분율||0)+'">'))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-환산실적">'+FMT_NUM(Math.round(r.지분환산실적))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-환산시평">'+FMT_NUM(Math.round(r.지분환산시평))+'</td>'+
@@ -4784,7 +4786,7 @@ function updateSlotMath(ci){
   set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(calc.isLH?(result.합산시평_raw||0):result.합산시평)));
   set('순신인도2',FMT_REP(result.순신인도));
   result.ROW.forEach(function(r,si){
-    var m=card.querySelector('[data-cell="'+ci+'-'+si+'-max"]');if(m){m.textContent=(r.최대지분율_pct||0).toFixed(1)+'%';m.style.color=(calc&&calc.jijaTier===1)?'#d1d5db':'';m.title=(calc&&calc.jijaTier===1)?'지자체 30억 미만: 최대지분율 제한 미적용':'';}
+    var m=card.querySelector('[data-cell="'+ci+'-'+si+'-max"]');if(m){m.textContent=(r.최대지분율_pct||0).toFixed(1)+'%';var _grey=(calc&&calc.jijaTier===1)||(calc&&calc.isRail);m.style.color=_grey?'#d1d5db':'';m.title=(calc&&calc.jijaTier===1)?'지자체 30억 미만: 최대지분율 제한 미적용':((calc&&calc.isRail)?'철도공단: 시평 기반 최대지분율 제한 미적용':'');}
     var a1=card.querySelector('[data-cell="'+ci+'-'+si+'-환산실적"]');if(a1)a1.textContent=FMT_NUM(Math.round(r.지분환산실적));
     var a2=card.querySelector('[data-cell="'+ci+'-'+si+'-환산시평"]');if(a2)a2.textContent=FMT_NUM(Math.round(r.지분환산시평));
     var a3=card.querySelector('[data-cell="'+ci+'-'+si+'-신인도가점"]');if(a3)a3.textContent=FMT_REP(r.신인도가점);
@@ -4804,7 +4806,7 @@ function recommendRegional(ci){
   if(!used.length){toast('업체가 없습니다','bad');return;}
 
   var 기본지분율=Number(state.bid.기본지분율)||65;
-  var 최대무시=(calc.jijaTier===1); // 지자체 30억 미만
+  var 최대무시=(calc.jijaTier===1)||calc.isRail; // 지자체 30억 미만·철도공단: 시평 기반 최대지분율 제한 없음
 
   // 시평 기반 최대지분율 (약정지분율 미포함)
   function getSiPyeongMax(s){
@@ -5515,7 +5517,7 @@ function bind(){
             '<div style="font-size:11px;color:#6b7280;margin-top:10px;line-height:1.6">'+
               '※ <b>자동분배</b> 버튼 실행 시: 업체에 <b>약정지분율</b>이 있으면 그 값을, 없으면 <b>기본지분율</b>을 지분율로 입력합니다.<br>'+
               '단, 계산된 <b>최대지분율</b>을 초과하면 최대지분율보다 낮은 5%단위 값으로 조정합니다 (예: 최대 45% → 40%, 최대 56% → 55%).<br>'+
-              '지자체 30억 미만 공고는 최대지분율 제한 없이 약정지분율/기본지분율을 그대로 입력합니다.'+
+              '지자체 30억 미만·철도공단 공고는 최대지분율 제한 없이 약정지분율/기본지분율을 그대로 입력합니다.'+
             '</div>'+
           '</div>'+
         '</div>'+
