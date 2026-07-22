@@ -617,7 +617,7 @@ function emptyCombo(){
 function defaultBidObj(){
   return {시평제한:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
        지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,
-       업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:''};
+       업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:'',공고번호:'',마감일:''};
 }
 function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null};});}
 
@@ -644,7 +644,29 @@ const GIST_FILENAME = 'jodal_app_v2.json';
 
 function cleanAscii(s){return(s||'').replace(/[^\x20-\x7E]/g,'').trim();}
 function gistCreds(){return{pat:cleanAscii(localStorage.getItem(GIST_PAT_KEY)),gid:cleanAscii(localStorage.getItem(GIST_ID_KEY))};}
-function gistSaveCreds(pat,gid){localStorage.setItem(GIST_PAT_KEY,cleanAscii(pat));localStorage.setItem(GIST_ID_KEY,cleanAscii(gid));}
+function gistSaveCreds(pat,gid){localStorage.setItem(GIST_PAT_KEY,cleanAscii(pat));localStorage.setItem(GIST_ID_KEY,cleanAscii(gid));updateGistSetupBanner();}
+
+// 이 기기에 Gist 연결(PAT/Gist ID)이 안 되어 있으면 안내 배너를 띄우고, 설정 모달로 바로 이동할 수 있게 함.
+// (로그인 자체는 이 기기의 로컬 계정목록만 확인하는 절차라 Gist 연결 여부와 무관하게 항상 성공하므로,
+//  "로그인은 됐는데 기존 자료가 안 보이는" 상황을 이 배너로 짚어줌)
+function updateGistSetupBanner(){
+  var c=gistCreds();
+  var need=!c.pat||!c.gid;
+  var el=document.getElementById('gist-setup-banner');
+  if(!need){if(el)el.remove();return;}
+  if(el)return; // 이미 표시 중
+  el=document.createElement('div');
+  el.id='gist-setup-banner';
+  el.style.cssText='background:#fef3c7;border-bottom:1px solid #fde68a;color:#92400e;padding:8px 16px;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+  el.innerHTML='<span>⚠ 이 기기는 클라우드 동기화(Gist)가 아직 연결되지 않았습니다. 기존 업체DB·조합 등 자료가 보이지 않을 수 있습니다.</span>'+
+    '<button id="gist-setup-banner-btn" class="btn btn-sm" style="background:#d97706">지금 연결하기</button>'+
+    '<button id="gist-setup-banner-close" class="btn btn-sm btn-ghost">닫기</button>';
+  var shell=document.getElementById('app-shell');
+  if(!shell)return;
+  shell.insertBefore(el,shell.firstChild);
+  el.querySelector('#gist-setup-banner-btn').addEventListener('click',openGistModal);
+  el.querySelector('#gist-setup-banner-close').addEventListener('click',function(){el.remove();});
+}
 
 function gistStatus(st,label){
   var btn=document.getElementById('btn-gist-sync');
@@ -726,7 +748,7 @@ function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function openGistModal(){
   var c=gistCreds();
   var bk=document.createElement('div');bk.className='modal-back';bk.id='gist-modal-back';
-  bk.innerHTML='<div class="modal gist-modal" style="min-width:400px;max-width:500px">'
+  bk.innerHTML='<div class="modal gist-modal" style="width:min(500px,94vw);min-width:0">'
     +'<h3>☁ GitHub Gist 동기화 설정</h3>'
     +'<div style="font-size:12px;color:#374151;margin-bottom:12px">저장할 때마다 Gist에 자동 push, 앱 열릴 때 자동 pull합니다.</div>'
     +'<label style="font-size:11px;font-weight:600;color:#6b7280">GitHub Personal Access Token (gist scope)</label>'
@@ -743,6 +765,7 @@ function openGistModal(){
     +'<button class="btn btn-ghost" id="gist-btn-close" style="margin-left:auto">닫기</button>'
     +'</div>'
     +'<div id="gist-msg" style="margin-top:10px;font-size:11px;min-height:16px"></div>'
+    +'<p class="gist-note">다른 기기로 이 연결값을 옮기려면 ⚙ 설정 → <b>☁ Gist 백업</b> 탭(관리자 전용)을 이용하세요.</p>'
     +'</div>';
   document.body.appendChild(bk);
 
@@ -775,6 +798,56 @@ function openGistModal(){
   };
   document.getElementById('gist-btn-push').onclick=async function(){
     var cr=cur();gistSaveCreds(cr.pat,cr.gid);bk.remove();await gistPushNow();
+  };
+}
+
+// ── 관리자 전용: Gist 연결값(PAT+Gist ID) 파일 백업/복원 ──
+// 메신저에 붙여넣는 방식(대화 이력에 비밀 토큰이 남음) 대신, 텍스트 파일로 내려받아 USB·개인 클라우드 등
+// 신뢰할 수 있는 경로로 옮긴 뒤 새 기기에서 파일을 선택해 바로 적용하는 방식. ⚙ 설정 모달의 "Gist 백업" 탭에서 사용.
+function gistBackupTabHTML(){
+  var c=gistCreds();
+  var curCode=(c.pat&&c.gid)?('jodal-gist:'+c.gid+':'+c.pat):'';
+  return '<div style="padding:14px 16px 18px">'+
+    '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:10px">☁ Gist 연결값 백업</div>'+
+    '<div style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6">'+
+      '이 기기에 저장된 GitHub Gist 연결값(PAT+Gist ID)입니다. 새 기기로 옮기려면 아래 값을 복사해 그 기기의 이 탭 하단 칸에 붙여넣으세요.<br>'+
+      '<b style="color:#dc2626">이 값에는 비밀 토큰(PAT)이 그대로 담기니 신뢰할 수 있는 경로로만 전달하세요.</b>'+
+    '</div>'+
+    '<label style="font-size:11px;font-weight:600;color:#6b7280">현재 연결값</label>'+
+    '<div style="display:flex;gap:6px;margin-top:4px">'+
+      '<input id="gbk-current" type="text" readonly value="'+escHtml(curCode)+'" placeholder="(이 기기에 저장된 연결값 없음)" style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:monospace;background:#f8fafc">'+
+      '<button type="button" class="btn btn-sm" id="gbk-copy" style="background:#0369a1"'+(!curCode?' disabled':'')+'>📋 복사</button>'+
+    '</div>'+
+    '<div style="padding-top:14px;margin-top:14px;border-top:1px dashed #e5e7eb">'+
+      '<label style="font-size:11px;font-weight:600;color:#6b7280">새 기기 — 값 붙여넣기</label>'+
+      '<div style="display:flex;gap:6px;margin-top:4px">'+
+        '<input id="gbk-import" type="text" placeholder="여기에 연결값 붙여넣기" style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:monospace">'+
+        '<button type="button" class="btn btn-sm" id="gbk-import-btn" style="background:#059669">적용</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+function bindGistBackupTab(mr){
+  var copyBtn=mr.querySelector('#gbk-copy');
+  if(copyBtn)copyBtn.onclick=function(){
+    var el=mr.querySelector('#gbk-current');
+    if(!el||!el.value){toast('먼저 ☁ Gist 버튼에서 연결값을 저장하세요','bad');return;}
+    copyToClipboard(el.value,'연결값 복사 완료');
+  };
+  var importBtn=mr.querySelector('#gbk-import-btn');
+  if(importBtn)importBtn.onclick=async function(){
+    var inp=mr.querySelector('#gbk-import');
+    var raw=(inp&&inp.value||'').trim();
+    if(!raw){toast('붙여넣을 연결값을 입력하세요','bad');return;}
+    var parts=raw.split(':');
+    if(parts.length<3||parts[0]!=='jodal-gist'){toast('올바른 연결값 형식이 아닙니다','bad');return;}
+    var gid=parts[1];var pat=parts.slice(2).join(':');
+    gistSaveCreds(pat,gid);
+    toast('연결값 적용 완료. 자료를 받아오는 중…','ok');
+    await gistPull();
+    toast('가져오기 및 동기화 완료','ok');
+    var page=mr.querySelector('[data-stabpage="gistbackup"]');
+    if(page){page.innerHTML=gistBackupTabHTML();bindGistBackupTab(mr);}
   };
 }
 // ████ END GIST SYNC ████
@@ -1907,6 +1980,21 @@ function calcBid(){
 // 적격기준 원본값 → 약칭 (마감일 표시, 한줄요약 등에서 공용 사용)
 function 기준약칭(v){
   return v==='조달청'?'조달':v==='인천공항'?'인천':v==='철도공단'?'철도':v==='지자체'?'지자체':v==='LH'?'LH':v==='도로공사'?'도로':v==='수자원공사'?'수자원':(v||'');
+}
+// 확정메세지/조합결과TXT 상단 헤더(공고명·공고번호(지역)·추정가격·마감일) — state.bid의 저장된 구조화 필드에서 항상 재생성.
+// 협정메세지 텍스트가 지워지거나 비어 있어도 이 정보만은 사라지지 않도록 하기 위한 용도(공고문분석 시 state.bid.공고명/공고번호/마감일에 별도 저장됨).
+function buildBidMsgHeader(b){
+  var lines=[];
+  if(b.공고명)lines.push(b.공고명);
+  var regStr=getRegionStr();
+  var line2=b.공고번호?(b.공고번호+(regStr?' ('+regStr+')':'')):'';
+  if(line2)lines.push(line2);
+  if(b.추정가격!=null&&b.추정가격!==''&&!isNaN(b.추정가격))lines.push('추정가격 '+FMT_NUM(b.추정가격)+'원');
+  if(b.마감일){
+    var 기준=기준약칭(b.적격기준);
+    lines.push('마감 '+b.마감일+(기준?' ('+기준+')':''));
+  }
+  return lines.join('\n');
 }
 function getOneLineSummary(b, c, hideLHNote) {
   var 기준=기준약칭(b.적격기준)||'?';
@@ -4314,6 +4402,9 @@ function showPdfResultModal(found,preview){
     var _regSel=['1','2','3'].map(function(i){var e=document.querySelector('[data-pdf-region-idx="'+i+'"]');return e?e.value.trim():'';}).filter(Boolean);
     if(_regSel.length)found.지역선택=Array.from(new Set(_regSel));
     if(found.공사명)state.bid.공고명=found.공사명;
+    // 확정메세지/조합결과TXT 상단 헤더(공고명·공고번호·추정가격·마감일)에 쓰일 값 — 협정메세지 텍스트와 별개로 항상 보존
+    if(found.공고번호)state.bid.공고번호=found.공고번호;
+    if(found.등록마감일)state.bid.마감일=found.등록마감일;
     document.querySelectorAll('[data-pdf-key]').forEach(function(cb){
       if(!cb.checked)return;
       var k=cb.dataset.pdfKey;var v=found[k];
@@ -4471,6 +4562,8 @@ function exportCombosText(){
   }
   while(msgLines.length>0&&msgLines[msgLines.length-1].trim()==='')msgLines.pop();
   var msgText=msgLines.join('\n');
+  // 협정메세지가 비어있으면(또는 헤더 부분이 지워졌으면) 공고명/공고번호/추정가격/마감일로 항상 재생성 — 이 정보는 필수이므로 누락되지 않게 함
+  if(!msgText.trim())msgText=buildBidMsgHeader(b);
   // 2. 한줄요약
   var summary=getOneLineSummary(b, c, true);
   // 3. 조합결과: calcSlot 활용 → 지분율 내림차순 정렬 + 순신인도 표시
@@ -5310,7 +5403,7 @@ function bind(){
   $('#btn-reset-bid').addEventListener('click',function(){
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기'});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고번호:'',마감일:''});
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
     if($('#in-기본지분율'))$('#in-기본지분율').value=65;
     state.combos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
@@ -5325,7 +5418,7 @@ function bind(){
     var _rlh3=$('#in-lh품질');if(_rlh3)_rlh3.value='2';
     var _rlh4=$('#in-lh순공사원가');if(_rlh4)_rlh4.value='';
     state.bid.품질평가점수=2;
-    save();refreshBidStats();refreshCombos();
+    save();refreshBidStats();refreshCombos();updateBidNameLabel();
   });
 
   // 조합 입력 이벤트
@@ -5532,7 +5625,7 @@ function bind(){
         '<div style="padding:12px 16px 14px">'+
           '<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.04em">■ 협정메세지</div>'+
           '<textarea id="m-jeong-edit" rows="8" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #c4b5fd;border-radius:4px;font-family:monospace;resize:vertical;line-height:1.6;box-sizing:border-box">'+esc(msg)+'</textarea>'+
-          '<div style="font-size:10px;color:#9ca3af;margin-top:3px">직접 수정 후 저장 가능. 공고문분석 시 자동 업데이트됨.</div>'+
+          '<div style="font-size:10px;color:#9ca3af;margin-top:3px">직접 수정 후 저장 가능. 비워두면 확정메세지·조합결과TXT에서 공고명/공고번호/추정가격/마감일로 자동 채워집니다.</div>'+
           '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px">'+
             '<button class="btn" id="m-jeong-copy" style="background:#7c3aed;padding:3px 10px;font-size:12px">📋 복사</button>'+
             '<button class="btn btn-ghost" id="m-jeong-save" style="padding:3px 10px;font-size:12px">저장</button>'+
@@ -5592,6 +5685,7 @@ function bind(){
           '<button type="button" class="settings-tabbtn" data-stab="analyzer">📋 공고문분석</button>'+
           '<button type="button" class="settings-tabbtn" data-stab="combo">🤝 조합</button>'+
           (isAdminOrAbove()?'<button type="button" class="settings-tabbtn" data-stab="accounts">👤 계정</button>':'')+
+          (isAdminOrAbove()?'<button type="button" class="settings-tabbtn" data-stab="gistbackup">☁ Gist 백업</button>':'')+
         '</div>'+
         '<div class="settings-tabpage" data-stabpage="backup">'+
           '<div style="margin:12px 16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
@@ -5655,6 +5749,7 @@ function bind(){
           '</div>'+
         '</div>'+
         (isAdminOrAbove()?('<div class="settings-tabpage" data-stabpage="accounts" style="display:none">'+accountsTabHTML()+'</div>'):'')+
+        (isAdminOrAbove()?('<div class="settings-tabpage" data-stabpage="gistbackup" style="display:none">'+gistBackupTabHTML()+'</div>'):'')+
         '</div></div>';
       document.getElementById('bkp-choose').onclick=pickBackupFolder;
       document.getElementById('bkp-now').onclick=function(){doBackupNow(false);};
@@ -5705,6 +5800,7 @@ function bind(){
         });
       }
       if(isAdminOrAbove())bindAccountsTab(mr);
+      if(isAdminOrAbove())bindGistBackupTab(mr);
       // 설정 탭 전환
       function switchStab(tab){
         mr.querySelectorAll('.settings-tabbtn').forEach(function(b){b.classList.toggle('active',b.dataset.stab===tab);});
@@ -6340,8 +6436,14 @@ function showConfirmPop(ci){
     return s.업체명+' '+(Number(s.지분율)||0)+'%'+netStr+(bizno?'\n('+bizno+')':'');
   }).join('\n');
   var msg=state.bid.협정메세지||'';
-  var result;
   var TAG='<구성현황>';
+  // 협정메세지 헤더 부분(공고명/공고번호/추정가격/마감일)이 비어있으면 state.bid 저장값으로 항상 재생성 — 텍스트가 지워져도 이 정보는 누락되지 않게 함
+  var _headerPart=(msg.indexOf(TAG)!==-1?msg.substring(0,msg.indexOf(TAG)):msg).trim();
+  if(!_headerPart){
+    var _hdr=buildBidMsgHeader(state.bid);
+    if(_hdr)msg=msg.indexOf(TAG)!==-1?(_hdr+'\n'+msg.substring(msg.indexOf(TAG))):(_hdr+(msg?('\n'+msg):''));
+  }
+  var result;
   if(msg.indexOf(TAG)!==-1){
     var tagEnd=msg.indexOf(TAG)+TAG.length;
     var before=msg.substring(0,tagEnd);
@@ -7146,6 +7248,7 @@ function boot(){
   lhRefreshStats();
   var _gb=document.getElementById('btn-gist-sync');
   if(_gb)_gb.addEventListener('click',openGistModal);
+  updateGistSetupBanner();
   gistPull();
   checkExpiryAlertsOnBoot();
   initBackupOnBoot();
