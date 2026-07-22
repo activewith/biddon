@@ -1496,7 +1496,7 @@ function applyRailTechToCombo(ci){
     var name=(s.업체명||'').trim();
     if(!name)return;
     var entry=(state.railTechDB||[]).find(function(e){return NFC(e.업체명)===NFC(name);});
-    if(entry){s.Func=railTechCompanyTotal(entry);matched.push(name);}
+    if(entry){s.Func=railTechCompanyTotal(entry);s.FuncNumeric=true;matched.push(name);}
     else unmatched.push(name);
   });
   if(matched.length===0&&unmatched.length===0){toast('조합에 업체가 없습니다','bad');return;}
@@ -4144,58 +4144,145 @@ function showPdfResultModal(found,preview){
       var found=extractBidFields(txt);if(found.공종){state.bid.공종=found.공종;syncAvgRatios(found.공종);var _ge=$('#in-공종');if(_ge)_ge.value=found.공종;var _lge=$('#o-공종-label');if(_lge)_lge.textContent=found.공종;}root.innerHTML='';showPdfResultModal(found,txt.slice(0,800));
     };return;
   }
-  // 협정메세지 자동 생성
-  // 협정메세지 기초금액 라인: 0원이면 추정가격 사용
-  var _amtLabel=found.기초금액_label||'기초금액';
-  var _amtVal=(found.기초금액_label==='추정가격'&&found.추정가격)?found.추정가격:(found.기초금액||0);
-  var _amtStr=_amtVal>0?(_amtLabel+' '+FMT_NUM(_amtVal)+'원'):(_amtLabel+' -');
-  var _jg=기준약칭(found.적격기준||state.bid.적격기준||'');  // 파싱 결과 우선, 없으면 현재 저장값 (약칭으로 표시: 조달/지자체/LH/도로/수자원)
-  var _deadlineStr=found.등록마감일?('마감 '+found.등록마감일+(_jg?' ('+_jg+')':'')):'';
-  var _defaultMsg=[
-    found.공사명||'',
-    (found.공고번호?(found.공고번호+(found.지역선택&&(Array.isArray(found.지역선택)?found.지역선택.length:found.지역선택)?' ('+(Array.isArray(found.지역선택)?found.지역선택.join(','):found.지역선택)+')':'')):'')||'',
-    _amtStr,
-    _deadlineStr,
-    '',
-    '<구성현황>',
-    '',
-    '',
-    '협정 부탁 드립니다.'
-  ].join('\n');
-  var _savedMsg=state.bid.협정메세지||'';
-  var _initMsg=_defaultMsg;  // 항상 현재 공고문 파싱 결과로 초기화 (이전 저장값 무시)
-
-  var rows=keys.filter(function(k){return !['공사명','공고번호','발주처','마감일','등록마감일','기초금액_label'].includes(k);}).map(function(k){
+  // ── 공통(필수)항목 / 개별항목 구분 ──────────────────────────────────
+  // 공통(필수)항목: 모든 공고에서 반드시 입력되어야 하는 항목.
+  // 단, 기초금액/A값은 미검출 시 "미정" 표시로 대체하고(공고입력 섹션 기본 규칙 그대로 사용).
+  // 그 외 미검출 항목은 버튼을 막지 않고, 대신 추출값 칸을 직접입력 가능한 입력란으로 대체한다.
+  var commonKeys=['공종','지역선택','추정가격','기초금액','지역의무지분','최소지분율','구성업체수','적격기준','투찰률','A값'];
+  var fallbackKeys={기초금액:1,A값:1}; // 미검출이어도 "미정"으로 표시하고 버튼을 막지 않음
+  var excludeKeys=['공사명','공고번호','발주처','마감일','등록마감일','기초금액_label'];
+  var _regionList=Array.from(new Set(state.db.map(function(c){return c.지역;}).filter(Boolean))).sort();
+  function _hasVal(k){
+    var v=found[k];
+    if(v==null||v==='')return false;
+    if(Array.isArray(v)&&v.length===0)return false;
+    return true;
+  }
+  function _dispVal(k){
     var val=found[k];
-    var disp=(k==='기초금액'||k==='추정가격'||k==='시평제한'||k==='A값'||k==='lh지분율기준')?FMT_NUM(val):String(val)+(k==='지역의무지분'||k==='투찰률'||k==='최소지분율'?'%':k==='배수'?'배':k==='구성업체수'?'개사':'');
+    return (k==='기초금액'||k==='추정가격'||k==='시평제한'||k==='A값'||k==='lh지분율기준')?FMT_NUM(val):
+      String(Array.isArray(val)?val.join(','):val)+(k==='지역의무지분'||k==='투찰률'||k==='최소지분율'?'%':k==='배수'?'배':k==='구성업체수'?'개사':'');
+  }
+  function _manualInput(k){
+    var st='width:100%;box-sizing:border-box;padding:2px 4px;border:1px solid #f59e0b;border-radius:3px;font-size:12px;background:#fffbeb;color:#111827';
+    if(k==='공종'){
+      return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
+        '<option value="">직접선택</option><option value="전기">전기</option><option value="통신">통신</option><option value="소방">소방</option><option value="전기+통신">전기+통신</option><option value="전기+소방">전기+소방</option></select>';
+    }
+    if(k==='적격기준'){
+      return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
+        '<option value="">직접선택</option><option value="조달청">조달청</option><option value="인천공항">인천공항</option><option value="철도공단">철도공단</option><option value="지자체">지자체</option><option value="LH">LH</option><option value="도로공사">도로공사</option><option value="수자원공사">수자원공사</option></select>';
+    }
+    if(k==='지역선택'){
+      var sst='width:33%;box-sizing:border-box;padding:2px 3px;border:1px solid #f59e0b;border-radius:3px;font-size:11px;background:#fffbeb;color:#111827';
+      var regOpts=function(ph){return '<option value="">'+esc(ph)+'</option>'+_regionList.map(function(r){return '<option value="'+esc(r)+'">'+esc(r)+'</option>';}).join('');};
+      return '<div style="display:flex;gap:3px">'+
+        '<select data-pdf-region-idx="1" style="'+sst+'">'+regOpts('지역1(필수)')+'</select>'+
+        '<select data-pdf-region-idx="2" style="'+sst+'">'+regOpts('지역2')+'</select>'+
+        '<select data-pdf-region-idx="3" style="'+sst+'">'+regOpts('지역3')+'</select>'+
+      '</div>';
+    }
+    // 나머지 항목은 숫자 직접입력형
+    var numAttrs={추정가격:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"'};
+    var ph=(k==='최소지분율'||k==='지역의무지분'||k==='투찰률')?'예: 10':(k==='구성업체수'?'예: 3':'직접입력');
+    return '<input type="number" data-pdf-manual="'+k+'" '+(numAttrs[k]||'')+' placeholder="'+ph+'" style="'+st+'">';
+  }
+  var commonRows=commonKeys.map(function(k){
+    var has=_hasVal(k);
+    var showFallback=!has&&fallbackKeys[k];
+    var disp=has?_dispVal(k):(showFallback?'미정':'');
+    var valStyle=has?'':';color:var(--bad)';
+    var valueCell=(has||showFallback)?
+      ('<td style="padding:4px 8px;font-weight:700'+valStyle+'">'+esc(disp)+'</td>'):
+      ('<td style="padding:4px 8px">'+_manualInput(k)+'</td>');
+    return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'"'+(has?' checked':'')+'></td>'+
+           '<td style="padding:4px 8px;color:var(--muted);font-size:12px">'+esc(labels[k]||k)+'</td>'+
+           valueCell+'</tr>';
+  }).join('');
+  var individualKeys=keys.filter(function(k){return !commonKeys.includes(k)&&!excludeKeys.includes(k);});
+  var individualRows=individualKeys.map(function(k){
     return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'" checked></td>'+
            '<td style="padding:4px 8px;color:var(--muted);font-size:12px">'+esc(labels[k]||k)+'</td>'+
-           '<td style="padding:4px 8px;font-weight:700">'+esc(disp)+'</td></tr>';
+           '<td style="padding:4px 8px;font-weight:700">'+esc(_dispVal(k))+'</td></tr>';
   }).join('');
   root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:460px;max-width:96vw">'+
     '<h3>📄 공고문 분석 결과</h3>'+
     '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">반영할 항목을 선택하세요.</p>'+
-    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody>'+rows+'</tbody></table>'+
-    '<div style="margin-top:14px">'+
-    '<div style="font-size:12px;font-weight:700;color:#1d4ed8;margin-bottom:4px;display:flex;align-items:center;gap:6px">'+
-      '📋 협정메세지 작성'+
-      '<span style="font-size:10px;color:#6b7280;font-weight:400">(수정 가능 — 반영 시 저장됨)</span>'+
-    '</div>'+
-    '<textarea id="m-jeongmsg" rows="7" style="width:100%;font-size:12px;padding:8px;border:1px solid #93c5fd;border-radius:4px;font-family:monospace;resize:vertical;line-height:1.6;box-sizing:border-box">'+esc(_initMsg)+'</textarea>'+
-    '</div>'+
+    '<div style="font-size:12px;font-weight:700;color:#1d4ed8;margin:4px 0">공통(필수)항목</div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody>'+commonRows+'</tbody></table>'+
+    (individualRows?(
+    '<div style="font-size:12px;font-weight:700;color:#374151;margin:12px 0 4px">개별항목</div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody>'+individualRows+'</tbody></table>'
+    ):'')+
     '<div class="row" style="justify-content:flex-end;margin-top:12px;gap:6px">'+
     '<button class="btn btn-ghost" id="m-cancel">취소</button>'+
     '<button class="btn" id="m-apply-pdf" style="background:#2563eb">선택 항목 반영</button>'+
     '</div></div></div>';
   $('#m-cancel').onclick=function(){root.innerHTML='';};
+  var applyBtn=$('#m-apply-pdf');
+  function _updateApplyBtnState(){
+    // 필수(공통)항목 중 fallback 대상이 아닌 항목이 하나라도 값이 없으면(검출도 안 되고 직접입력도 안 되면) 버튼 비활성화.
+    // 값이 채워지면 자동으로 다시 활성화됨.
+    var blocked=commonKeys.some(function(k){
+      if(fallbackKeys[k])return false;
+      if(_hasVal(k))return false;
+      if(k==='지역선택'){
+        var r1=document.querySelector('[data-pdf-region-idx="1"]');
+        return !(r1&&r1.value);
+      }
+      var el=document.querySelector('[data-pdf-manual="'+k+'"]');
+      return !(el&&el.value.trim());
+    });
+    applyBtn.disabled=blocked;
+    applyBtn.style.background=blocked?'#9ca3af':'#2563eb';
+    applyBtn.style.cursor=blocked?'not-allowed':'';
+    applyBtn.style.opacity=blocked?'.7':'';
+  }
+  document.querySelectorAll('[data-pdf-manual]').forEach(function(el){
+    el.addEventListener('input',function(){
+      var k=el.dataset.pdfManual;
+      var cb=document.querySelector('[data-pdf-key="'+k+'"]');
+      if(cb)cb.checked=!!el.value.trim();
+      _updateApplyBtnState();
+    });
+    el.addEventListener('change',function(){
+      var k=el.dataset.pdfManual;
+      var cb=document.querySelector('[data-pdf-key="'+k+'"]');
+      if(cb)cb.checked=!!el.value.trim();
+      _updateApplyBtnState();
+    });
+  });
+  document.querySelectorAll('[data-pdf-region-idx]').forEach(function(el){
+    el.addEventListener('change',function(){
+      var r1=document.querySelector('[data-pdf-region-idx="1"]');
+      var cb=document.querySelector('[data-pdf-key="지역선택"]');
+      if(cb)cb.checked=!!(r1&&r1.value);
+      _updateApplyBtnState();
+    });
+  });
+  _updateApplyBtnState();
   $('#m-apply-pdf').onclick=function(){
-    // 협정메세지 저장
-    var msgEl=document.getElementById('m-jeongmsg');
-    if(msgEl)state.bid.협정메세지=msgEl.value;
+    if(applyBtn.disabled)return;
+    // 직접입력한 미검출 항목 값을 found에 반영
+    document.querySelectorAll('[data-pdf-manual]').forEach(function(el){
+      var k=el.dataset.pdfManual;
+      var raw=(el.value||'').trim();
+      if(!raw)return;
+      if(k==='공종'||k==='적격기준'){
+        found[k]=raw;
+      }else{
+        var num=Number(raw.replace(/,/g,''));
+        if(!isNaN(num))found[k]=num;
+      }
+    });
+    // 지역선택: 최대 3개 선택형(select) 입력을 배열로 반영
+    var _regSel=['1','2','3'].map(function(i){var e=document.querySelector('[data-pdf-region-idx="'+i+'"]');return e?e.value.trim():'';}).filter(Boolean);
+    if(_regSel.length)found.지역선택=Array.from(new Set(_regSel));
     if(found.공사명)state.bid.공고명=found.공사명;
     document.querySelectorAll('[data-pdf-key]').forEach(function(cb){
       if(!cb.checked)return;
       var k=cb.dataset.pdfKey;var v=found[k];
+      if(v==null||v===''||(Array.isArray(v)&&v.length===0))return;
       if(k==='기초금액'){state.bid.기초금액=v;$('#in-기초금액').value=FMT_NUM(v);}
       else if(k==='추정가격'){state.bid.추정가격=v;$('#in-추정가격').value=FMT_NUM(v);}
       else if(k==='시평제한'){state.bid.시평제한=v;$('#in-시평제한').value=FMT_NUM(v);}
@@ -4657,7 +4744,9 @@ function renderSlotRow(ci,si,r,calc){
     '<td data-cell="'+ci+'-'+si+'-환산시평">'+FMT_NUM(Math.round(r.지분환산시평))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-신인도가점">'+FMT_REP(r.신인도가점)+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-감점가점">'+FMT_REP(r.감점가점)+'</td>'+
-    '<td><input type="number" class="rep" step="0.001" data-edit="'+ci+'-'+si+'-Func" value="'+(r.Func!=null&&r.Func!==''?FMT_REP(r.Func):'')+'" placeholder="-" style="width:56px" title="특별 계산점수 · 참고사항 수동 입력 (예: 철도기술점수 총합산점수)"></td>'+
+    (r.FuncNumeric?
+      '<td><input type="number" class="rep" step="0.001" data-edit="'+ci+'-'+si+'-Func" value="'+(r.Func!=null&&r.Func!==''?FMT_REP(r.Func):'')+'" placeholder="-" style="width:56px" title="철도기술점수 DB에서 자동 반영된 값 (숫자만 입력 가능)"></td>'
+     :'<td><input type="text" class="rep" data-edit="'+ci+'-'+si+'-Func" value="'+esc(r.Func!=null?String(r.Func):'')+'" placeholder="-" style="width:56px" title="특별 계산점수 · 참고사항 수동 입력 (예: 철도기술점수 총합산점수). 숫자를 입력하면 적격계산에 반영되고, 🚄기술 버튼을 누르면 자동으로 숫자입력 칸으로 전환됩니다."></td>')+
     renderEconCell(r)+
     '<td class="c"><button class="btn btn-sm btn-ghost" data-del-slot="'+ci+'-'+si+'" title="슬롯 삭제">×</button></td>'+
     '</tr>';
@@ -5241,6 +5330,13 @@ function bind(){
     if(!t.dataset||!t.dataset.edit)return;
     var parts=t.dataset.edit.split('-');
     var ci=Number(parts[0]),si=Number(parts[1]),field=parts[2];
+    if(field==='Func'){
+      // Func(기술점수): 기본은 텍스트(참고사항) 입력, 🚄기술 버튼으로 자동반영된 후에만 숫자입력으로 전환됨.
+      // 숫자입력 모드가 아니면 입력한 텍스트를 그대로 저장(적격계산 시 Number()||0으로 안전하게 처리됨).
+      var _slot=state.combos[ci].slots[si];
+      _slot.Func=_slot.FuncNumeric?(Number(t.value)||0):t.value;
+      save();updateSlotMath(ci);return;
+    }
     var val=(field==='실적'||field==='시평액')?(readMoney(t)||0):(Number(t.value)||0);
     state.combos[ci].slots[si][field]=val;
     if(field==='감점')state.combos[ci].slots[si].감점Override=true;  // 수동 입력 시 자동계산 대신 사용
