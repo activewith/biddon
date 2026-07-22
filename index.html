@@ -61,8 +61,8 @@ tr.hover:hover{background:#f8fafc}
 .combo-head{background:#f1f5f9;padding:6px 10px;display:flex;align-items:center;gap:10px;font-weight:600;font-size:12px;flex-wrap:wrap}
 .combo-head .name{font-size:13px;color:#0f172a}
 .combo-head .actions{margin-left:auto;display:flex;gap:4px}
-.combo-body{padding:6px;overflow-x:hidden}
-.combo-body table{font-size:11.5px}
+.combo-body{padding:6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.combo-body table{font-size:11.5px;width:auto;min-width:900px}
 .combo-body input.money,.combo-body input[type="number"]{padding:2px 4px;text-align:right;border:1px solid var(--border);border-radius:3px;font-size:11.5px;font-variant-numeric:tabular-nums}
 .combo-body input.money{width:88px}
 .combo-body input.rep{width:50px}
@@ -175,6 +175,43 @@ body.role-user [data-rtaddrow]{display:none!important}
 body.role-user .railtech-name,
 body.role-user .railtech-memo,
 body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
+
+/* ── 반응형(태블릿/모바일) ── */
+/* 넓은 표(조합/업체DB 등)는 축소 대신 카드/컨테이너 내부 가로스크롤로 전환 — 열이 잘리지 않게 함 */
+@media (max-width:1024px){
+  main{max-width:100%;padding:8px}
+  .panel{padding:8px}
+  .summary{grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}
+  .modal{min-width:0;width:94vw}
+  .form-grid{grid-template-columns:120px 1fr}
+}
+@media (max-width:640px){
+  body{font-size:12px}
+  header{flex-wrap:wrap;padding:8px 10px;gap:6px 10px}
+  header h1{font-size:14px}
+  header .small{display:none}
+  #session-info{margin-left:0}
+  header nav{margin-left:0;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  header nav button{flex:0 0 auto;padding:7px 10px;font-size:12px}
+  main{padding:6px}
+  .panel{padding:8px;margin-bottom:8px}
+  .panel h2{font-size:13px}
+  .row{gap:6px}
+  .field input,.field select{padding:7px 8px;font-size:13px}
+  .field input.money,.field input[type="number"]{width:120px}
+  .summary{grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px}
+  .stat{padding:5px 4px}
+  .stat .v{font-size:12px}
+  .toolbar input[type="text"]{width:auto;flex:1;min-width:100px}
+  .form-grid{grid-template-columns:1fr;gap:4px}
+  .form-grid label{font-weight:600;color:var(--muted);font-size:11px}
+  .modal{padding:12px;width:96vw;max-height:94vh}
+  button.btn{padding:8px 12px;font-size:12.5px}
+  button.btn-sm{padding:6px 9px;font-size:11.5px}
+  .combo-head{gap:6px}
+  .combo-head .actions{width:100%;justify-content:flex-start}
+  .settings-table td:first-child{width:auto;min-width:90px}
+}
 </style>
 </head>
 <!-- SECTION: HTML-레이아웃 (헤더/메인/탭 구조) -->
@@ -220,7 +257,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <div class="field"><label>A값 <span class="star-tip" style="color:#059669" data-tip="복수예비가격 산술평균. 입력 시 예상투찰금액 계산에 반영">★</span></label><input type="text" inputmode="numeric" class="money" id="in-A값" placeholder="없으면 기초금액 자동 적용" style="background:#f0fdf4;border-color:#86efac"></div>
         <div class="field"><label>지역의무지분 (%)</label><input type="number" id="in-지역의무지분" step="1" min="0" max="100" placeholder="예: 40" style="width:100px"></div>
         <div class="field"><label>최소지분율 (%) <span class="star-tip" style="color:#d97706" data-tip="이 비율 미만이면 업체 목록에 미표시">★</span></label><input type="number" id="in-최소지분율" step="0.1" min="0" max="100" placeholder="예: 10" style="width:100px"></div>
-        <div class="field"><label>구성업체수 <span class="star-tip" style="color:#7c3aed" data-tip="슬롯 수를 자동 조정 (1~5)">★</span></label><input type="number" id="in-구성업체수" step="1" min="1" max="5" value="3" style="width:70px"></div>
+        <div class="field"><label>구성업체수 <span class="star-tip" style="color:#7c3aed" data-tip="슬롯 수를 자동 조정 (1~5)">★</span></label><input type="number" id="in-구성업체수" step="1" min="1" max="5" value="2" style="width:70px"></div>
         <div id="lh-group" style="display:none;flex-wrap:wrap;gap:8px;align-items:flex-end;border:2px dashed #fde68a;border-radius:8px;padding:8px 10px;background:#fffbeb;">
           <div style="width:100%;font-size:10px;font-weight:700;color:#92400e;letter-spacing:0.03em">⚡ LH 전용 입력항목</div>
           <div class="field" id="field-lh순공사원가"><label>순공사원가 <span class="star-tip" style="color:#dc2626;font-size:10px;font-weight:700" data-tip="LH 협정계산 기준. 공고문의 순공사원가 금액 입력">LH ★</span></label><input type="text" inputmode="numeric" class="money" id="in-lh순공사원가" placeholder="공고문 순공사원가 입력" style="width:200px;background:#fef3c7;border-color:#fde68a"></div>
@@ -293,7 +330,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
     </div>
 
     <div class="panel">
-      <h2>2. 조합 (기본 3개 · 필요 시 추가, 슬롯은 최대 5)
+      <h2>2. 조합 (기본 2개 · 필요 시 추가, 슬롯은 최대 5)
         <span class="small" style="font-weight:400;color:#6b7280;margin-left:4px">
           <span class="badge type-지역">지역</span> = 선택 지역 업체 &nbsp;
           <span class="badge type-실적">실적</span> = 실적업체 플래그 &nbsp;
@@ -440,8 +477,8 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <button class="btn btn-sm" id="btn-grp-unassign" style="display:none;background:#fee2e2;color:#dc2626;border:1px solid #fecaca">선택업체 그룹 해제</button>
         <span id="db-group-sel-info" class="small" style="color:#0369a1;font-weight:600"></span>
       </div>
-      <div style="max-height:600px;overflow-y:auto;overflow-x:hidden">
-        <table id="db-table">
+      <div style="max-height:600px;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table id="db-table" style="width:auto;min-width:1150px">
           <thead><tr>
             <th class="c" style="width:28px"><input type="checkbox" id="db-chk-all" title="전체 선택/해제"></th>
             <th class="l">지역</th><th title="일자리창출가점+안전보건시스템 (별표7A기준 / 괄호:별표6)&#10;일자리창출: 최대+3.0(7A)/+1.0(6)&#10;K(YYMM)=KOSHA-MS: +2.0(7A)/+1.0(6)&#10;S(YYMM)=ISO45001: +1.6(7A)/+0.8(6)&#10;수자원공사: KOSHA·ISO 공통 +1.0(10~50억)/+0.5(50억+)" style="cursor:help">가점 ℹ</th><th title="경영상태 배점 대비 감점 (별표7A기준 / 괄호:별표6)">감점</th><th class="l">업체명</th>
@@ -572,17 +609,17 @@ function fallbackCopy(text, successToastMsg) {
 
 function emptySlot(){return {업체명:'',신인도:0,감점:0,실적:0,시평액:0,지분율:0,isRec:false,grp:'지역',개별최대지분율:null};}
 function emptyCombo(){
-  var n=3;
-  try{if(state&&state.bid)n=Math.max(1,Math.min(MAX_SLOTS,Number(state.bid.구성업체수)||3));}catch(e){}
+  var n=2;
+  try{if(state&&state.bid)n=Math.max(1,Math.min(MAX_SLOTS,Number(state.bid.구성업체수)||2));}catch(e){}
   return {slots:Array.from({length:n},emptySlot),사정률D7:null};
 }
 
 function defaultBidObj(){
   return {시평제한:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-       지역의무지분:null,최소지분율:null,구성업체수:3,지역선택:[],적격기준:'',기본지분율:65,
+       지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,
        업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:''};
 }
-function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:3},emptySlot),사정률D7:null};});}
+function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null};});}
 
 var _initBid=defaultBidObj();
 var _initCombos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
@@ -1886,7 +1923,7 @@ function getOneLineSummary(b, c, hideLHNote) {
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
   var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정)':'');
   var 실적str='실적'+실적억.toFixed(1)+'억'+실적기준sfx;
-  var n=Number(b.구성업체수)||3;
+  var n=Number(b.구성업체수)||2;
   var 최소str=(b.최소지분율!=null&&b.최소지분율!==''&&!isNaN(b.최소지분율))?Number(b.최소지분율)+'%':'';
   var 구성str=n+'인'+(n<=2?'':(최소str||''));
   
@@ -1912,7 +1949,7 @@ function getOneLineSummary(b, c, hideLHNote) {
 function getEligibilityChecklist(b, c) {
   if(b.적격기준==='지자체' && !(c.E5>=LIMIT_30) && !(c.E3!=null&&c.E3>0)) return '';
   var 의무=(b.지역의무지분!=null&&b.지역의무지분!=='')?'의무 '+Number(b.지역의무지분)+'%':'';
-  var n=Number(b.구성업체수)||3;
+  var n=Number(b.구성업체수)||2;
   var 최소str=(b.최소지분율!=null&&b.최소지분율!==''&&!isNaN(b.최소지분율))?Number(b.최소지분율)+'%':'';
   var 구성str=n+'인'+(n<=2?'':(최소str||''));
   var 시평str='';
@@ -3959,16 +3996,14 @@ function extractBidFields(t){
   if(!m)m=t.match(/(\d)\s*인\s*이\s*(?:하|내)/);
   if(m)r.구성업체수=Number(m[1]);
   _tryKW(t,'구성업체수',r);
-  var _rjlim=t.match(/지역\s*제한[^\n]{0,30}전국\s*\/\s*([가-힣]{2,6})/);
-  if(_rjlim){r.지역선택=[_rjlim[1]];}
-  else{
-    var _REGPAT=/(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/g;
-    var _foundRegs=[];
-    var _rCtxLines=t.match(/(?:지역\s*의무공동도급|지역\s*제한|공사\s*지역)[^\n]{0,150}/g);
-    if(_rCtxLines){_rCtxLines.forEach(function(line){var ms=line.match(_REGPAT);if(ms)ms.forEach(function(x){if(_foundRegs.indexOf(x)<0)_foundRegs.push(x);});});}
-    if(!_foundRegs.length){var _fm=t.match(_REGPAT);if(_fm&&_fm[0])_foundRegs=[_fm[0]];}
-    if(_foundRegs.length)r.지역선택=_foundRegs;
-  }
+  // "지역제한 전국/서울/경기 [지역의무비율:30%]" 처럼 "/"로 여러 지역이 나열되는 경우를 모두 추출.
+  // (과거에는 "전국/" 뒤 지역명 1개만 캡처하는 별도 분기가 있어 두 번째 이후 지역이 누락되었음 — 제거하고 아래 다중추출 로직으로 통일)
+  var _REGPAT=/(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/g;
+  var _foundRegs=[];
+  var _rCtxLines=t.match(/(?:지역\s*의무공동도급|지역\s*제한|공사\s*지역)[^\n]{0,150}/g);
+  if(_rCtxLines){_rCtxLines.forEach(function(line){var ms=line.match(_REGPAT);if(ms)ms.forEach(function(x){if(_foundRegs.indexOf(x)<0)_foundRegs.push(x);});});}
+  if(!_foundRegs.length){var _fm=t.match(_REGPAT);if(_fm&&_fm[0])_foundRegs=[_fm[0]];}
+  if(_foundRegs.length)r.지역선택=_foundRegs;
   m=t.match(/지역(?:업체|의무)[^%\n]{0,30}?(\d{1,3})\s*%\s*이상/);
   if(!m)m=t.match(/(\d{1,3})\s*%\s*이상\s*시공참여비율/);
   if(!m)m=t.match(/공사금액의\s*(\d{1,3})\s*%\s*이상/);
@@ -4303,7 +4338,7 @@ function showPdfResultModal(found,preview){
       else if(k==='lh지분율기준'){state.bid.lh지분율기준=v;var _lg2=$('#in-lh지분율기준');if(_lg2)_lg2.value=FMT_NUM(v);}
       else if(k==='lh순공사원가'){state.bid.lh순공사원가=v;var _sc2=$('#in-lh순공사원가');if(_sc2)_sc2.value=FMT_NUM(v);}
       else if(k==='구성업체수'){
-        var n=Math.max(1,Math.min(MAX_SLOTS,Number(v)||3));
+        var n=Math.max(1,Math.min(MAX_SLOTS,Number(v)||2));
         state.bid.구성업체수=n;$('#in-구성업체수').value=n;
         state.combos.forEach(function(combo){
           while(combo.slots.length<n)combo.slots.push(emptySlot());
@@ -4761,6 +4796,25 @@ function comboCalcFor(combo,globalCalc){
   return Object.assign({},globalCalc,{D7:lD7,예정가격:lExpt,E7:lE7});
 }
 
+// LH/철도 점수 상세 라인(combo-foot) 생성 — refreshCombos(전체 재렌더)와 updateSlotMath(부분 갱신) 양쪽에서 공용으로 사용.
+// Func/지분율 등을 입력할 때 updateSlotMath만 호출되므로, 이 라인도 그때 함께 갱신되어야 최신 합산점수가 반영된다.
+function buildScoreFootHtml(calc,result){
+  var html='';
+  if(calc.isLH&&result.lh총점!=null){
+    html+='<div class="item" style="grid-column:1/-1"><span class="k">LH 점수 상세</span><span class="v" style="font-size:11px">시공경험 '+FLOOR3(result.lh시공경험).toFixed(2)+'pt (실적 '+FLOOR3(result.lh실적점수||0).toFixed(2)+'+품질 '+FLOOR3(result.lh품질||0).toFixed(2)+') | 경영 '+FLOOR3(result.lh경영상태).toFixed(2)+'pt'+(result.lh경영만점?' (만점)':'')+' | 신인도 '+(result.lh신인도>=0?'+':'')+TRIM3(result.lh신인도)+'pt'+((result.lh하도급+result.lh자재인력)>0?' | 고정 '+(result.lh하도급+result.lh자재인력)+'pt':'')+' | 가격 '+FLOOR3(result.lh가격).toFixed(2)+'pt = <b>'+FLOOR3(result.lh총점).toFixed(2)+'pt</b></span></div>';
+  }
+  if(calc.isRail&&result.rail총점!=null){
+    var _rtScore=result.기술점수합계||0;
+    html+='<div class="item" style="grid-column:1/-1"><span class="k">철도 점수 상세 ('+esc(result.rail티어명||'')+')</span><span class="v" style="font-size:11px">'+
+      '실적 '+result.rail실적점수.toFixed(2)+'pt | 기술 '+result.rail기술점수.toFixed(1)+'pt'+(result.rail기술등급?'('+result.rail기술등급+'등급, 합산 '+_rtScore.toFixed(3)+')':'(합산 '+_rtScore.toFixed(3)+', 미달)')+' | 경영 '+result.rail경영상태점수.toFixed(2)+'pt | 신인도 '+(result.rail신인도점수>=0?'+':'')+TRIM3(result.rail신인도점수)+'pt | 시공계획 '+result.rail시공계획점수.toFixed(1)+'pt(만점고정) | 가격 '+result.rail가격점수.toFixed(2)+'pt'+(result.rail가격비율!=null?'('+(result.rail가격비율*100).toFixed(2)+'%)':'')+' = <b>'+result.rail총점.toFixed(2)+'pt</b> / 95pt'+
+      '</span></div>';
+  } else if(calc.isRail&&!railScoreTier(calc.E5)){
+    var _rtScore2=result.기술점수합계||0;
+    html+='<div class="item" style="grid-column:1/-1"><span class="k">기술점수 (참고)</span><span class="v" style="font-size:11px">Func×지분율 합산 '+_rtScore2.toFixed(3)+'pt <span style="color:#9ca3af">— 추정가격이 3억~100억 구간을 벗어나 별표3 100점 배점제를 적용할 수 없습니다. 실적/시평/신인도 게이트로만 판정됩니다.</span></span></div>';
+  }
+  return html;
+}
+
 function refreshCombos(){
   var calc=calcBid();
   var root=$('#combos');if(!root)return;
@@ -4786,16 +4840,7 @@ function refreshCombos(){
     
     var summary=getOneLineSummary(b, c);
 
-    var railFootHtml='';
-    if(calc.isRail&&result.rail총점!=null){
-      var _rtScore=result.기술점수합계||0;
-      railFootHtml='<div class="item" style="grid-column:1/-1"><span class="k">철도 점수 상세 ('+esc(result.rail티어명||'')+')</span><span class="v" style="font-size:11px">'+
-        '실적 '+result.rail실적점수.toFixed(2)+'pt | 기술 '+result.rail기술점수.toFixed(1)+'pt'+(result.rail기술등급?'('+result.rail기술등급+'등급, 합산 '+_rtScore.toFixed(3)+')':'(합산 '+_rtScore.toFixed(3)+', 미달)')+' | 경영 '+result.rail경영상태점수.toFixed(2)+'pt | 신인도 '+(result.rail신인도점수>=0?'+':'')+TRIM3(result.rail신인도점수)+'pt | 시공계획 '+result.rail시공계획점수.toFixed(1)+'pt(만점고정) | 가격 '+result.rail가격점수.toFixed(2)+'pt'+(result.rail가격비율!=null?'('+(result.rail가격비율*100).toFixed(2)+'%)':'')+' = <b>'+result.rail총점.toFixed(2)+'pt</b> / 95pt'+
-        '</span></div>';
-    } else if(calc.isRail&&!railScoreTier(calc.E5)){
-      var _rtScore2=result.기술점수합계||0;
-      railFootHtml='<div class="item" style="grid-column:1/-1"><span class="k">기술점수 (참고)</span><span class="v" style="font-size:11px">Func×지분율 합산 '+_rtScore2.toFixed(3)+'pt <span style="color:#9ca3af">— 추정가격이 3억~100억 구간을 벗어나 별표3 100점 배점제를 적용할 수 없습니다. 실적/시평/신인도 게이트로만 판정됩니다.</span></span></div>';
-    }
+    var scoreFootHtml=buildScoreFootHtml(calc,result);
     card.innerHTML=
       '<div class="combo-head">'+
         '<span class="name">조합 #'+(ci+1)+' <span style="font-size:10px;color:#6b7280;font-weight:400;margin-left:5px">'+summary+'</span></span>'+status+
@@ -4837,8 +4882,7 @@ function refreshCombos(){
       '</div>'+
       '<div class="combo-foot">'+
         '<div class="item"><span class="k">적격여부</span><span class="v '+(result.적격?'ok-text':'bad-text')+'" data-stat="적격사유">'+(result.적격?'OK':result.적격사유)+'</span></div>'+
-        (calc.isLH&&result.lh총점!=null?'<div class="item" style="grid-column:1/-1"><span class="k">LH 점수 상세</span><span class="v" style="font-size:11px">시공경험 '+FLOOR3(result.lh시공경험).toFixed(2)+'pt (실적 '+FLOOR3(result.lh실적점수||0).toFixed(2)+'+품질 '+FLOOR3(result.lh품질||0).toFixed(2)+') | 경영 '+FLOOR3(result.lh경영상태).toFixed(2)+'pt'+(result.lh경영만점?' (만점)':'')+' | 신인도 '+(result.lh신인도>=0?'+':'')+TRIM3(result.lh신인도)+'pt'+((result.lh하도급+result.lh자재인력)>0?' | 고정 '+(result.lh하도급+result.lh자재인력)+'pt':'')+' | 가격 '+FLOOR3(result.lh가격).toFixed(2)+'pt = <b>'+FLOOR3(result.lh총점).toFixed(2)+'pt</b></span></div>':'')+
-        railFootHtml+
+        '<div data-scorefoot="'+ci+'" style="display:contents">'+scoreFootHtml+'</div>'+
         '<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>'+
         '<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>'+
         '<div class="item"><span class="k">순 신인도</span><span class="v" data-stat="순신인도2">'+FMT_REP(result.순신인도)+'</span></div>'+
@@ -4865,6 +4909,8 @@ function updateSlotMath(ci){
   if(ae){ae.textContent=result.적격?'OK':result.적격사유;ae.className='v '+(result.적격?'ok-text':'bad-text');}
   set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(calc.isLH?(result.합산시평_raw||0):result.합산시평)));
   set('순신인도2',FMT_REP(result.순신인도));
+  var sf=card.querySelector('[data-scorefoot]');
+  if(sf)sf.innerHTML=buildScoreFootHtml(calc,result);  // LH/철도 점수 상세(Func×지분율 합산 등)도 실시간 반영
   result.ROW.forEach(function(r,si){
     var m=card.querySelector('[data-cell="'+ci+'-'+si+'-max"]');if(m){m.textContent=(r.최대지분율_pct||0).toFixed(1)+'%';var _grey=(calc&&calc.jijaTier===1)||(calc&&calc.isRail);m.style.color=_grey?'#d1d5db':'';m.title=(calc&&calc.jijaTier===1)?'지자체 30억 미만: 최대지분율 제한 미적용':((calc&&calc.isRail)?'철도공단: 시평 기반 최대지분율 제한 미적용':'');}
     var a1=card.querySelector('[data-cell="'+ci+'-'+si+'-환산실적"]');if(a1)a1.textContent=FMT_NUM(Math.round(r.지분환산실적));
@@ -5091,7 +5137,7 @@ function bind(){
   });
   $('#in-구성업체수').addEventListener('change',function(){
     var v=$('#in-구성업체수').value;
-    var n=v===''?3:Math.max(1,Math.min(MAX_SLOTS,Math.round(Number(v))||3));
+    var n=v===''?2:Math.max(1,Math.min(MAX_SLOTS,Math.round(Number(v))||2));
     $('#in-구성업체수').value=n;state.bid.구성업체수=n;
     state.combos.forEach(function(combo){
       while(combo.slots.length<n)combo.slots.push(emptySlot());
@@ -5190,7 +5236,7 @@ function bind(){
       toast('업계평균비율 저장','ok');
     });
   })();
-  $('#in-구성업체수').value=Math.max(1,Math.min(MAX_SLOTS,Number(b.구성업체수)||3));
+  $('#in-구성업체수').value=Math.max(1,Math.min(MAX_SLOTS,Number(b.구성업체수)||2));
 
   // 경영상태 등급 기준표 모달
   var _econLegendBtn=$('#btn-econ-legend');
@@ -5264,7 +5310,7 @@ function bind(){
   $('#btn-reset-bid').addEventListener('click',function(){
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:DEFAULT_COMBOS,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기'});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기'});
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
     if($('#in-기본지분율'))$('#in-기본지분율').value=65;
     state.combos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
@@ -5272,7 +5318,7 @@ function bind(){
     ['in-배수','in-투찰률'].forEach(function(id){$('#'+id).value='';})
     if($('#in-A값'))$('#in-A값').value='';
     $('#in-투찰배수').value='2';var _sjSel=$('#sel-사정률기준');if(_sjSel)_sjSel.value='0';$('#in-지역의무지분').value='';$('#in-최소지분율').value='';
-    $('#in-구성업체수').value=DEFAULT_COMBOS;applyRegionSelects([]);$('#in-적격기준').value='';
+    $('#in-구성업체수').value=2;applyRegionSelects([]);$('#in-적격기준').value='';
     // LH 전용 필드 초기화
     var _rlh1=$('#in-lh지분율기준');if(_rlh1)_rlh1.value='';
     var _rlh2=$('#in-소방통신추정가');if(_rlh2)_rlh2.value='';
@@ -6800,7 +6846,7 @@ function restoreBidInputsFromState(){
   var _elig=$('#in-적격기준');if(_elig)_elig.value=b.적격기준||'';
   applyRegionSelects(b.지역선택);
   var _bp=$('#in-기본지분율');if(_bp)_bp.value=Number(b.기본지분율)||65;
-  var _n=$('#in-구성업체수');if(_n)_n.value=Math.max(1,Math.min(MAX_SLOTS,Number(b.구성업체수)||3));
+  var _n=$('#in-구성업체수');if(_n)_n.value=Math.max(1,Math.min(MAX_SLOTS,Number(b.구성업체수)||2));
   function setDisp(id,val){var el=$('#'+id);if(el)el.textContent=(val!=null&&val!==''?val:'-');}
   setDisp('avg-disp-전기부채',b.전기_평균부채);setDisp('avg-disp-전기유동',b.전기_평균유동);
   setDisp('avg-disp-통신부채',b.통신_평균부채);setDisp('avg-disp-통신유동',b.통신_평균유동);
