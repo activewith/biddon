@@ -537,7 +537,7 @@ window.addEventListener('error', function(e){
 });
 
 const STORE_KEY='jodal_app_v2';
-const SCHEMA_VERSION=10;
+const SCHEMA_VERSION=11;
 const MAX_SLOTS=5;
 const DEFAULT_COMBOS=3;
 
@@ -632,6 +632,7 @@ const state={
   combos:_initCombos,
   bidScreens:[{name:'입찰적격판정A',bid:_initBid,combos:_initCombos}],
   activeBidScreenIndex:0,
+  bidScreensByUser:{}, // 계정별 화면 파티션: {accountId:{screens:[...], activeIndex:0}} — state.bidScreens/activeBidScreenIndex는 현재 로그인 계정의 파티션을 가리키는 런타임 뷰
   accounts:[],
   railTechDB:[]
 };
@@ -656,7 +657,7 @@ function gistStatus(st,label){
 
 function gistApplyData(obj){
   migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
-  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);
+  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);
   if(obj.db)state.db=obj.db;
   if(obj.groups)state.groups=obj.groups;
   if(obj.bid)Object.assign(state.bid,obj.bid);
@@ -668,7 +669,8 @@ function gistApplyData(obj){
     obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
     state.combos=obj.combos;
   }
-  applyBidScreensFromObj(obj);
+  if(obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object')state.bidScreensByUser=obj.bidScreensByUser;
+  (function(){var _s=getSession();if(_s)loadBidScreensForUser(_s.id);})();
   try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){}
 }
 
@@ -687,9 +689,30 @@ async function gistPull(){
 }
 
 var _gistTimer=null;
+// Push 직전에 remote를 다시 pull하여 bidScreensByUser 중 "내 계정 파티션만" 로컬 값으로 덮어쓰고
+// 나머지 계정 파티션은 remote의 최신 값을 그대로 유지한 뒤 push함. 이렇게 하지 않으면 두 계정이
+// 서로 다른 기기에서 동시에 저장할 때 나중에 push하는 쪽이 상대방 화면 파티션까지 통째로 덮어써 버림.
+// (주의) db/groups/accounts/settings 등 다른 공유 필드는 여전히 전체 덮어쓰기 방식이라 이 병합의 대상이 아님 — 그 부분은 그대로 마지막 저장이 우선함.
+async function mergeRemoteBidScreensBeforePush(){
+  try{
+    var pr=await fetch(GIST_WORKER_URL+'/pull',{headers:{'X-App-Key':GIST_APP_KEY}});
+    if(!pr.ok)return;
+    var remote=JSON.parse(await pr.text());
+    if(!remote||typeof remote.bidScreensByUser!=='object')return;
+    var merged=Object.assign({},remote.bidScreensByUser);
+    var s=getSession();
+    if(s&&state.bidScreensByUser&&state.bidScreensByUser[s.id]){
+      merged[s.id]=state.bidScreensByUser[s.id]; // 내 계정 파티션만 로컬 최신값으로 덮어씀
+    }
+    state.bidScreensByUser=merged;
+  }catch(e){console.warn('merge pull 실패, 로컬 상태로 push 진행',e);}
+}
 async function gistPushNow(){
   gistStatus('syncing');
   try{
+    syncActiveBidScreen();
+    persistCurrentUserBidScreens();
+    await mergeRemoteBidScreensBeforePush();
     var r=await fetch(GIST_WORKER_URL+'/push',{
       method:'POST',
       headers:{'Content-Type':'application/json','X-App-Key':GIST_APP_KEY},
@@ -906,6 +929,7 @@ function restoreFromBackupFile(file){
 function save(){
   try{
     syncActiveBidScreen();
+    persistCurrentUserBidScreens();
     localStorage.setItem(STORE_KEY,JSON.stringify(state));
   }catch(e){console.warn(e);}
   gistPush();
@@ -914,7 +938,7 @@ function load(){
   try{
     var raw=localStorage.getItem(STORE_KEY);if(!raw)return;
     var obj=JSON.parse(raw);
-    migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);
+    migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);
     if(obj.db)state.db=obj.db;
     if(obj.groups)state.groups=obj.groups;
     if(obj.bid)Object.assign(state.bid,obj.bid);
@@ -938,7 +962,9 @@ function load(){
         return combo.slots&&combo.slots.some(function(s){return(s.업체명||'').trim()!=='';});
       });
     }
-    applyBidScreensFromObj(obj);
+    if(obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object')state.bidScreensByUser=obj.bidScreensByUser;
+    var _s=getSession();
+    if(_s)loadBidScreensForUser(_s.id);
   }catch(e){console.warn('load failed',e);}
 }
 function migrateV1(obj){
@@ -1065,6 +1091,24 @@ function migrateV9(obj){
     obj.activeBidScreenIndex=0;
   }
   obj.schemaVersion=10;
+}
+// v11: 입찰적격판정 화면(bidScreens)을 계정 전역 공유 → 계정별 파티션(bidScreensByUser)으로 전환.
+// 마이그레이션 정책(사용자 확정): 기존 공유 화면들을 그 시점에 존재하는 "모든 계정"에 동일하게 복사해
+// 계정별 시작점으로 삼고, 이후부터는 계정마다 독립적으로 갈라지도록 함. 원본 obj.bidScreens는
+// 그대로 남겨두어(삭제하지 않음) 구버전으로 롤백 시에도 읽을 수 있게 함.
+function migrateV10(obj){
+  if((obj.schemaVersion||1)>=11)return;
+  if(!obj.bidScreensByUser||typeof obj.bidScreensByUser!=='object'){
+    obj.bidScreensByUser={};
+    var _superId=(typeof SUPER_ID!=='undefined'&&SUPER_ID)?SUPER_ID:'activewith';
+    var accIds=(Array.isArray(obj.accounts)&&obj.accounts.length)?obj.accounts.map(function(a){return a.id;}):[_superId,'admin'];
+    var baseScreens=(obj.bidScreens&&obj.bidScreens.length)?obj.bidScreens:[{name:'입찰적격판정A',bid:obj.bid||{},combos:obj.combos||[]}];
+    var baseActive=Number(obj.activeBidScreenIndex)||0;
+    accIds.forEach(function(id){
+      obj.bidScreensByUser[id]={screens:JSON.parse(JSON.stringify(baseScreens)),activeIndex:baseActive};
+    });
+  }
+  obj.schemaVersion=11;
 }
 // ████ SECTION: 유틸 (toast/esc/moneyHandler/regionOptions) ████
 // ── 유틸 ─────────────────────────────────────────────
@@ -6770,10 +6814,14 @@ function lhBind() {
   if(resetBtn)resetBtn.addEventListener('click',lhResetAll);
 }
 
-// ████ SECTION: 입찰적격판정 화면 다중화 (bidScreens) ████
-function applyBidScreensFromObj(obj){
-  if(!obj.bidScreens||!obj.bidScreens.length)return;
-  obj.bidScreens.forEach(function(scr){
+// ████ SECTION: 입찰적격판정 화면 다중화 (bidScreens, 계정별 파티션) ████
+// state.bidScreens / state.activeBidScreenIndex는 "현재 로그인한 계정"의 파티션을 가리키는 런타임 뷰이며,
+// 실제 영속 데이터는 state.bidScreensByUser[accountId] = {screens, activeIndex} 에 저장됨.
+// loadBidScreensForUser()가 state.bidScreens를 해당 계정 파티션의 screens 배열로 "참조 연결"하므로
+// switchBidScreen/addBidScreen/deleteBidScreen 등 기존 코드가 state.bidScreens를 직접 push/splice해도
+// 자동으로 같은 배열인 bidScreensByUser[id].screens에 반영됨(활성 인덱스만 save() 시점에 별도 동기화).
+function normalizeBidScreens(screens){
+  screens.forEach(function(scr){
     scr.bid=Object.assign(defaultBidObj(),scr.bid||{});
     if(!scr.combos||!scr.combos.length){
       scr.combos=defaultCombos();
@@ -6786,11 +6834,35 @@ function applyBidScreensFromObj(obj){
     }
     if(!scr.name)scr.name='입찰적격판정';
   });
-  state.bidScreens=obj.bidScreens;
-  state.activeBidScreenIndex=Math.max(0,Math.min(state.bidScreens.length-1,Number(obj.activeBidScreenIndex)||0));
+  return screens;
+}
+function ensureUserBidPartition(id){
+  if(!state.bidScreensByUser||typeof state.bidScreensByUser!=='object')state.bidScreensByUser={};
+  var p=state.bidScreensByUser[id];
+  if(!p||!Array.isArray(p.screens)||!p.screens.length){
+    p={screens:[{name:'입찰적격판정A',bid:defaultBidObj(),combos:defaultCombos()}],activeIndex:0};
+    state.bidScreensByUser[id]=p;
+  }
+  return p;
+}
+// 로그인한 계정 id의 화면 파티션을 state.bidScreens/activeBidScreenIndex/bid/combos에 적재(=탭 전환·복원).
+function loadBidScreensForUser(id){
+  if(!id)return;
+  var p=ensureUserBidPartition(id);
+  normalizeBidScreens(p.screens);
+  state.bidScreens=p.screens;
+  state.activeBidScreenIndex=Math.max(0,Math.min(p.screens.length-1,Number(p.activeIndex)||0));
   var _act=state.bidScreens[state.activeBidScreenIndex];
   state.bid=_act.bid;
   state.combos=_act.combos;
+}
+// 현재 로그인 계정의 활성 인덱스를 파티션에 동기화(screens 배열 자체는 이미 같은 참조라 자동 반영됨).
+function persistCurrentUserBidScreens(){
+  var s=getSession();
+  if(!s)return;
+  var p=ensureUserBidPartition(s.id);
+  p.screens=state.bidScreens;
+  p.activeIndex=state.activeBidScreenIndex;
 }
 function syncActiveBidScreen(){
   if(!state.bidScreens||!state.bidScreens.length)return;
@@ -7002,7 +7074,11 @@ function doLogin(){
   if(idEl)idEl.value='';if(pwEl)pwEl.value='';
   showApp();
   if(!window._appBooted){window._appBooted=true;boot();}
-  else{renderBidScreenTabs();refreshDB();refreshBidStats();refreshCombos();}
+  else{
+    loadBidScreensForUser(acc.id); // 계정 전환 시 해당 계정의 마지막 화면/탭으로 복원
+    restoreBidInputsFromState();
+    renderBidScreenTabs();refreshDB();refreshBidStats();refreshCombos();
+  }
 }
 function doLogout(){
   if(!confirm('로그아웃 하시겠습니까?'))return;
@@ -7115,6 +7191,7 @@ function bindLoginUI(){
 function boot(){
   load();
   ensureDefaultAccounts();
+  (function(){var _s=getSession();if(_s)loadBidScreensForUser(_s.id);})();
   renderBidScreenTabs();
   refreshDB();
   refreshRailTechTab();
