@@ -7132,11 +7132,15 @@ function boot(){
   enableModalDrag();
 }
 
-function initAuthFlow(){
+async function initAuthFlow(){
   bindLoginUI();
   load();
   ensureDefaultAccounts();
   save();
+  // 새 기기에서는 로그인 화면이 뜨는 시점에 아직 클라우드 계정목록을 받아오기 전이라
+  // 로컬 기본계정(최고관리자·admin) 외 커스텀 계정은 로그인이 안 됐음.
+  // 로그인 판정 전에 먼저 Pull해서 최신 계정목록을 확보함(실패해도 기본계정으로는 로그인 가능하도록 무시).
+  try{ await gistPull(); }catch(e){}
   var sess=getSession();
   if(sess&&findAccount(sess.id)){
     showApp();
