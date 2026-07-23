@@ -4351,7 +4351,15 @@ function showPdfResultModal(found,preview){
     // 지역선택: 최대 3개 선택형(select) 입력을 배열로 반영
     var _regSel=['1','2','3'].map(function(i){var e=document.querySelector('[data-pdf-region-idx="'+i+'"]');return e?e.value.trim():'';}).filter(Boolean);
     if(_regSel.length)found.지역선택=Array.from(new Set(_regSel));
-    if(found.공사명)state.bid.공고명=found.공사명;
+    if(found.공사명){
+      state.bid.공고명=found.공사명;
+      // 화면 탭 이름을 '공고명 앞4글자_적격판정'으로 자동 개명(탭 hover 시 풀네임 title은 renderBidScreenTabs가 별도로 계속 붙여줌)
+      var _actScr=state.bidScreens&&state.bidScreens[state.activeBidScreenIndex];
+      if(_actScr){
+        var _nm4=found.공사명.trim().slice(0,4);
+        if(_nm4)_actScr.name=_nm4+'_적격판정';
+      }
+    }
     // 확정메세지/조합결과TXT 상단 헤더(공고명·공고번호·추정가격·마감일)에 쓰일 값 — 협정메세지 텍스트와 별개로 항상 보존
     if(found.공고번호)state.bid.공고번호=found.공고번호;
     if(found.등록마감일)state.bid.마감일=found.등록마감일;
@@ -6968,10 +6976,8 @@ function selectBidScreenTab(idx){
   switchBidScreen(idx);
 }
 function nextBidScreenName(){
-  var letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  var n=state.bidScreens.length;
-  var label=n<26?letters[n]:(letters[Math.floor(n/26)-1]+letters[n%26]);
-  return '입찰적격판정'+label;
+  // 알파벳 접미사 없이 생성. 이후 공고문분석 '선택 항목 반영' 시 공고명 기준으로 자동 개명됨(applyExtractedFieldsRenameActiveScreen 참고).
+  return '입찰적격판정';
 }
 function addBidScreen(){
   syncActiveBidScreen();
