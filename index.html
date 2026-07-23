@@ -905,15 +905,40 @@ function renderBackupPanel(){
   var elInterval=document.getElementById('bkp-interval');
   if(elInterval)elInterval.value=String(bs.intervalMin||0);
 }
+// 백업파일 복원 전용 적용 함수(gistApplyData와는 다름).
+// db/groups/settings/railTechDB/combos는 백업파일 내용으로 덮어쓰되,
+// - accounts(계정 목록)는 건드리지 않음 → 백업 시점 이후 추가/삭제된 계정이 이 기기에서 사라지는 것을 방지.
+// - bidScreensByUser는 "복원을 실행한 계정 자신의 파티션"만 백업 내용으로 교체하고 다른 계정의 화면은 그대로 유지.
+//   (구버전 백업이라 bidScreensByUser가 없으면 migrateV10이 obj.accounts 기준으로 만들어주므로 그 결과에서 내 파티션만 가져옴)
+function restoreStateFromBackupObj(obj){
+  migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
+  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);
+  if(obj.db)state.db=obj.db;
+  if(obj.groups)state.groups=obj.groups;
+  if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
+  if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
+  if(obj.combos&&obj.combos.length>0){
+    obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
+    state.combos=obj.combos;
+  }
+  var s=getSession();
+  if(s&&obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object'&&obj.bidScreensByUser[s.id]){
+    if(!state.bidScreensByUser||typeof state.bidScreensByUser!=='object')state.bidScreensByUser={};
+    state.bidScreensByUser[s.id]=obj.bidScreensByUser[s.id];
+    loadBidScreensForUser(s.id);
+  }
+  try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){}
+}
 function restoreFromBackupFile(file){
+  if(currentRole()!=='super'){toast('백업 파일 복원은 최고관리자만 가능합니다','bad');return;}
   var reader=new FileReader();
   reader.onload=function(e){
     var obj;
     try{obj=JSON.parse(e.target.result);}catch(err){toast('백업 파일을 읽을 수 없습니다 (JSON 오류)','err');return;}
     if(!obj||typeof obj!=='object'||(!obj.db&&!obj.bidScreens)){toast('올바른 백업 파일이 아닙니다','err');return;}
-    if(!confirm('현재 화면의 모든 데이터(업체DB·입찰정보·조합)를 이 백업 파일 내용으로 덮어씁니다. 계속할까요?'))return;
+    if(!confirm('현재 화면의 데이터(업체DB·조합·공고문분석 설정 등)를 이 백업 파일 내용으로 덮어씁니다.\n(다른 계정의 화면·로그인 계정 목록에는 영향 없음) 계속할까요?'))return;
     try{
-      gistApplyData(obj);
+      restoreStateFromBackupObj(obj);
       renderBidScreenTabs();restoreBidInputsFromState();refreshDB();refreshBidStats();refreshCombos();
       toast('백업 파일 복원 완료: '+file.name,'ok');
       var mr=MODAL_ROOT;if(mr)mr.innerHTML='';
@@ -5637,9 +5662,13 @@ function bind(){
               '<span style="font-size:11px;color:#6b7280">마지막 백업: <b id="bkp-last">'+(getBackupSettings().lastBackup?new Date(getBackupSettings().lastBackup).toLocaleString('ko-KR'):'없음')+'</b></span>'+
             '</div>'+
             '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">'+
-              '<button type="button" class="btn btn-sm btn-ghost" id="bkp-restore-btn" style="border-color:#f59e0b;color:#b45309">📂 백업 파일 복원</button>'+
-              '<input type="file" id="bkp-restore-file" accept="application/json,.json" style="display:none">'+
-              '<span style="font-size:11px;color:#9ca3af">백업 json 파일을 선택하면 현재 데이터를 덮어씁니다</span>'+
+              (currentRole()==='super'?(
+                '<button type="button" class="btn btn-sm btn-ghost" id="bkp-restore-btn" style="border-color:#f59e0b;color:#b45309">📂 백업 파일 복원</button>'+
+                '<input type="file" id="bkp-restore-file" accept="application/json,.json" style="display:none">'+
+                '<span style="font-size:11px;color:#9ca3af">백업 json 파일을 선택하면 현재 데이터를 덮어씁니다</span>'
+              ):(
+                '<span style="font-size:11px;color:#9ca3af">📂 백업 파일 복원은 최고관리자만 가능합니다</span>'
+              ))+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -5676,12 +5705,17 @@ function bind(){
         '</div></div>';
       document.getElementById('bkp-choose').onclick=pickBackupFolder;
       document.getElementById('bkp-now').onclick=function(){doBackupNow(false);};
-      document.getElementById('bkp-restore-btn').onclick=function(){document.getElementById('bkp-restore-file').click();};
-      document.getElementById('bkp-restore-file').addEventListener('change',function(ev){
-        var f=ev.target.files&&ev.target.files[0];
-        if(f)restoreFromBackupFile(f);
-        ev.target.value='';
-      });
+      (function(){
+        var _rBtn=document.getElementById('bkp-restore-btn'),_rFile=document.getElementById('bkp-restore-file');
+        if(_rBtn&&_rFile){
+          _rBtn.onclick=function(){_rFile.click();};
+          _rFile.addEventListener('change',function(ev){
+            var f=ev.target.files&&ev.target.files[0];
+            if(f)restoreFromBackupFile(f);
+            ev.target.value='';
+          });
+        }
+      })();
       var _bkpAutoEl=document.getElementById('bkp-auto');
       var _bkpIntervalEl=document.getElementById('bkp-interval');
       var _bs0=getBackupSettings();
