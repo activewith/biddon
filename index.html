@@ -120,6 +120,13 @@ tr.hover:hover{background:#f8fafc}
 .settings-tabbtn:hover{color:#374151;background:#f8fafc}
 .settings-tabbtn.active{color:#4f46e5;border-bottom-color:#4f46e5;background:#eef2ff}
 .settings-tabpage{padding-top:2px}
+.settings-subtabbar{display:flex;gap:4px;padding:8px 16px 0}
+.settings-subtabbtn{background:none;border:none;border-bottom:2px solid transparent;padding:5px 8px;font-size:11.5px;font-weight:600;color:#6b7280;cursor:pointer;border-radius:4px 4px 0 0}
+.settings-subtabbtn:hover{color:#374151;background:#f8fafc}
+.settings-subtabbtn.active{color:#0891b2;border-bottom-color:#0891b2;background:#ecfeff}
+.settings-subtabpage{padding-top:2px}
+.region-chip{display:inline-flex;align-items:center;gap:2px;padding:3px 4px 3px 10px;border:1px solid var(--border);border-radius:14px;font-size:12px;background:#f8fafc}
+.region-chip button{border:none;background:none;cursor:pointer;padding:2px 4px;font-size:12px;line-height:1}
 .sr-pct{color:#7c3aed;font-size:10px;margin-left:4px}
 .search-inp-wrap{flex:1;position:relative;min-width:0}
 
@@ -233,7 +240,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
   <span class="small" style="color:#94a3b8">v6.24</span>
 
   <button id="btn-gist-sync" title="GitHub Gist 클라우드 동기화"><span class="gist-icon">☁</span> <span id="gist-lbl">Gist</span></button>
-  <button id="btn-settings" title="설정 (공고문분석 키워드 · 데이터 백업 · 계정)">⚙</button>
+  <button id="btn-settings" title="설정 (공고입력 설정: 공고문분석 키워드·지역편집 · 데이터 백업 · 계정)">⚙</button>
   <span id="session-info"><span id="session-user-label"></span><button id="btn-mypw" class="btn btn-ghost btn-sm" title="내 비밀번호 변경" style="padding:2px 6px">🔑</button><button id="btn-logout" class="btn btn-sm" style="background:#475569" title="로그아웃">로그아웃</button></span>
   <nav>
     <span id="bid-screen-tabs" style="display:contents"></span>
@@ -623,12 +630,15 @@ function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){re
 
 var _initBid=defaultBidObj();
 var _initCombos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
+// 공고입력 화면의 "지역 선택" 드롭다운에 쓰이는 지역 마스터 목록 기본값.
+// (기존에는 업체DB에 실제로 등록된 지역만 목록에 나타나서, DB에 없는 지역(예: 광주)은 선택 자체가 불가능했던 문제 → 설정>공고입력 설정>지역편집에서 관리하는 고정 목록으로 분리)
+const DEFAULT_REGIONS=['서울','부산','대구','인천','광주','대전','울산','세종','경기','강원','충북','충남','전북','전남','경북','경남','제주'];
 const state={
   schemaVersion:SCHEMA_VERSION,
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''}},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},regionList:DEFAULT_REGIONS.slice()},
   combos:_initCombos,
   bidScreens:[{name:'입찰적격판정A',bid:_initBid,combos:_initCombos}],
   activeBidScreenIndex:0,
@@ -662,6 +672,7 @@ function gistApplyData(obj){
   if(obj.groups)state.groups=obj.groups;
   if(obj.bid)Object.assign(state.bid,obj.bid);
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
+  if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
   ensureDefaultAccounts();
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
@@ -916,6 +927,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.db)state.db=obj.db;
   if(obj.groups)state.groups=obj.groups;
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
+  if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
   if(obj.combos&&obj.combos.length>0){
     obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
@@ -968,6 +980,7 @@ function load(){
     if(obj.groups)state.groups=obj.groups;
     if(obj.bid)Object.assign(state.bid,obj.bid);
     if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
+    if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
     if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
     if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
     // 업체 데이터에 있는 그룹명이 state.groups에서 누락된 경우 자동 복구
@@ -1199,6 +1212,10 @@ function syncAllRegionOptions(regs){
   syncRegionOptions($('#in-지역선택'),regs,true);
   (function(){var s=$('#in-지역선택2');if(!s)return;var c=s.value;s.innerHTML='<option value="">— 2번째 지역 —</option>'+regs.map(function(r){return'<option>'+esc(r)+'</option>';}).join('');if(regs.indexOf(c)>=0)s.value=c;})();
   (function(){var s=$('#in-지역선택3');if(!s)return;var c=s.value;s.innerHTML='<option value="">— 3번째 지역 —</option>'+regs.map(function(r){return'<option>'+esc(r)+'</option>';}).join('');if(regs.indexOf(c)>=0)s.value=c;})();
+}
+function getRegionMasterList(){
+  var list=(state.settings&&Array.isArray(state.settings.regionList)&&state.settings.regionList.length)?state.settings.regionList:DEFAULT_REGIONS;
+  return list.slice();
 }
 function getRegionList(){
   var r=state.bid.지역선택;
@@ -2809,9 +2826,9 @@ function refreshDB(){
       '<button class="btn btn-sm btn-bad db-del-btn" data-del="'+idx+'">삭제</button></td>';
     tbody.appendChild(tr);
   });
-  var regs=Array.from(new Set(state.db.map(function(c){return c.지역;}).filter(Boolean))).sort();
-  syncRegionOptions($('#db-region-filter'),regs,false);
-  syncAllRegionOptions(regs);
+  var dbRegs=Array.from(new Set(state.db.map(function(c){return c.지역;}).filter(Boolean))).sort();
+  syncRegionOptions($('#db-region-filter'),dbRegs,false);
+  syncAllRegionOptions(getRegionMasterList());
   applyRegionSelects(state.bid.지역선택);
   if(state.bid.적격기준)$('#in-적격기준').value=state.bid.적격기준;
   refreshGroupToolbar();
@@ -4224,7 +4241,7 @@ function showPdfResultModal(found,preview){
   var commonKeys=['공종','지역선택','추정가격','기초금액','지역의무지분','최소지분율','구성업체수','적격기준','투찰률','A값'];
   var fallbackKeys={기초금액:1,A값:1}; // 미검출이어도 "미정"으로 표시하고 버튼을 막지 않음
   var excludeKeys=['공사명','공고번호','발주처','마감일','등록마감일','기초금액_label'];
-  var _regionList=Array.from(new Set(state.db.map(function(c){return c.지역;}).filter(Boolean))).sort();
+  var _regionList=getRegionMasterList();
   function _hasVal(k){
     var v=found[k];
     if(v==null||v==='')return false;
@@ -4372,8 +4389,7 @@ function showPdfResultModal(found,preview){
       else if(k==='시평제한'){state.bid.시평제한=v;$('#in-시평제한').value=FMT_NUM(v);}
       else if(k==='지역선택'){
         state.bid.지역선택=Array.isArray(v)?v:(v?[v]:[]);
-        var regs=Array.from(new Set(state.db.map(function(c){return c.지역;}).filter(Boolean))).sort();
-        syncAllRegionOptions(regs);
+        syncAllRegionOptions(getRegionMasterList());
         applyRegionSelects(state.bid.지역선택);
       }
       else if(k==='적격기준'){
@@ -5640,7 +5656,7 @@ function bind(){
         '</div>'+
         '<div class="settings-tabbar">'+
           '<button type="button" class="settings-tabbtn active" data-stab="backup">💾 백업</button>'+
-          '<button type="button" class="settings-tabbtn" data-stab="analyzer">📋 공고문분석</button>'+
+          '<button type="button" class="settings-tabbtn" data-stab="bidinput">🗂️ 공고입력 설정</button>'+
           '<button type="button" class="settings-tabbtn" data-stab="combo">🤝 조합</button>'+
           (isAdminOrAbove()?'<button type="button" class="settings-tabbtn" data-stab="accounts">👤 계정</button>':'')+
         '</div>'+
@@ -5680,20 +5696,42 @@ function bind(){
             '</div>'+
           '</div>'+
         '</div>'+
-        '<div class="settings-tabpage" data-stabpage="analyzer" style="display:none">'+
-          '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
-            '공고문분석 시 기본 패턴이 인식 실패할 경우 사용할 <b>추가 키워드</b>를 입력하세요.<br>'+
-            '키워드 이후 가까운 숫자를 해당 항목으로 추출합니다. 여러 개는 쉼표로 구분.'+
+        '<div class="settings-tabpage" data-stabpage="bidinput" style="display:none">'+
+          '<div class="settings-subtabbar">'+
+            '<button type="button" class="settings-subtabbtn active" data-substab="analyzer">📋 공고문분석</button>'+
+            '<button type="button" class="settings-subtabbtn" data-substab="region">🗺️ 지역편집</button>'+
           '</div>'+
-          '<div style="padding:0 16px 10px;overflow-x:auto">'+
-            '<table class="settings-table">'+
-            '<thead><tr><th>항목</th><th>기본 키워드 (참고)</th><th>추가 키워드</th></tr></thead>'+
-            '<tbody>'+rows+'</tbody>'+
-            '</table>'+
+          '<div class="settings-subtabpage" data-substabpage="analyzer">'+
+            '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
+              '공고문분석 시 기본 패턴이 인식 실패할 경우 사용할 <b>추가 키워드</b>를 입력하세요.<br>'+
+              '키워드 이후 가까운 숫자를 해당 항목으로 추출합니다. 여러 개는 쉼표로 구분.'+
+            '</div>'+
+            '<div style="padding:0 16px 10px;overflow-x:auto">'+
+              '<table class="settings-table">'+
+              '<thead><tr><th>항목</th><th>기본 키워드 (참고)</th><th>추가 키워드</th></tr></thead>'+
+              '<tbody>'+rows+'</tbody>'+
+              '</table>'+
+            '</div>'+
+            '<div style="display:flex;justify-content:flex-end;gap:6px;padding:4px 16px 12px">'+
+              '<button class="btn" id="skw-save" style="background:#6366f1">저장</button>'+
+              '<button class="btn btn-ghost" id="skw-reset">초기화</button>'+
+            '</div>'+
           '</div>'+
-          '<div style="display:flex;justify-content:flex-end;gap:6px;padding:4px 16px 12px">'+
-            '<button class="btn" id="skw-save" style="background:#6366f1">저장</button>'+
-            '<button class="btn btn-ghost" id="skw-reset">초기화</button>'+
+          '<div class="settings-subtabpage" data-substabpage="region" style="display:none">'+
+            '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
+              '공고 입력 화면의 <b>지역 선택</b> 드롭다운(1~3번째)에 표시되는 지역 목록입니다.<br>'+
+              '업체DB에 등록된 지역과 무관하게, 여기서 추가한 지역만 공고 입력 시 선택할 수 있습니다.'+
+            '</div>'+
+            '<div style="padding:0 16px 10px">'+
+              '<div id="region-edit-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>'+
+              '<div style="display:flex;gap:6px">'+
+                '<input type="text" id="region-new-input" placeholder="추가할 지역명 입력 (예: 광주)" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit">'+
+                '<button type="button" class="btn btn-sm" id="region-add-btn" style="background:#6366f1">추가</button>'+
+              '</div>'+
+            '</div>'+
+            '<div style="display:flex;justify-content:flex-end;gap:6px;padding:4px 16px 12px">'+
+              '<button class="btn btn-ghost" id="region-reset-btn">기본값 복원</button>'+
+            '</div>'+
           '</div>'+
         '</div>'+
         '<div class="settings-tabpage" data-stabpage="combo" style="display:none">'+
@@ -5754,6 +5792,79 @@ function bind(){
         });
         save();toast('초기화 완료','ok');
       };
+      // ── 지역편집 (공고입력 설정 탭 > 지역편집 서브탭) ──
+      function renderRegionEditList(){
+        var box=document.getElementById('region-edit-list');if(!box)return;
+        var list=getRegionMasterList();
+        box.innerHTML=list.length?list.map(function(r){
+          return '<span class="region-chip" data-region="'+esc(r)+'">'+esc(r)+
+            '<button type="button" class="region-edit-btn" data-region="'+esc(r)+'" title="이름 수정" style="color:#6366f1">✏</button>'+
+            '<button type="button" class="region-del-btn" data-region="'+esc(r)+'" title="삭제" style="color:#ef4444">×</button>'+
+            '</span>';
+        }).join(''):'<span style="font-size:12px;color:#9ca3af">등록된 지역이 없습니다</span>';
+        box.querySelectorAll('.region-edit-btn').forEach(function(b){
+          b.onclick=function(){
+            var old=b.dataset.region;
+            var nv=prompt('지역명 수정',old);
+            if(nv==null)return;
+            nv=nv.trim();
+            if(!nv){toast('지역명을 입력하세요','bad');return;}
+            var arr=getRegionMasterList();
+            if(nv!==old&&arr.indexOf(nv)>=0){toast('이미 있는 지역명입니다','bad');return;}
+            var i=arr.indexOf(old);if(i<0)return;
+            arr[i]=nv;
+            state.settings.regionList=arr;
+            if(Array.isArray(state.bid.지역선택))state.bid.지역선택=state.bid.지역선택.map(function(r){return r===old?nv:r;});
+            save();
+            syncAllRegionOptions(getRegionMasterList());
+            applyRegionSelects(state.bid.지역선택);
+            renderRegionEditList();
+            toast('지역명 수정 완료','ok');
+          };
+        });
+        box.querySelectorAll('.region-del-btn').forEach(function(b){
+          b.onclick=function(){
+            var r=b.dataset.region;
+            if(!confirm('"'+r+'" 지역을 목록에서 삭제할까요?'))return;
+            state.settings.regionList=getRegionMasterList().filter(function(x){return x!==r;});
+            save();
+            syncAllRegionOptions(getRegionMasterList());
+            applyRegionSelects(state.bid.지역선택);
+            renderRegionEditList();
+            toast('삭제 완료','ok');
+          };
+        });
+      }
+      renderRegionEditList();
+      var _regAddBtn=document.getElementById('region-add-btn'),_regInput=document.getElementById('region-new-input');
+      if(_regAddBtn&&_regInput){
+        _regAddBtn.onclick=function(){
+          var v=(_regInput.value||'').trim();
+          if(!v){toast('지역명을 입력하세요','bad');return;}
+          var arr=getRegionMasterList();
+          if(arr.indexOf(v)>=0){toast('이미 있는 지역입니다','bad');return;}
+          arr.push(v);
+          state.settings.regionList=arr;
+          save();
+          syncAllRegionOptions(getRegionMasterList());
+          renderRegionEditList();
+          _regInput.value='';
+          toast('"'+v+'" 추가 완료','ok');
+        };
+        _regInput.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();_regAddBtn.click();}});
+      }
+      var _regResetBtn=document.getElementById('region-reset-btn');
+      if(_regResetBtn){
+        _regResetBtn.onclick=function(){
+          if(!confirm('지역 목록을 기본값(17개 시도)으로 초기화할까요?'))return;
+          state.settings.regionList=DEFAULT_REGIONS.slice();
+          save();
+          syncAllRegionOptions(getRegionMasterList());
+          applyRegionSelects(state.bid.지역선택);
+          renderRegionEditList();
+          toast('초기화 완료','ok');
+        };
+      }
       // 기본지분율 (조합 탭)
       var _bpEl=document.getElementById('in-기본지분율');
       if(_bpEl){
@@ -5772,6 +5883,14 @@ function bind(){
       }
       mr.querySelectorAll('.settings-tabbtn').forEach(function(b){
         b.addEventListener('click',function(){switchStab(b.dataset.stab);});
+      });
+      // 공고입력 설정 탭 내부 서브탭 전환(공고문분석 / 지역편집)
+      function switchSubstab(tab){
+        mr.querySelectorAll('.settings-subtabbtn').forEach(function(b){b.classList.toggle('active',b.dataset.substab===tab);});
+        mr.querySelectorAll('.settings-subtabpage').forEach(function(p){p.style.display=(p.dataset.substabpage===tab)?'':'none';});
+      }
+      mr.querySelectorAll('.settings-subtabbtn').forEach(function(b){
+        b.addEventListener('click',function(){switchSubstab(b.dataset.substab);});
       });
       mr.querySelector('.modal-back').addEventListener('click',function(ev){if(ev.target===this)mr.innerHTML='';});
     });
