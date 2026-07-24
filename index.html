@@ -4277,34 +4277,98 @@ function showPdfResultModal(found,preview){
     var ph=(k==='최소지분율'||k==='지역의무지분'||k==='투찰률')?'예: 10':(k==='구성업체수'?'예: 3':'직접입력');
     return '<input type="number" data-pdf-manual="'+k+'" '+(numAttrs[k]||'')+' placeholder="'+ph+'" style="'+st+'">';
   }
-  var commonRows=commonKeys.map(function(k){
+  // ── 전체 수정 모드 ─────────────────────────────────────────
+  // 기본값(false)일 때는 검출된 항목은 텍스트로만 보여주고, 미검출 항목만 직접입력이 가능함.
+  // '✏ 수정' 버튼을 누르면 editMode=true가 되어 검출 여부와 무관하게 모든 항목을 직접 고쳐 쓸 수 있는 입력칸으로 바뀜.
+  var editMode=false;
+  function _syncManualIntoFound(){
+    document.querySelectorAll('[data-pdf-manual]').forEach(function(el){
+      var k=el.dataset.pdfManual;
+      var raw=(el.value||'').trim();
+      if(!raw)return;
+      if(k==='공종'||k==='적격기준'){found[k]=raw;}
+      else{var num=Number(raw.replace(/,/g,''));if(!isNaN(num))found[k]=num;}
+    });
+    var _regSel=['1','2','3'].map(function(i){var e=document.querySelector('[data-pdf-region-idx="'+i+'"]');return e?e.value.trim():'';}).filter(Boolean);
+    if(_regSel.length)found.지역선택=Array.from(new Set(_regSel));
+  }
+  function _editableInput(k){
+    var st='width:100%;box-sizing:border-box;padding:2px 4px;border:1px solid #93c5fd;border-radius:3px;font-size:12px;background:#eff6ff;color:#111827';
+    if(k==='공종'){
+      var cur=found.공종||'';
+      var opts=['전기','통신','소방','전기+통신','전기+소방'];
+      return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
+        '<option value=""'+(cur?'':' selected')+'>직접선택</option>'+
+        opts.map(function(o){return '<option value="'+o+'"'+(cur===o?' selected':'')+'>'+o+'</option>';}).join('')+
+        '</select>';
+    }
+    if(k==='적격기준'){
+      var cur2=found.적격기준||'';
+      var opts2=['조달청','인천공항','철도공단','지자체','LH','도로공사','수자원공사'];
+      return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
+        '<option value=""'+(cur2?'':' selected')+'>직접선택</option>'+
+        opts2.map(function(o){return '<option value="'+o+'"'+(cur2===o?' selected':'')+'>'+o+'</option>';}).join('')+
+        '</select>';
+    }
+    if(k==='지역선택'){
+      var sst='width:33%;box-sizing:border-box;padding:2px 3px;border:1px solid #93c5fd;border-radius:3px;font-size:11px;background:#eff6ff;color:#111827';
+      var curArr=Array.isArray(found.지역선택)?found.지역선택:(found.지역선택?[found.지역선택]:[]);
+      var regOpts=function(ph,selVal){return '<option value="">'+esc(ph)+'</option>'+_regionList.map(function(r){return '<option value="'+esc(r)+'"'+(r===selVal?' selected':'')+'>'+esc(r)+'</option>';}).join('');};
+      return '<div style="display:flex;gap:3px">'+
+        '<select data-pdf-region-idx="1" style="'+sst+'">'+regOpts('지역1(필수)',curArr[0])+'</select>'+
+        '<select data-pdf-region-idx="2" style="'+sst+'">'+regOpts('지역2',curArr[1])+'</select>'+
+        '<select data-pdf-region-idx="3" style="'+sst+'">'+regOpts('지역3',curArr[2])+'</select>'+
+      '</div>';
+    }
+    var numAttrs={추정가격:'min="0" step="1"',기초금액:'min="0" step="1"',시평제한:'min="0" step="1"',A값:'min="0" step="1"',lh지분율기준:'min="0" step="1"',lh순공사원가:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"',배수:'min="0" step="0.1"'};
+    var ph=(k==='최소지분율'||k==='지역의무지분'||k==='투찰률')?'예: 10':(k==='구성업체수'?'예: 3':'직접입력');
+    var v=found[k];
+    var vAttr=(v!=null&&v!=='')?' value="'+esc(String(v))+'"':'';
+    return '<input type="number" data-pdf-manual="'+k+'" '+(numAttrs[k]||'')+vAttr+' placeholder="'+ph+'" style="'+st+'">';
+  }
+  function _rowValueCell(k){
+    if(editMode)return '<td style="padding:4px 8px">'+_editableInput(k)+'</td>';
     var has=_hasVal(k);
     var showFallback=!has&&fallbackKeys[k];
     var disp=has?_dispVal(k):(showFallback?'미정':'');
     var valStyle=has?'':';color:var(--bad)';
-    var valueCell=(has||showFallback)?
+    return (has||showFallback)?
       ('<td style="padding:4px 8px;font-weight:700'+valStyle+'">'+esc(disp)+'</td>'):
       ('<td style="padding:4px 8px">'+_manualInput(k)+'</td>');
-    return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'"'+(has?' checked':'')+'></td>'+
-           '<td style="padding:4px 8px;color:var(--muted);font-size:12px">'+esc(labels[k]||k)+'</td>'+
-           valueCell+'</tr>';
-  }).join('');
+  }
+  function _rowChecked(k){
+    var existing=document.querySelector('[data-pdf-key="'+k+'"]');
+    if(existing)return existing.checked;
+    return editMode?true:_hasVal(k);
+  }
+  function _buildCommonRows(){
+    return commonKeys.map(function(k){
+      return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'"'+(_rowChecked(k)?' checked':'')+'></td>'+
+             '<td style="padding:4px 8px;color:var(--muted);font-size:12px">'+esc(labels[k]||k)+'</td>'+
+             _rowValueCell(k)+'</tr>';
+    }).join('');
+  }
   var individualKeys=keys.filter(function(k){return !commonKeys.includes(k)&&!excludeKeys.includes(k);});
-  var individualRows=individualKeys.map(function(k){
-    return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'" checked></td>'+
-           '<td style="padding:4px 8px;color:var(--muted);font-size:12px">'+esc(labels[k]||k)+'</td>'+
-           '<td style="padding:4px 8px;font-weight:700">'+esc(_dispVal(k))+'</td></tr>';
-  }).join('');
+  function _buildIndividualRows(){
+    return individualKeys.map(function(k){
+      return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'"'+(_rowChecked(k)?' checked':'')+'></td>'+
+             '<td style="padding:4px 8px;color:var(--muted);font-size:12px">'+esc(labels[k]||k)+'</td>'+
+             _rowValueCell(k)+'</tr>';
+    }).join('');
+  }
+  var commonRows=_buildCommonRows();
+  var individualRows=_buildIndividualRows();
   root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:460px;max-width:96vw">'+
     '<h3>📄 공고문 분석 결과</h3>'+
     '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">반영할 항목을 선택하세요.</p>'+
     '<div style="font-size:12px;font-weight:700;color:#1d4ed8;margin:4px 0">공통(필수)항목</div>'+
-    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody>'+commonRows+'</tbody></table>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody id="m-pdf-common-tbody">'+commonRows+'</tbody></table>'+
     (individualRows?(
     '<div style="font-size:12px;font-weight:700;color:#374151;margin:12px 0 4px">개별항목</div>'+
-    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody>'+individualRows+'</tbody></table>'
+    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody id="m-pdf-individual-tbody">'+individualRows+'</tbody></table>'
     ):'')+
     '<div class="row" style="justify-content:flex-end;margin-top:12px;gap:6px">'+
+    '<button type="button" class="btn btn-ghost" id="m-edit-toggle" style="border-color:#f59e0b;color:#b45309">✏ 수정</button>'+
     '<button class="btn btn-ghost" id="m-cancel">취소</button>'+
     '<button class="btn" id="m-apply-pdf" style="background:#2563eb">선택 항목 반영</button>'+
     '</div></div></div>';
@@ -4328,46 +4392,48 @@ function showPdfResultModal(found,preview){
     applyBtn.style.cursor=blocked?'not-allowed':'';
     applyBtn.style.opacity=blocked?'.7':'';
   }
-  document.querySelectorAll('[data-pdf-manual]').forEach(function(el){
-    el.addEventListener('input',function(){
-      var k=el.dataset.pdfManual;
-      var cb=document.querySelector('[data-pdf-key="'+k+'"]');
-      if(cb)cb.checked=!!el.value.trim();
-      _updateApplyBtnState();
+  function _bindDynamicInputs(){
+    document.querySelectorAll('[data-pdf-manual]').forEach(function(el){
+      el.addEventListener('input',function(){
+        var k=el.dataset.pdfManual;
+        var cb=document.querySelector('[data-pdf-key="'+k+'"]');
+        if(cb)cb.checked=!!el.value.trim();
+        _updateApplyBtnState();
+      });
+      el.addEventListener('change',function(){
+        var k=el.dataset.pdfManual;
+        var cb=document.querySelector('[data-pdf-key="'+k+'"]');
+        if(cb)cb.checked=!!el.value.trim();
+        _updateApplyBtnState();
+      });
     });
-    el.addEventListener('change',function(){
-      var k=el.dataset.pdfManual;
-      var cb=document.querySelector('[data-pdf-key="'+k+'"]');
-      if(cb)cb.checked=!!el.value.trim();
-      _updateApplyBtnState();
+    document.querySelectorAll('[data-pdf-region-idx]').forEach(function(el){
+      el.addEventListener('change',function(){
+        var r1=document.querySelector('[data-pdf-region-idx="1"]');
+        var cb=document.querySelector('[data-pdf-key="지역선택"]');
+        if(cb)cb.checked=!!(r1&&r1.value);
+        _updateApplyBtnState();
+      });
     });
-  });
-  document.querySelectorAll('[data-pdf-region-idx]').forEach(function(el){
-    el.addEventListener('change',function(){
-      var r1=document.querySelector('[data-pdf-region-idx="1"]');
-      var cb=document.querySelector('[data-pdf-key="지역선택"]');
-      if(cb)cb.checked=!!(r1&&r1.value);
-      _updateApplyBtnState();
-    });
-  });
+  }
+  _bindDynamicInputs();
   _updateApplyBtnState();
+  var editBtn=$('#m-edit-toggle');
+  editBtn.onclick=function(){
+    _syncManualIntoFound(); // 전환 전 입력값을 found에 먼저 반영해 값 유실 방지
+    editMode=!editMode;
+    var commonTbody=document.getElementById('m-pdf-common-tbody');
+    if(commonTbody)commonTbody.innerHTML=_buildCommonRows();
+    var indivTbody=document.getElementById('m-pdf-individual-tbody');
+    if(indivTbody)indivTbody.innerHTML=_buildIndividualRows();
+    _bindDynamicInputs();
+    _updateApplyBtnState();
+    editBtn.textContent=editMode?'✏ 수정 중…(원래대로)':'✏ 수정';
+    editBtn.style.background=editMode?'#fef3c7':'';
+  };
   $('#m-apply-pdf').onclick=function(){
     if(applyBtn.disabled)return;
-    // 직접입력한 미검출 항목 값을 found에 반영
-    document.querySelectorAll('[data-pdf-manual]').forEach(function(el){
-      var k=el.dataset.pdfManual;
-      var raw=(el.value||'').trim();
-      if(!raw)return;
-      if(k==='공종'||k==='적격기준'){
-        found[k]=raw;
-      }else{
-        var num=Number(raw.replace(/,/g,''));
-        if(!isNaN(num))found[k]=num;
-      }
-    });
-    // 지역선택: 최대 3개 선택형(select) 입력을 배열로 반영
-    var _regSel=['1','2','3'].map(function(i){var e=document.querySelector('[data-pdf-region-idx="'+i+'"]');return e?e.value.trim():'';}).filter(Boolean);
-    if(_regSel.length)found.지역선택=Array.from(new Set(_regSel));
+    _syncManualIntoFound();
     if(found.공사명){
       state.bid.공고명=found.공사명;
       // 화면 탭 이름을 '공고명 앞4글자_적격판정'으로 자동 개명(탭 hover 시 풀네임 title은 renderBidScreenTabs가 별도로 계속 붙여줌)
