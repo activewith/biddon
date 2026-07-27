@@ -1237,6 +1237,23 @@ function getRegionMasterList(){
   var list=(state.settings&&Array.isArray(state.settings.regionList)&&state.settings.regionList.length)?state.settings.regionList:DEFAULT_REGIONS;
   return list.slice();
 }
+// 업체DB(지역 단일값) select 렌더링 — 공고 지역선택(다중,별도)과 별개. 2026-07-27: 타이핑 입력 대신 목록 선택으로 통일.
+function regionSelectHTML(id,cur){
+  var regs=getRegionMasterList();
+  var opts='<option value="">지역 선택</option>';
+  if(cur&&regs.indexOf(cur)<0)opts+='<option value="'+esc(cur)+'">'+esc(cur)+' (목록에 없음)</option>';
+  opts+=regs.map(function(r){return '<option value="'+esc(r)+'"'+(r===cur?' selected':'')+'>'+esc(r)+'</option>';}).join('');
+  return '<select id="'+id+'">'+opts+'</select>';
+}
+// autocomplete 등으로 사후에 값을 넣을 때 사용 — 목록에 없는 값이면 옵션을 동적으로 추가해 유실 방지.
+function setRegionSelectValue(id,val){
+  var el=$('#'+id);if(!el)return;
+  val=val||'';
+  if(val&&!Array.prototype.some.call(el.options,function(o){return o.value===val;})){
+    var opt=document.createElement('option');opt.value=val;opt.textContent=val;el.appendChild(opt);
+  }
+  el.value=val;
+}
 function getRegionList(){
   var r=state.bid.지역선택;
   if(!r||r.length===0)return[];
@@ -2929,6 +2946,97 @@ function openPrioritySearch(jongmok){
   overlay.addEventListener('click',function(e){if(e.target===overlay)document.body.removeChild(overlay);});
 }
 
+// ── 그룹 선택 UI(다중선택 드롭다운) — openCompanyModal/showCertImageModal 공통 사용 (2026-07-27 통합) ──
+function renderGroupPickerHTML(prefix,curGroups){
+  var cg=curGroups||[];
+  var sel=cg.filter(function(g){return state.groups.indexOf(g)>=0;});
+  var btnLabel=sel.length>0?sel.map(function(g){return esc(g);}).join(', '):'그룹 선택...';
+  var html2='<button type="button" id="'+prefix+'-grp-btn" style="width:100%;text-align:left;padding:5px 10px;font-size:13px;border:1px solid #d1d5db;border-radius:5px;background:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'+
+    '<span id="'+prefix+'-grp-label" style="color:'+(sel.length>0?'#1d4ed8':'#9ca3af')+'">'+btnLabel+'</span>'+
+    '<span style="color:#6b7280;font-size:11px">▼</span></button>'+
+    '<div id="'+prefix+'-grp-panel" style="display:none;position:absolute;z-index:200;background:#fff;border:1px solid #d1d5db;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:6px 0;min-width:100%;left:0;top:calc(100% + 2px)">'+
+    '<div style="display:flex;gap:4px;padding:5px 8px;border-bottom:1px solid #e5e7eb">'+
+      '<input id="'+prefix+'-grp-new-inp" type="text" placeholder="새 그룹명..." style="flex:1;font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;min-width:0" onclick="event.stopPropagation()">'+
+      '<button type="button" id="'+prefix+'-grp-new-btn" style="font-size:11px;padding:3px 8px;background:#0369a1;color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">＋추가</button>'+
+    '</div>'+
+    '<div id="'+prefix+'-grp-list">';
+  if(state.groups.length===0){
+    html2+='<div style="padding:8px 14px;font-size:12px;color:#9ca3af">등록된 그룹 없음</div>';
+  } else {
+    state.groups.forEach(function(g){
+      var checked=cg.indexOf(g)>=0;
+      html2+='<label style="display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;font-size:13px;background:'+(checked?'#eff6ff':'#fff')+'">'+
+        '<input type="checkbox" class="'+prefix+'-grp-chk" data-grp="'+esc(g)+'" '+(checked?'checked':'')+' style="cursor:pointer">'+
+        '<span style="color:'+(checked?'#1d4ed8':'#374151')+'">'+esc(g)+'</span></label>';
+    });
+  }
+  html2+='</div></div>';
+  return html2;
+}
+function bindGroupPicker(prefix){
+  var btn=document.getElementById(prefix+'-grp-btn');
+  var panel=document.getElementById(prefix+'-grp-panel');
+  if(!btn||!panel) return;
+  btn.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=panel.style.display==='block';
+    panel.style.display=open?'none':'block';
+  });
+  var newInp=document.getElementById(prefix+'-grp-new-inp');
+  var newBtn=document.getElementById(prefix+'-grp-new-btn');
+  function addNewGroup(){
+    if(!newInp)return;
+    var name=newInp.value.trim();
+    if(!name){newInp.focus();return;}
+    if(state.groups.indexOf(name)>=0){toast('이미 같은 이름의 그룹이 있습니다','bad');newInp.select();return;}
+    state.groups.push(name);
+    save();
+    var list=document.getElementById(prefix+'-grp-list');
+    if(list){
+      var noMsg=list.querySelector('div');
+      if(noMsg&&noMsg.style.color==='rgb(156, 163, 175)')noMsg.remove();
+      var lbl=document.createElement('label');
+      lbl.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;font-size:13px;background:#eff6ff';
+      lbl.innerHTML='<input type="checkbox" class="'+prefix+'-grp-chk" data-grp="'+esc(name)+'" checked style="cursor:pointer"><span style="color:#1d4ed8">'+esc(name)+'</span>';
+      list.appendChild(lbl);
+      lbl.querySelector('input').addEventListener('change',function(){updateGrpLabel();});
+    }
+    newInp.value='';
+    updateGrpLabel();
+    toast('"'+name+'" 그룹 추가','ok');
+  }
+  if(newBtn)newBtn.addEventListener('click',function(e){e.stopPropagation();addNewGroup();});
+  if(newInp)newInp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();e.stopPropagation();addNewGroup();}});
+  panel.addEventListener('click',function(e){e.stopPropagation();});
+  function updateGrpLabel(){
+    var sel=[];
+    panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(c2){
+      if(c2.checked) sel.push(c2.dataset.grp);
+      var lbl=c2.closest('label');
+      if(lbl) lbl.style.background=c2.checked?'#eff6ff':'#fff';
+      var span=lbl&&lbl.querySelector('span');
+      if(span) span.style.color=c2.checked?'#1d4ed8':'#374151';
+    });
+    var lbl2=document.getElementById(prefix+'-grp-label');
+    if(lbl2){lbl2.textContent=sel.length>0?sel.join(', '):'그룹 선택...';lbl2.style.color=sel.length>0?'#1d4ed8':'#9ca3af';}
+  }
+  panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(chk){
+    chk.addEventListener('change',function(){updateGrpLabel();});
+  });
+  function closePanel(e){if(panel)panel.style.display='none';}
+  setTimeout(function(){document.addEventListener('click',closePanel,{once:true});},0);
+}
+function readGroupPickerValues(prefix){
+  var gs=[];document.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(chk){if(chk.checked)gs.push(chk.dataset.grp);});
+  return gs;
+}
+function setGroupPickerValues(prefix,groups){
+  var gs=groups||[];
+  document.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(chk){
+    chk.checked=gs.indexOf(chk.dataset.grp)>=0;
+    chk.dispatchEvent(new Event('change'));
+  });
+}
 function openCompanyModal(idx){
   if(!canManageCompanyDB()){toast('업체 등록/수정 권한이 없습니다','bad');return;}
   var isNew=(idx==null);
@@ -2945,7 +3053,7 @@ function openCompanyModal(idx){
       '<label>업체명 *</label><div style="display:flex;gap:6px"><input id="m-업체명" autocomplete="off" style="flex:1" value="'+esc(c.업체명||'')+'"><input id="m-약어" autocomplete="off" style="width:90px" placeholder="약어" title="조합결과TXT에서 업체명 대신 표시" value="'+esc(c.약어||'')+'"></div>'+
       '<label>사업자번호</label><input id="m-사업자번호" autocomplete="off" value="'+esc(c.사업자번호||'')+'">'+
       '<label>대표자</label><input id="m-대표자" autocomplete="off" value="'+esc(c.대표자||'')+'">'+
-      '<label>지역</label><input id="m-지역" autocomplete="off" value="'+esc(c.지역||'')+'">'+
+      '<label>지역</label>'+regionSelectHTML('m-지역',c.지역||'')+
       '<label>약정지분율(%)</label><input id="m-개별최대지분율" autocomplete="off" type="number" step="0.1" min="0" max="100" value="'+(c.개별최대지분율!=null&&c.개별최대지분율!==''?c.개별최대지분율:'')+'" placeholder="비우면 시평액 자동계산">'+
  '<input id="m-감점" type="hidden" value="'+(c.감점||0)+'"><div style="grid-column:1/-1">'+
       '<div style="overflow-x:auto;margin:4px 0">'+
@@ -2993,32 +3101,7 @@ function openCompanyModal(idx){
       '</div>'+
       '<label style="color:#0369a1;font-weight:700">그룹</label>'+
       '<div id="m-group-area" style="padding:4px 0;position:relative">'+
-        (function(){
-          var cg=c.groups||[];
-          var sel=cg.filter(function(g){return state.groups.indexOf(g)>=0;});
-          var btnLabel=sel.length>0?sel.map(function(g){return esc(g);}).join(', '):'그룹 선택...';
-          var html2='<button type="button" id="m-grp-btn" style="width:100%;text-align:left;padding:5px 10px;font-size:13px;border:1px solid #d1d5db;border-radius:5px;background:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'+
-            '<span id="m-grp-label" style="color:'+(sel.length>0?'#1d4ed8':'#9ca3af')+'">'+btnLabel+'</span>'+
-            '<span style="color:#6b7280;font-size:11px">▼</span></button>'+
-            '<div id="m-grp-panel" style="display:none;position:absolute;z-index:200;background:#fff;border:1px solid #d1d5db;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:6px 0;min-width:100%;left:0;top:calc(100% + 2px)">'+
-            '<div style="display:flex;gap:4px;padding:5px 8px;border-bottom:1px solid #e5e7eb">'+
-              '<input id="m-grp-new-inp" type="text" placeholder="새 그룹명..." style="flex:1;font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;min-width:0" onclick="event.stopPropagation()">'+
-              '<button type="button" id="m-grp-new-btn" style="font-size:11px;padding:3px 8px;background:#0369a1;color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">＋추가</button>'+
-            '</div>'+
-            '<div id="m-grp-list">';
-          if(state.groups.length===0){
-            html2+='<div style="padding:8px 14px;font-size:12px;color:#9ca3af">등록된 그룹 없음</div>';
-          } else {
-            state.groups.forEach(function(g){
-              var checked=cg.indexOf(g)>=0;
-              html2+='<label style="display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;font-size:13px;background:'+(checked?'#eff6ff':'#fff')+'">'+
-                '<input type="checkbox" class="m-grp-chk" data-grp="'+esc(g)+'" '+(checked?'checked':'')+' style="cursor:pointer">'+
-                '<span style="color:'+(checked?'#1d4ed8':'#374151')+'">'+esc(g)+'</span></label>';
-            });
-          }
-          html2+='</div></div>';
-          return html2;
-        })()
+        renderGroupPickerHTML('m',c.groups)
       +'</div>'+
     '</div>'+
     '<div class="row" style="justify-content:flex-end">'+
@@ -3088,7 +3171,7 @@ function openCompanyModal(idx){
   attachCompanyAutocomplete('m-업체명',function(c){
     fv('m-사업자번호',c.사업자번호||'');
     fv('m-대표자',c.대표자||'');
-    fv('m-지역',c.지역||'');
+    setRegionSelectValue('m-지역',c.지역||'');
     fv('m-감점',c.감점!=null?c.감점:'');
     fv('m-신용평가',c.신용평가||'');
     fv('m-참고',c.참고||'');
@@ -3119,62 +3202,7 @@ function openCompanyModal(idx){
     toast(c.업체명+' 불러옴','ok');
   });
   // ── 수정모달 그룹 드롭다운 ─────────────────────────────────
-  (function(){
-    var btn=document.getElementById('m-grp-btn');
-    var panel=document.getElementById('m-grp-panel');
-    if(!btn||!panel) return;
-    btn.addEventListener('click',function(e){
-      e.stopPropagation();
-      var open=panel.style.display==='block';
-      panel.style.display=open?'none':'block';
-    });
-    // 새 그룹 추가 버튼
-    var newInp=document.getElementById('m-grp-new-inp');
-    var newBtn=document.getElementById('m-grp-new-btn');
-    function addNewGroup(){
-      if(!newInp)return;
-      var name=newInp.value.trim();
-      if(!name){newInp.focus();return;}
-      if(state.groups.indexOf(name)>=0){toast('이미 같은 이름의 그룹이 있습니다','bad');newInp.select();return;}
-      state.groups.push(name);
-      save();
-      // 목록에 체크박스 추가
-      var list=document.getElementById('m-grp-list');
-      if(list){
-        var noMsg=list.querySelector('div');
-        if(noMsg&&noMsg.style.color==='rgb(156, 163, 175)')noMsg.remove();
-        var lbl=document.createElement('label');
-        lbl.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;font-size:13px;background:#eff6ff';
-        lbl.innerHTML='<input type="checkbox" class="m-grp-chk" data-grp="'+esc(name)+'" checked style="cursor:pointer"><span style="color:#1d4ed8">'+esc(name)+'</span>';
-        list.appendChild(lbl);
-        lbl.querySelector('input').addEventListener('change',function(){updateGrpLabel();});
-      }
-      newInp.value='';
-      updateGrpLabel();
-      toast('"'+name+'" 그룹 추가','ok');
-    }
-    if(newBtn)newBtn.addEventListener('click',function(e){e.stopPropagation();addNewGroup();});
-    if(newInp)newInp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();e.stopPropagation();addNewGroup();}});
-    panel.addEventListener('click',function(e){e.stopPropagation();});
-    function updateGrpLabel(){
-      var sel=[];
-      panel.querySelectorAll('.m-grp-chk').forEach(function(c2){
-        if(c2.checked) sel.push(c2.dataset.grp);
-        var lbl=c2.closest('label');
-        if(lbl) lbl.style.background=c2.checked?'#eff6ff':'#fff';
-        var span=lbl&&lbl.querySelector('span');
-        if(span) span.style.color=c2.checked?'#1d4ed8':'#374151';
-      });
-      var lbl2=document.getElementById('m-grp-label');
-      if(lbl2){lbl2.textContent=sel.length>0?sel.join(', '):'그룹 선택...';lbl2.style.color=sel.length>0?'#1d4ed8':'#9ca3af';}
-    }
-    panel.querySelectorAll('.m-grp-chk').forEach(function(chk){
-      chk.addEventListener('change',function(){updateGrpLabel();});
-    });
-    // document 리스너는 once:true로 등록해 자동 제거 (누적 방지)
-    function closePanel(e){if(panel)panel.style.display='none';}
-    setTimeout(function(){document.addEventListener('click',closePanel,{once:true});},0);
-  })();
+  bindGroupPicker('m');
 
   $('#m-save').onclick=function(){
     try{
@@ -3207,7 +3235,7 @@ function openCompanyModal(idx){
       소방_시평액:readMoney($('#m-소방-시평액'))||0,소방_실적5:readMoney($('#m-소방-실적5'))||0,소방_실적3:readMoney($('#m-소방-실적3'))||0,
       소방_부채비율:null,소방_유동비율:null,
       소방_공사업등록일:$('#m-소방-공사업등록일').value.trim(),
-      groups:(function(){var gs=[];document.querySelectorAll('.m-grp-chk').forEach(function(chk){if(chk.checked)gs.push(chk.dataset.grp);});return gs;})(),
+      groups:readGroupPickerValues('m'),
       전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||''
     };
     if(!obj.업체명){toast('업체명을 입력하세요','bad');return;}
@@ -3541,6 +3569,7 @@ function renderPdfPageAsImage(file, callback){
 function showCertImageModal(dataUrl, preloaded, rawText){
   var root=MODAL_ROOT;
   var p=preloaded||{};
+  var _acFilled=false; // 업체명 자동완성으로 기존 업체 데이터를 불러왔는지 여부(그룹/분류 등 병합 판단용)
   root.innerHTML=
     '<div class="modal-back"><div class="modal" style="min-width:min(96vw,900px);max-width:96vw">'+
     '<h3>📋 경영확인서 등록 — 확인 후 저장</h3>'+
@@ -3552,14 +3581,16 @@ function showCertImageModal(dataUrl, preloaded, rawText){
         :'<div style="flex:1.3;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:4px;color:#9ca3af;font-size:12px;min-width:80px;padding:20px">이미지 없음</div>')+
       '<div style="flex:1;overflow-y:auto;padding:4px 0">'+
       '<div class="form-grid" style="row-gap:6px">'+
-      '<label>업체명 *</label><input id="m-c-업체명" value="'+esc(p.업체명||'')+'">'+
+      '<label>업체명 *</label><div style="display:flex;gap:6px"><input id="m-c-업체명" style="flex:1" value="'+esc(p.업체명||'')+'"><input id="m-c-약어" style="width:80px" placeholder="약어" title="조합결과TXT에서 업체명 대신 표시" value="'+esc(p.약어||'')+'"></div>'+
       '<label>사업자번호</label><input id="m-c-사업자번호" value="'+esc(p.사업자번호||'')+'">'+
+      '<label>대표자</label><input id="m-c-대표자" value="'+esc(p.대표자||'')+'">'+
       '<label>공종</label>'+
       '<select id="m-c-공종">'+
       '<option value="전기"'+((!p.공종||p.공종==="전기")?" selected":"")+'>전기</option>'+
       '<option value="통신"'+(p.공종==="통신"?" selected":"")+'>통신</option>'+
       '<option value="소방"'+(p.공종==="소방"?" selected":"")+'>소방</option>'+
       '</select>'+
+      '<label>약정지분율(%)</label><input id="m-c-개별최대지분율" type="number" step="0.1" min="0" max="100" value="'+(p.개별최대지분율!=null&&p.개별최대지분율!==''?p.개별최대지분율:'')+'" placeholder="비우면 시평액 자동계산">'+
       '<label style="color:#7c3aed">부채비율(%)<br><span style="font-size:10px;color:#6b7280">해당업체 → 경영비율(자동계산)</span></label>'+
       '<div style="display:flex;gap:4px;align-items:center">'+
         '<input id="m-c-부채비율" type="number" step="0.01" value="'+(p.부채비율!=null?p.부채비율:'')+'" placeholder="해당업체" style="border-color:#c4b5fd;flex:1;min-width:0">'+
@@ -3589,8 +3620,19 @@ function showCertImageModal(dataUrl, preloaded, rawText){
       '<input id="m-c-실적3" type="text" inputmode="numeric" value="'+(p.실적3>0?FMT_NUM(p.실적3):'')+'">'+
       '<label>5년실적(원) <span style="font-size:10px;color:#6b7280;font-weight:400">수동입력: 천원 단위</span></label>'+
       '<input id="m-c-실적5" type="text" inputmode="numeric" value="'+(p.실적5>0?FMT_NUM(p.실적5):'')+'">'+
-      '<label>지역</label><input id="m-c-지역" value="'+esc(p.지역||'')+'">'+
-      '<label>참고</label><input id="m-c-참고" value="'+esc(p.참고||'')+'" placeholder="메모">'+
+      '<label>지역</label>'+regionSelectHTML('m-c-지역',p.지역||'')+
+      '<label>메모</label><input id="m-c-참고" value="'+esc(p.참고||'')+'" placeholder="메모">'+
+      '<label>분류</label>'+
+      '<div style="display:flex;gap:16px;align-items:center;padding:4px 0">'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer">'+
+          '<input type="checkbox" id="m-c-is실적" '+(p.is실적?'checked':'')+'>'+
+          '<span class="badge type-실적">실적업체</span></label>'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer">'+
+          '<input type="checkbox" id="m-c-is자사" '+(p.is자사?'checked':'')+'>'+
+          '<span class="badge type-자사">자사</span></label>'+
+      '</div>'+
+      '<label style="color:#0369a1;font-weight:700">그룹</label>'+
+      '<div id="m-c-group-area" style="padding:4px 0;position:relative">'+renderGroupPickerHTML('m-c',p.groups)+'</div>'+
       '</div>'+
       (rawText?
         '<details style="margin-top:8px;font-size:10px"><summary style="cursor:pointer;color:#6b7280">🔍 추출 원문 보기 / 재분석</summary>'+
@@ -3605,6 +3647,7 @@ function showCertImageModal(dataUrl, preloaded, rawText){
     '</div></div></div>';
   ['m-c-시평액','m-c-실적3','m-c-실적5'].forEach(function(id){attachCheonMoneyHandlers($('#'+id));});
   attachBiznoHandler($('#m-c-사업자번호'));
+  bindGroupPicker('m-c');
   (function(){
   function _showYr(val){showRegYearBadge('m-c-공사업등록일-grade',val);}
   var _d=$('#m-c-공사업등록일');
@@ -3673,13 +3716,20 @@ function showCertImageModal(dataUrl, preloaded, rawText){
   $('#m-c-cancel').onclick=function(){root.innerHTML='';};
   attachCompanyAutocomplete('m-c-업체명',function(c){
     fv('m-c-사업자번호',c.사업자번호||'');
-    fv('m-c-지역',c.지역||'');
+    fv('m-c-약어',c.약어||'');
+    fv('m-c-대표자',c.대표자||'');
+    setRegionSelectValue('m-c-지역',c.지역||'');
     fv('m-c-참고',c.참고||'');
     fv('m-c-공사업등록일',c.공사업등록일||'');
     if(c.공사업등록일){var ed=$('#m-c-공사업등록일');if(ed)ed.dispatchEvent(new Event('blur'));}
     if($('#m-c-시평액'))$('#m-c-시평액').value=c.시평액>0?FMT_NUM(c.시평액):'';
     if($('#m-c-실적3'))$('#m-c-실적3').value=c.실적3>0?FMT_NUM(c.실적3):'';
     if($('#m-c-실적5'))$('#m-c-실적5').value=c.실적5>0?FMT_NUM(c.실적5):'';
+    var _mml=$('#m-c-개별최대지분율');if(_mml)_mml.value=c.개별최대지분율!=null?c.개별최대지분율:'';
+    if($('#m-c-is실적'))$('#m-c-is실적').checked=!!c.is실적;
+    if($('#m-c-is자사'))$('#m-c-is자사').checked=!!c.is자사;
+    setGroupPickerValues('m-c',c.groups);
+    _acFilled=true;
     if($('#m-c-부채만점')){$('#m-c-부채만점').checked=!!c.부채만점;$('#m-c-부채만점').dispatchEvent(new Event('change'));}
     if($('#m-c-유동만점')){$('#m-c-유동만점').checked=!!c.유동만점;$('#m-c-유동만점').dispatchEvent(new Event('change'));}
     if(!c.부채만점&&$('#m-c-부채비율')){$('#m-c-부채비율').value=c.부채비율!=null?c.부채비율:'';$('#m-c-부채비율').dispatchEvent(new Event('input'));}
@@ -3722,6 +3772,16 @@ function showCertImageModal(dataUrl, preloaded, rawText){
       지역:NFC($('#m-c-지역').value),
       참고:$('#m-c-참고').value.trim()
     };
+    // 신규 추가 필드(약어/대표자/약정지분율/분류/그룹)는 값이 실제로 입력됐거나(비어있지 않음) 신규 업체일 때만 반영.
+    // existIdx로 기존 업체를 매칭했는데 이 폼이 빈 채로 시작한 경우(자동완성 미실행) 기존 값을 실수로 지우지 않기 위함.
+    (function(){var v=$('#m-c-약어')?$('#m-c-약어').value.trim():'';if(v||existIdx<0)newData.약어=v;})();
+    (function(){var v=$('#m-c-대표자')?$('#m-c-대표자').value.trim():'';if(v||existIdx<0)newData.대표자=v;})();
+    (function(){var el=$('#m-c-개별최대지분율');var v=el?el.value.trim():'';if(v!==''||existIdx<0)newData.개별최대지분율=(v===''?null:Number(v));})();
+    if(existIdx<0||_acFilled){
+      newData.is실적=!!($('#m-c-is실적')&&$('#m-c-is실적').checked);
+      newData.is자사=!!($('#m-c-is자사')&&$('#m-c-is자사').checked);
+      newData.groups=readGroupPickerValues('m-c');
+    }
     if(_cgv==='소방'){
       newData.소방_부채비율=부채입력;newData.소방_유동비율=유동입력;
       newData.소방_부채만점=_bm;newData.소방_유동만점=_um;
@@ -3764,7 +3824,7 @@ function showCertImageModal(dataUrl, preloaded, rawText){
     }
     // ────────────────────────────────────────────────────────
     if(existIdx>=0){Object.assign(state.db[existIdx],newData);}
-    else{state.db.push(Object.assign({신인도:0,일자리가점:0,감점:0,신용평가:'',안전보건시스템:'',is실적:false,is자사:false,개별최대지분율:null,대표자:'',공사업종:''},newData));}
+    else{state.db.push(Object.assign({신인도:0,일자리가점:0,감점:0,신용평가:'',안전보건시스템:'',is실적:false,is자사:false,개별최대지분율:null,대표자:'',공사업종:'',약어:'',groups:[]},newData));}
     save();refreshDB();refreshBidStats();refreshCombos();
     root.innerHTML='';
     toast(existIdx>=0?'업체 정보 업데이트 완료':'신규 업체 등록 완료','ok');
@@ -3853,12 +3913,8 @@ function openCertModal(){
     '<input type="file" id="m-cert-file" accept=".pdf,.jpg,.jpeg,.png,.bmp,.webp,.gif,.tiff" class="hidden">'+
     '<p style="font-size:10px;color:var(--muted);margin:6px 0 0">PDF, JPG, PNG, BMP 등 지원</p>'+
     '</div></div>'+
-    '<p style="font-size:11px;color:var(--muted);margin:0 0 6px">또는 텍스트가 있는 PDF에서 복사해서 붙여넣기:</p>'+
-    '<textarea id="m-cert-text" style="width:100%;height:130px;font-size:11px;padding:8px;border:1px solid var(--border);border-radius:4px;resize:vertical;font-family:monospace" '+
-    'placeholder="사업자 등록번호 : 755-87-02394&#10;상 호  주식회사 신훈전설&#10;부 채 비 율  124.41 %  22.31 %&#10;유 동 비 율  142.58 %  378.14 %&#10;공사업 등록일  2022년 03월 02일&#10;최근년도 시공능력공시액  1,343,479  (단위:천원)&#10;최근 3년 합계  1,287,225&#10;5년 합계  1,287,225"></textarea>'+
     '<div class="row" style="justify-content:flex-end;margin-top:10px">'+
     '<button class="btn btn-ghost" id="m-cert-cancel">취소</button>'+
-    '<button class="btn" id="m-cert-parse" style="background:#7c3aed">텍스트 분석</button>'+
     '</div></div></div>';
 
   // ── 파일 처리 공통 함수 ──────────────────────────────
@@ -3908,10 +3964,6 @@ function openCertModal(){
     processCertFile(f);
   };
 
-  // ── 텍스트 분석 ──────────────────────────────────────
-  $('#m-cert-parse').onclick=function(){
-    root.innerHTML='';showCertImageModal(null,{},null);
-  };
 }
 
 // ████ SECTION: 공고문-분석 (extractBidFields/showPdfResultModal) ████
@@ -4833,7 +4885,54 @@ function exportDBXlsx(){
   var wb2=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb2,ws,'통합');
   XLSX.writeFile(wb2,'업체DB_백업_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  toast('DB 백업 저장 완료','ok');
+  exportLegacyDBXlsx(); // 2026-07-27: 수작업DB시트(통합-통소.xlsx) 형식 파일도 함께 생성
+  toast('DB 백업 저장 완료 (앱 형식 + 수작업시트 형식 2개 파일)','ok');
+}
+
+// ── 수작업DB시트(통합-통소.xlsx) 형식 재현 내보내기 ──────────────────────
+// 2026-07-27: 이 앱 이전부터 사용자가 써온 수작업 입찰시트 중 업체DB 부분(통합-통소.xlsx)을 분석해 추가.
+// '통합' 시트는 importXlsx의 최구형(else) 파싱 로직과 컬럼 순서가 완전히 동일 — 이 파일을 다시 이 앱으로
+// 가져오면 그대로 복원됨. '소방통신' 시트는 원본 파일의 실제 데이터를 대조해 확인한 규칙
+// (통신·소방 모두 있으면 소방 데이터 우선)을 그대로 반영한 참고용 시트.
+// 판단이 명확하지 않았던 부분(사실 기반으로 밝혀둠):
+//  - B열 '신인도'는 원본에서 신인도(+)/감점(-)을 부호로 한 컬럼에 같이 쓰던 값인데, 이 앱은 그 개념을
+//    그대로 쓰지 않아 가장 가까운 값인 '일자리가점'(항상 0 이상)을 대신 넣음.
+//  - '경영상태'/'영업개시' 컬럼은 원본에서도 항상 비어있었고 이 앱의 importXlsx도 읽지 않는 컬럼이라 공란 유지.
+//  - '소방기간'/'통신기간' 컬럼은 실제로는 등록일(날짜)이 들어있던 컬럼이라 소방/통신 공사업등록일을 넣음.
+function _legacyTradeOf(c,jong){
+  var j=c.공사업종||'';
+  if(j)return j.indexOf(jong)>=0;
+  if(jong==='전기')return (Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0;
+  return false;
+}
+function exportLegacyDBXlsx(){
+  var header1=['지역','신인도','업체명','5년실적','시평액','3년실적','경영상태','신용평가','안전인증(K/S)','영업개시','참고','사업자번호',
+    '','소방5년실적','소방시평','소방기간','','통신5년실적','통신시평','통신기간'];
+  var rows1=state.db.filter(function(c){return _legacyTradeOf(c,'전기');}).map(function(c){
+    return [
+      c.지역||'', c.일자리가점||null, c.업체명, c.실적5||0, c.시평액||0, c.실적3||0, '',
+      c.신용평가||'', c.안전보건시스템||'', '', c.참고||'', c.사업자번호||'',
+      '', c.소방_실적5||null, c.소방_시평액||null, c.소방_공사업등록일||'',
+      '', c.통신_실적5||null, c.통신_시평액||null, c.통신_공사업등록일||''
+    ];
+  });
+  var ws1=XLSX.utils.aoa_to_sheet([[],[],[],header1].concat(rows1));
+  ws1['!cols']=[{wch:8},{wch:8},{wch:20},{wch:13},{wch:13},{wch:13},{wch:10},{wch:12},{wch:12},{wch:10},{wch:20},{wch:14},
+    {wch:2},{wch:13},{wch:13},{wch:12},{wch:2},{wch:13},{wch:13},{wch:12}];
+
+  var header2=['지역','신인도','업체명','5년실적','시평액','3년실적','경영상태','사업자번호','참고','영업개시'];
+  var rows2=state.db.filter(function(c){return _legacyTradeOf(c,'통신')||_legacyTradeOf(c,'소방');}).map(function(c){
+    var use소방=(Number(c.소방_실적5||0)+Number(c.소방_시평액||0)+Number(c.소방_실적3||0))>0;
+    var r5=use소방?c.소방_실적5:c.통신_실적5, sp=use소방?c.소방_시평액:c.통신_시평액, r3=use소방?c.소방_실적3:c.통신_실적3;
+    return [c.지역||'', c.일자리가점||null, c.업체명, r5||0, sp||0, r3||0, '', c.사업자번호||'', c.참고||'', ''];
+  });
+  var ws2=XLSX.utils.aoa_to_sheet([[],[],[],header2].concat(rows2));
+  ws2['!cols']=[{wch:8},{wch:8},{wch:20},{wch:13},{wch:13},{wch:13},{wch:10},{wch:14},{wch:20},{wch:10}];
+
+  var wb2=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb2,ws1,'통합');
+  XLSX.utils.book_append_sheet(wb2,ws2,'소방통신');
+  XLSX.writeFile(wb2,'업체DB_수작업시트_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
 function exportTemplateXlsx(){
