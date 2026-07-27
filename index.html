@@ -1317,69 +1317,49 @@ function calcSafetyBonus(system,type){
   if(type==='철도7A'){return (ps.type==='KOSHA-MS'||ps.type==='ISO-45001')?0.17:0;} // 철도공단 50억~10억: 붙임7 인증항목 1점×0.5/3≈0.17, KOSHA·ISO 구분없음
   return ps.type==='KOSHA-MS'?2.0:ps.type==='ISO-45001'?1.6:0; // 별표7A
 }
+// ── 2026-07-27: 경영상태 배점표를 함수 내 if/else 대신 데이터 테이블로 분리.
+//    각 함수의 시그니처·반환값·호출부는 기존과 완전히 동일 — 순수 내부 구현 교체(외부 동작 변경 없음).
+// _econTier(table,val,mode): mode='lt' → 부채비율처럼 낮을수록 유리(오름차순 상한 비교 t),
+//                             mode='gte' → 유동비율·영업연수처럼 높을수록 유리(내림차순 하한 비교 t)
+function _econTier(table,val,mode){
+  for(var i=0;i<table.length-1;i++){
+    var t=table[i];
+    if(mode==='lt'?(val<t.t):(val>=t.t))return{g:t.g,s:t.s};
+  }
+  var last=table[table.length-1];
+  return{g:last.g,s:last.s};
+}
 // 별표6 (추정가격 50억 이상): 부채22+유동21+영업2=45점 → ×15/45
-function 부채등급6(r){
-  if(r<50)return{g:'A',s:22.0};if(r<75)return{g:'B',s:19.7};
-  if(r<100)return{g:'C',s:17.5};if(r<125)return{g:'D',s:15.2};
-  return{g:'E',s:13.0};
-}
-function 유동등급6(r){
-  if(r>=150)return{g:'A',s:21.0};if(r>=120)return{g:'B',s:18.7};
-  if(r>=100)return{g:'C',s:16.5};if(r>=70)return{g:'D',s:14.2};
-  return{g:'E',s:12.0};
-}
-function 영업등급6(y){
-  if(y>=5)return{g:'5년+',s:2.0};if(y>=3)return{g:'3~5년',s:1.8};
-  return{g:'3년미만',s:1.5};
-}
+var ECON_TABLE_부채6=[{t:50,g:'A',s:22.0},{t:75,g:'B',s:19.7},{t:100,g:'C',s:17.5},{t:125,g:'D',s:15.2},{g:'E',s:13.0}];
+var ECON_TABLE_유동6=[{t:150,g:'A',s:21.0},{t:120,g:'B',s:18.7},{t:100,g:'C',s:16.5},{t:70,g:'D',s:14.2},{g:'E',s:12.0}];
+var ECON_TABLE_영업6=[{t:5,g:'5년+',s:2.0},{t:3,g:'3~5년',s:1.8},{g:'3년미만',s:1.5}];
+function 부채등급6(r){return _econTier(ECON_TABLE_부채6,r,'lt');}
+function 유동등급6(r){return _econTier(ECON_TABLE_유동6,r,'gte');}
+function 영업등급6(y){return _econTier(ECON_TABLE_영업6,y,'gte');}
 // 별표7 A공사 (추정가격 10억 이상 50억 미만): 부채7+유동7+영업1=15점
-function 부채등급7A(r){
-  if(r<50)return{g:'A',s:7.0};if(r<75)return{g:'B',s:6.2};
-  if(r<100)return{g:'C',s:5.4};if(r<125)return{g:'D',s:4.6};
-  return{g:'E',s:3.8};
-}
-function 유동등급7A(r){
-  if(r>=150)return{g:'A',s:7.0};if(r>=120)return{g:'B',s:6.2};
-  if(r>=100)return{g:'C',s:5.4};if(r>=70)return{g:'D',s:4.6};
-  return{g:'E',s:3.8};
-}
-function 영업등급7(y){
-  if(y>=3)return{g:'3년+',s:1.0};if(y>=1)return{g:'1~3년',s:0.9};
-  return{g:'1년미만',s:0.8};
-}
+var ECON_TABLE_부채7A=[{t:50,g:'A',s:7.0},{t:75,g:'B',s:6.2},{t:100,g:'C',s:5.4},{t:125,g:'D',s:4.6},{g:'E',s:3.8}];
+var ECON_TABLE_유동7A=[{t:150,g:'A',s:7.0},{t:120,g:'B',s:6.2},{t:100,g:'C',s:5.4},{t:70,g:'D',s:4.6},{g:'E',s:3.8}];
+var ECON_TABLE_영업7=[{t:3,g:'3년+',s:1.0},{t:1,g:'1~3년',s:0.9},{g:'1년미만',s:0.8}];
+function 부채등급7A(r){return _econTier(ECON_TABLE_부채7A,r,'lt');}
+function 유동등급7A(r){return _econTier(ECON_TABLE_유동7A,r,'gte');}
+function 영업등급7(y){return _econTier(ECON_TABLE_영업7,y,'gte');}
 
 // ── 철도공단(국가철도공단) 경영상태 배점표 ────────────────────────────
+// 붙임3/붙임4는 별표6/7A와 값이 유사하지만 반올림 방식이 달라 독립된 표를 그대로 유지함(계수 환산 아님).
 // 붙임3 (추정가격 100억원미만 50억원이상): 부채7.0+유동6.0+영업2.0=15점
-function 부채등급철도1(r){
-  if(r<50)return{g:'A',s:7.0};if(r<75)return{g:'B',s:6.3};
-  if(r<100)return{g:'C',s:5.6};if(r<125)return{g:'D',s:4.9};
-  return{g:'E',s:4.2};
-}
-function 유동등급철도1(r){
-  if(r>=150)return{g:'A',s:6.0};if(r>=120)return{g:'B',s:5.4};
-  if(r>=100)return{g:'C',s:4.8};if(r>=70)return{g:'D',s:4.2};
-  return{g:'E',s:3.6};
-}
-function 영업등급철도1(y){
-  if(y>=5)return{g:'5년+',s:2.0};if(y>=3)return{g:'5년미만~3년+',s:1.7};
-  if(y>=2)return{g:'3년미만~2년+',s:1.5};
-  return{g:'2년미만',s:1.3};
-}
+var ECON_TABLE_부채철도1=[{t:50,g:'A',s:7.0},{t:75,g:'B',s:6.3},{t:100,g:'C',s:5.6},{t:125,g:'D',s:4.9},{g:'E',s:4.2}];
+var ECON_TABLE_유동철도1=[{t:150,g:'A',s:6.0},{t:120,g:'B',s:5.4},{t:100,g:'C',s:4.8},{t:70,g:'D',s:4.2},{g:'E',s:3.6}];
+var ECON_TABLE_영업철도1=[{t:5,g:'5년+',s:2.0},{t:3,g:'5년미만~3년+',s:1.7},{t:2,g:'3년미만~2년+',s:1.5},{g:'2년미만',s:1.3}];
+function 부채등급철도1(r){return _econTier(ECON_TABLE_부채철도1,r,'lt');}
+function 유동등급철도1(r){return _econTier(ECON_TABLE_유동철도1,r,'gte');}
+function 영업등급철도1(y){return _econTier(ECON_TABLE_영업철도1,y,'gte');}
 // 붙임4 A공사 (추정가격 50억원미만 10억원이상): 부채7.0+유동6.5+영업1.5=15점
-function 부채등급철도2(r){
-  if(r<50)return{g:'A',s:7.0};if(r<75)return{g:'B',s:6.3};
-  if(r<100)return{g:'C',s:5.6};if(r<125)return{g:'D',s:4.9};
-  return{g:'E',s:4.2};
-}
-function 유동등급철도2(r){
-  if(r>=150)return{g:'A',s:6.5};if(r>=120)return{g:'B',s:5.7};
-  if(r>=100)return{g:'C',s:5.0};if(r>=70)return{g:'D',s:4.3};
-  return{g:'E',s:3.6};
-}
-function 영업등급철도2(y){
-  if(y>=3)return{g:'3년+',s:1.5};if(y>=1)return{g:'3년미만~1년+',s:1.3};
-  return{g:'1년미만',s:1.1};
-}
+var ECON_TABLE_부채철도2=[{t:50,g:'A',s:7.0},{t:75,g:'B',s:6.3},{t:100,g:'C',s:5.6},{t:125,g:'D',s:4.9},{g:'E',s:4.2}];
+var ECON_TABLE_유동철도2=[{t:150,g:'A',s:6.5},{t:120,g:'B',s:5.7},{t:100,g:'C',s:5.0},{t:70,g:'D',s:4.3},{g:'E',s:3.6}];
+var ECON_TABLE_영업철도2=[{t:3,g:'3년+',s:1.5},{t:1,g:'3년미만~1년+',s:1.3},{g:'1년미만',s:1.1}];
+function 부채등급철도2(r){return _econTier(ECON_TABLE_부채철도2,r,'lt');}
+function 유동등급철도2(r){return _econTier(ECON_TABLE_유동철도2,r,'gte');}
+function 영업등급철도2(y){return _econTier(ECON_TABLE_영업철도2,y,'gte');}
 
 // ── 철도공단 기술점수(경력기술자) 계산 ──────────────────────────────────
 // 인원별 점수 = 등급계수 × 경력계수(참여일수→환산년수) × 관리능력계수(소장/대리인참여일수→환산년수)
@@ -1450,6 +1430,16 @@ function updateRailGroupInfo(){
   el.innerHTML='<b>['+table.tier+']</b> &nbsp; '+table.rows.map(function(r){
     return '<span style="display:inline-block;margin-right:10px">'+r.g+'. '+r.min+'점 이상 → <b>'+r.pt.toFixed(1)+'점</b></span>';
   }).join('')+'<div style="font-size:10px;color:#6b7280;margin-top:2px">경력기술자 합산점수(조합 슬롯 Func×지분율 합계) 기준 · 미달 시 0점</div>';
+}
+// 적격기준별 전용 UI 그룹(lh-group/rail-group) 노출 토글 — 이전엔 4곳(공고문분석 반영/화면복원 2곳/select change)에
+// 개별 구현되어 있었고, 그 중 화면복원 2곳(bindBidForm 초기화, restoreBidInputsFromState)은 rail-group을
+// 토글하지 않는 누락이 있었음(철도공단 저장 화면을 열어도 rail-group이 안 뜨는 경우) — 2026-07-27 통합하며 함께 수정.
+function applyInstitutionUI(적격기준){
+  var isLH=(적격기준==='LH');
+  var isRail=(적격기준==='철도공단');
+  var _lhg=$('#lh-group');if(_lhg)_lhg.style.display=isLH?'flex':'none';
+  var _rg=$('#rail-group');if(_rg)_rg.style.display=isRail?'flex':'none';
+  if(isRail)updateRailGroupInfo();
 }
 
 // ── 철도공단(국가철도공단) 별표3 전기·정보통신공사 100점 배점제 ──────────────
@@ -4512,8 +4502,7 @@ function showPdfResultModal(found,preview){
       else if(k==='적격기준'){
         state.bid.적격기준=v;
         if($('#in-적격기준'))$('#in-적격기준').value=v;
-        var _isLHpdf=v==='LH';
-        var _lhg=$('#lh-group');if(_lhg)_lhg.style.display=_isLHpdf?'flex':'none';
+        applyInstitutionUI(v);
       }
       else if(k==='지역의무지분'){state.bid.지역의무지분=v;$('#in-지역의무지분').value=v;}
       else if(k==='최소지분율'){state.bid.최소지분율=v;$('#in-최소지분율').value=v;}
@@ -5355,10 +5344,7 @@ function bind(){
   if(b.lh지분율기준!=null){var _lg=$('#in-lh지분율기준');if(_lg)_lg.value=FMT_NUM(b.lh지분율기준);}
   if(b.lh순공사원가!=null){var _sc=$('#in-lh순공사원가');if(_sc)_sc.value=FMT_NUM(b.lh순공사원가);}
   (function(){var _q=$('#in-lh품질');if(_q&&b.품질평가점수!=null)_q.value=b.품질평가점수;})();
-  (function(){
-    var isLH=b.적격기준==='LH';
-    var _lhg=$('#lh-group');if(_lhg)_lhg.style.display=isLH?'flex':'none';
-  })();
+  applyInstitutionUI(b.적격기준);
   attachMoneyHandlers($('#in-A값'));
   $('#in-A값').addEventListener('blur',function(){
     state.bid.A값=readMoney($('#in-A값'));save();refreshBidStats();refreshAllCombosMath();
@@ -6108,13 +6094,7 @@ function bind(){
   })();
   (function(){
     var _sel=$('#in-적격기준');if(!_sel)return;
-    function _toggleSB(){
-      var isLH=_sel.value==='LH';
-      var _lhg=$('#lh-group');if(_lhg)_lhg.style.display=isLH?'flex':'none';
-      var isRail=_sel.value==='철도공단';
-      var _rg=$('#rail-group');if(_rg)_rg.style.display=isRail?'flex':'none';
-      if(isRail)updateRailGroupInfo();
-    }
+    function _toggleSB(){applyInstitutionUI(_sel.value);}
     _sel.addEventListener('change',_toggleSB);_toggleSB();
   })();
 
@@ -7221,8 +7201,7 @@ function restoreBidInputsFromState(){
   var _lg=$('#in-lh지분율기준');if(_lg)_lg.value=(b.lh지분율기준!=null)?FMT_NUM(b.lh지분율기준):'';
   var _sc=$('#in-lh순공사원가');if(_sc)_sc.value=(b.lh순공사원가!=null)?FMT_NUM(b.lh순공사원가):'';
   var _q=$('#in-lh품질');if(_q)_q.value=(b.품질평가점수!=null)?b.품질평가점수:2;
-  var isLH=(b.적격기준==='LH');
-  var _lhg=$('#lh-group');if(_lhg)_lhg.style.display=isLH?'flex':'none';
+  applyInstitutionUI(b.적격기준);
   var _elig=$('#in-적격기준');if(_elig)_elig.value=b.적격기준||'';
   applyRegionSelects(b.지역선택);
   var _bp=$('#in-기본지분율');if(_bp)_bp.value=Number(b.기본지분율)||65;
