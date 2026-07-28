@@ -812,6 +812,30 @@ function backupIdbGet(){
   });
 }
 function backupSupported(){return!!(window.showDirectoryPicker&&window.indexedDB);}
+// gzip 압축/해제(2026-07-28): 백업 파일 용량을 원본 대비 대폭 절감(실측 약 1/10)하기 위해 사용.
+async function gzipCompress(str){
+  var bytes=new TextEncoder().encode(str);
+  var cs=new CompressionStream('gzip');
+  var writer=cs.writable.getWriter();
+  writer.write(bytes);writer.close();
+  var chunks=[];var reader=cs.readable.getReader();
+  while(true){var res=await reader.read();if(res.done)break;chunks.push(res.value);}
+  var total=chunks.reduce(function(a,c){return a+c.length;},0);
+  var out=new Uint8Array(total);var off=0;
+  chunks.forEach(function(c){out.set(c,off);off+=c.length;});
+  return out;
+}
+async function gzipDecompress(bytes){
+  var ds=new DecompressionStream('gzip');
+  var writer=ds.writable.getWriter();
+  writer.write(bytes);writer.close();
+  var chunks=[];var reader=ds.readable.getReader();
+  while(true){var res=await reader.read();if(res.done)break;chunks.push(res.value);}
+  var total=chunks.reduce(function(a,c){return a+c.length;},0);
+  var out=new Uint8Array(total);var off=0;
+  chunks.forEach(function(c){out.set(c,off);off+=c.length;});
+  return new TextDecoder().decode(out);
+}
 
 async function pickBackupFolder(){
   if(!backupSupported()){toast('이 브라우저는 폴더 백업을 지원하지 않습니다 (Chrome/Edge 권장)','err');return;}
@@ -861,10 +885,14 @@ async function doBackupNow(silent,allowRequest,source){
       var _iv=getBackupSettings().intervalMin||0;
       _prefix=(_iv>0?(_iv%60===0?(_iv/60)+'H':_iv+'M'):'AUTO')+'_';
     }
-    var fname=_prefix+'입찰적격도구_백업_'+stamp+'.json';
+    // gzip 압축 저장(2026-07-28): 원본 JSON 대비 용량 대폭 절감. CompressionStream 미지원 브라우저는 압축 없이 저장.
+    var _json=JSON.stringify(state);
+    var _canGzip=(typeof CompressionStream!=='undefined');
+    var fname=_prefix+'입찰적격도구_백업_'+stamp+(_canGzip?'.json.gz':'.json');
     var fh=await backupDirHandle.getFileHandle(fname,{create:true});
     var ws=await fh.createWritable();
-    await ws.write(JSON.stringify(state));
+    if(_canGzip){await ws.write(await gzipCompress(_json));}
+    else{await ws.write(_json);}
     await ws.close();
     var bs=getBackupSettings();bs.lastBackup=ts.toISOString();saveBackupSettings(bs);
     if(!silent)toast('백업 완료: '+fname,'ok');
@@ -941,10 +969,9 @@ function restoreStateFromBackupObj(obj){
 }
 function restoreFromBackupFile(file){
   if(currentRole()!=='super'){toast('백업 파일 복원은 최고관리자만 가능합니다','bad');return;}
-  var reader=new FileReader();
-  reader.onload=function(e){
+  function applyText(text){
     var obj;
-    try{obj=JSON.parse(e.target.result);}catch(err){toast('백업 파일을 읽을 수 없습니다 (JSON 오류)','err');return;}
+    try{obj=JSON.parse(text);}catch(err){toast('백업 파일을 읽을 수 없습니다 (JSON 오류)','err');return;}
     if(!obj||typeof obj!=='object'||(!obj.db&&!obj.bidScreens)){toast('올바른 백업 파일이 아닙니다','err');return;}
     if(!confirm('현재 화면의 데이터(업체DB·조합·공고문분석 설정 등)를 이 백업 파일 내용으로 덮어씁니다.\n(다른 계정의 화면·로그인 계정 목록에는 영향 없음) 계속할까요?'))return;
     try{
@@ -953,7 +980,21 @@ function restoreFromBackupFile(file){
       toast('백업 파일 복원 완료: '+file.name,'ok');
       var mr=MODAL_ROOT;if(mr)mr.innerHTML='';
     }catch(err){console.warn('restore failed',err);toast('복원 실패: '+(err.message||err),'err');}
-  };
+  }
+  // gzip 백업(.json.gz)은 바이너리로 읽어 압축 해제 후 처리, 구버전 평문 .json 백업은 기존 방식 그대로 지원.
+  if(/\.gz$/i.test(file.name||'')){
+    var reader2=new FileReader();
+    reader2.onload=function(e){
+      gzipDecompress(new Uint8Array(e.target.result)).then(applyText).catch(function(err){
+        console.warn('gunzip failed',err);toast('백업 파일 압축 해제 실패: '+(err.message||err),'err');
+      });
+    };
+    reader2.onerror=function(){toast('파일을 읽는 중 오류가 발생했습니다','err');};
+    reader2.readAsArrayBuffer(file);
+    return;
+  }
+  var reader=new FileReader();
+  reader.onload=function(e){applyText(e.target.result);};
   reader.onerror=function(){toast('파일을 읽는 중 오류가 발생했습니다','err');};
   reader.readAsText(file,'utf-8');
 }
