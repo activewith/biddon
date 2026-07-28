@@ -418,7 +418,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <button class="btn btn-ghost" id="btn-template-xlsx" style="border-color:#0369a1;color:#0369a1" title="임포트용 빈 서식(헤더+예시행) 다운로드">📥 임포트 서식</button>
         <button class="btn btn-warn" id="btn-add-company">＋ 업체 직접 추가</button>
         <button class="btn" id="btn-import-cert" style="background:#7c3aed">📋 경영확인서 등록</button>
-        <button class="btn btn-ghost" id="btn-exp-alert" style="border-color:#dc2626;color:#dc2626" title="신용평가(7일 이내)/안전보건(1개월 이내) 만료 임박 · 일자리 A조건 유효월 불일치 업체만 아래 목록에 필터링 (다시 누르면 해제)">⚠ 만료임박 확인</button>
+        <button class="btn btn-ghost" id="btn-exp-alert" style="border-color:#dc2626;color:#dc2626" title="신용평가(7일 이내)/안전보건(1개월 이내) 만료 임박 · 일자리 B조건 연1회 재확인 필요 업체만 아래 목록에 필터링 (다시 누르면 해제)">⚠ 만료임박 확인</button>
         <span style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:nowrap" id="avg-display-area">
           <table style="border-collapse:collapse;font-size:11px;line-height:1.4"><tr>
             <th style="padding:1px 6px;color:#7c3aed;font-size:10px;border-bottom:1px solid #e5e7eb">업체평균비율</th>
@@ -525,7 +525,7 @@ window.addEventListener('error', function(e){
 });
 
 const STORE_KEY='jodal_app_v2';
-const SCHEMA_VERSION=12;
+const SCHEMA_VERSION=13;
 const MAX_SLOTS=5;
 const DEFAULT_COMBOS=3;
 
@@ -549,18 +549,11 @@ function funcSuffixText(row){
   if(row.FuncNumeric)return '[기술_'+TRIMDEC(Number(row.Func))+']';
   return '['+row.Func+']';
 }
-// 일자리창출 A조건이 실제로 신인도에 반영된 경우에만 유효기간(월) 태그를 기존 괄호(suffix)에 병합해 반환.
-// 예: suffix='(+1.80)' + 유효월 7 → '(+1.80_7월)' (괄호를 새로 추가하지 않고 기존 괄호 안에 합침)
-// 지자체 등 신인도 미적용/A조건 미체크/suffix 없음 시 suffix를 그대로 반환.
+// 일자리창출 A조건 유효월 수동선택 UI는 폐지(2026-07-28) — 매월 1일 자동해제 방식으로 대체되어
+// 더 이상 suffix에 유효월 태그를 병합할 필요가 없음. 기존 4곳의 호출부를 건드리지 않기 위해
+// 함수 자체는 남겨두되 항상 suffix를 그대로 반환하는 pass-through로 축소.
 const jobAMonthTag=function(dbEntry,appliedScore,suffix){
-  suffix=suffix||'';
-  if(!suffix)return suffix;
-  if(!dbEntry)return suffix;
-  if(!(Number(appliedScore)>0))return suffix;
-  if(Number(dbEntry.일자리가점||0)<2.5)return suffix;
-  var m=Number(dbEntry.일자리A유효월||0);
-  if(!(m>0))return suffix;
-  return suffix.charAt(suffix.length-1)===')'?(suffix.slice(0,-1)+'_'+m+'월)'):(suffix+'('+m+'월)');
+  return suffix||'';
 };
 const NFC=function(s){return String(s||'').trim().normalize('NFC');}; // 지역 등 한글 문자열 비교 시 NFC/NFD 정규화 차이로 인한 불일치 방지
 const $=function(sel){return document.querySelector(sel);};
@@ -663,13 +656,14 @@ function gistStatus(st,label){
 
 function gistApplyData(obj){
   migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
-  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);
+  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);
   if(obj.db)state.db=obj.db;
   if(obj.groups)state.groups=obj.groups;
   if(obj.bid)Object.assign(state.bid,obj.bid);
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
+  if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
   ensureDefaultAccounts();
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
@@ -679,6 +673,7 @@ function gistApplyData(obj){
   }
   if(obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object')state.bidScreensByUser=obj.bidScreensByUser;
   (function(){var _s=getSession();if(_s)loadBidScreensForUser(_s.id);})();
+  try{runExpiryMaintenance();}catch(e){console.warn('runExpiryMaintenance error:',e);}
   try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){}
 }
 
@@ -948,12 +943,13 @@ function renderBackupPanel(){
 //   (구버전 백업이라 bidScreensByUser가 없으면 migrateV10이 obj.accounts 기준으로 만들어주므로 그 결과에서 내 파티션만 가져옴)
 function restoreStateFromBackupObj(obj){
   migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
-  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);
+  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);
   if(obj.db)state.db=obj.db;
   if(obj.groups)state.groups=obj.groups;
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
+  if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
   if(obj.combos&&obj.combos.length>0){
     obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
@@ -965,6 +961,7 @@ function restoreStateFromBackupObj(obj){
     state.bidScreensByUser[s.id]=obj.bidScreensByUser[s.id];
     loadBidScreensForUser(s.id);
   }
+  try{runExpiryMaintenance();}catch(e){console.warn('runExpiryMaintenance error:',e);}
   try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){}
 }
 function restoreFromBackupFile(file){
@@ -1014,13 +1011,14 @@ function load(){
   try{
     var raw=localStorage.getItem(STORE_KEY);if(!raw)return;
     var obj=JSON.parse(raw);
-    migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);
+    migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);
     if(obj.db)state.db=obj.db;
     if(obj.groups)state.groups=obj.groups;
     if(obj.bid)Object.assign(state.bid,obj.bid);
     if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
     if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
     if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
+  if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
     if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
     if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
     // 업체 데이터에 있는 그룹명이 state.groups에서 누락된 경우 자동 복구
@@ -1043,6 +1041,7 @@ function load(){
     if(obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object')state.bidScreensByUser=obj.bidScreensByUser;
     var _s=getSession();
     if(_s)loadBidScreensForUser(_s.id);
+    try{runExpiryMaintenance();}catch(e){console.warn('runExpiryMaintenance error:',e);}
   }catch(e){console.warn('load failed',e);}
 }
 function migrateV1(obj){
@@ -1217,6 +1216,24 @@ function migrateV11(obj){
   if(!('기준연도' in ca))ca.기준연도=null;
   if(!('수정일시' in ca))ca.수정일시=null;
   obj.schemaVersion=12;
+}
+// v13(2026-07-28): 업체 등록일시 자동기록 + 재무데이터(시평액/실적/부채·유동비율) 연1회(8/1) 초기화 +
+// 일자리창출 B조건 연1회(4/1~4/15) 재확인 + A조건 매월 자동해제 기능 도입.
+// 기존 데이터는 이번 배포 시점을 이미 처리 완료한 상태(baseline)로 표시해 즉시 초기화/자동해제가
+// 발생하지 않도록 하고, 다음 해당 주기(8/1, 4/1)부터 새 로직이 실제로 작동하게 함.
+function migrateV12(obj){
+  if((obj.schemaVersion||1)>=13)return;
+  var now=new Date();
+  if(obj.db){
+    obj.db.forEach(function(c){
+      if(!('등록일시' in c))c.등록일시='';
+      if(!('_fin초기화연도' in c))c._fin초기화연도=finResetYear(now);
+      if(!('_B저장연도' in c))c._B저장연도=jobBCycleYear(now);
+    });
+  }
+  if(!obj.settings)obj.settings={};
+  if(obj.settings._A조건초기화월==null)obj.settings._A조건초기화월=currentYM(now);
+  obj.schemaVersion=13;
 }
 
 // ████ SECTION: 유틸 (toast/esc/moneyHandler/regionOptions) ████
@@ -1887,7 +1904,95 @@ function econGradeColor(g){
   return{A:'#16a34a',B:'#2563eb',C:'#d97706',D:'#dc2626',E:'#7f1d1d'}[g]||'#374151';
 }
 
-// ── 만료 임박 경고 (신용평가 D-7 / 안전보건 D-30) ──────────────────────
+// ── 자동 만료/초기화 주기 계산 헬퍼 (2026-07-28 추가) ──────────────────
+// 재무데이터(시평액/실적/부채·유동비율) 연 1회 초기화 주기: 매년 8/1 0시(=7/31 24시) 기준.
+// 반환값은 "가장 최근에 지난 8/1의 연도"— 이 값이 바뀌는 시점(=새 8/1을 지난 시점)에 1회만 초기화 실행.
+function finResetYear(d){
+  d=d||new Date();
+  var y=d.getFullYear();
+  var aug1=new Date(y,7,1);
+  return d>=aug1?y:y-1;
+}
+// 일자리창출 B조건 연 1회 재확인 주기: 매년 4/1 0시 기준(반환값=가장 최근 4/1의 연도)
+function jobBCycleYear(d){
+  d=d||new Date();
+  var y=d.getFullYear();
+  var apr1=new Date(y,3,1);
+  return d>=apr1?y:y-1;
+}
+// 4/15 0시가 이미 지났는지(=해당 B조건 재확인 유예기간 종료) 여부. bCycleYear는 jobBCycleYear() 반환값.
+function isPastJobBGrace(d,bCycleYear){
+  d=d||new Date();
+  var apr15=new Date(bCycleYear,3,15);
+  return d>=apr15;
+}
+function currentYM(d){
+  d=d||new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+// 신규 업체(state.db에 처음 push되는 레코드)에 등록일시 및 자동만료 주기 기준값(baseline)을 부여.
+// baseline을 심어두지 않으면 다음 유지보수 실행 때 "미확인 상태"로 오인되어 방금 입력한 데이터가
+// 곧바로 초기화/경고 대상이 되어버리므로, 신규 생성 시점 = 이미 처리 완료 상태로 표시해둠.
+function stampNewCompanyDefaults(obj){
+  var now=new Date();
+  if(!obj.등록일시)obj.등록일시=now.toISOString();
+  if(obj._fin초기화연도==null)obj._fin초기화연도=finResetYear(now);
+  if(obj._B저장연도==null)obj._B저장연도=jobBCycleYear(now);
+  return obj;
+}
+// 만료 시 자동으로 값을 초기화/삭제하고, 아직 유예기간 내인 경우는 알림만 표시하는 전체 유지보수 루틴.
+// boot() 및 gistApplyData() 직후 1회씩 호출. 반환값 true면 state가 변경되어 save()가 필요함.
+function runExpiryMaintenance(){
+  var changed=false;
+  var today=new Date();today.setHours(0,0,0,0);
+  var finY=finResetYear(today);
+  var bY=jobBCycleYear(today);
+  var pastGrace=isPastJobBGrace(today,bY);
+  var ym=currentYM(today);
+  state.db.forEach(function(c){
+    // (a) 매년 8/1: 시평액/3년실적/5년실적(전기·통신·소방)·부채비율·유동비율 0으로 초기화
+    if(c._fin초기화연도!==finY){
+      c.시평액=0;c.실적3=0;c.실적5=0;
+      c.통신_시평액=0;c.통신_실적3=0;c.통신_실적5=0;
+      c.소방_시평액=0;c.소방_실적3=0;c.소방_실적5=0;
+      c.부채비율=0;c.유동비율=0;
+      c.부채만점=false;c.유동만점=false;
+      c._fin초기화연도=finY;
+      changed=true;
+    }
+    // (b) 매년 4/1~4/15: 일자리창출 B조건 재확인 — 업체등록 화면 저장 전까지 경고 유지, 4/15까지 미저장 시 B조건 자동 해제
+    if(c._B저장연도==null)c._B저장연도=bY; // 구버전 데이터 보정(그레이스 기간 부여)
+    var hasB=(Number(c.일자리가점||0)===0.5||Number(c.일자리가점||0)===3.0);
+    if(hasB&&c._B저장연도!==bY&&pastGrace){
+      c.일자리가점=Number((Number(c.일자리가점||0)-0.5).toFixed(1));
+      c._B저장연도=bY;
+      changed=true;
+    }
+  });
+  // (c) 매월 1일: 일자리창출 A조건 전역 자동 해제(업체별 유효월 표기 방식 폐지)
+  if(state.settings&&state.settings._A조건초기화월!==ym){
+    state.db.forEach(function(c){
+      var ja=Number(c.일자리가점||0);
+      if(ja>=2.5){c.일자리가점=Number((ja-2.5).toFixed(1));changed=true;}
+    });
+    if(state.settings)state.settings._A조건초기화월=ym;
+    changed=true;
+  }
+  // (d) 신용평가 유효기간 경과 시 필드 자동 삭제 (만료임박 알림은 getExpiryAlerts에서 그대로 유지)
+  state.db.forEach(function(c){
+    if(!c.신용평가)return;
+    var cr=parseCreditRating(c.신용평가);
+    if(cr&&cr.expiry&&cr.expiry<today){c.신용평가='';changed=true;}
+  });
+  // (e) 안전보건시스템 유효기간 경과 시 필드 자동 삭제 (만료임박 알림은 유지)
+  state.db.forEach(function(c){
+    if(!c.안전보건시스템)return;
+    var ps=parseSafetySystem(c.안전보건시스템);
+    if(ps&&ps.expiry&&ps.expiry<today){c.안전보건시스템='';changed=true;}
+  });
+  return changed;
+}
+// ── 만료 임박 경고 (신용평가 D-7 / 안전보건 D-30 / 일자리B조건 연1회 재확인) ──────
 function getExpiryAlerts(c){
   var alerts=[];
   if(!c)return alerts;
@@ -1906,13 +2011,11 @@ function getExpiryAlerts(c){
     var _reachedExpiryMonth=(_curY>_expY)||(_curY===_expY&&_curM>=_expM);
     if(_reachedExpiryMonth)alerts.push({kind:'안전보건',days:dPs,expiry:ps.expiry});
   }
-  // 일자리창출 A조건: 매월 변동되는 자료 — 등록된 유효월이 현재월과 다르면 경고
-  if(Number(c.일자리가점||0)>=2.5){
-    var _curMonth=today.getMonth()+1;
-    var _effMonth=Number(c.일자리A유효월||0);
-    if(_effMonth!==_curMonth){
-      alerts.push({kind:'일자리A조건',custom:(_effMonth>0?'유효월 '+_effMonth+'월(현재 '+_curMonth+'월과 불일치)':'유효월 미입력(현재 '+_curMonth+'월)')});
-    }
+  // 일자리창출 B조건: 매년 4/1부터 재확인 필요 — 업체등록 화면에서 저장하기 전까지 경고 유지(4/15 경과 후에는 자동 해제되어 더 이상 해당 없음)
+  var bY=jobBCycleYear(today);
+  var hasB=(Number(c.일자리가점||0)===0.5||Number(c.일자리가점||0)===3.0);
+  if(hasB&&c._B저장연도!==bY&&!isPastJobBGrace(today,bY)){
+    alerts.push({kind:'일자리B조건',custom:'연 1회 재확인 필요(4/15까지 업체등록 저장 안하면 자동 해제)'});
   }
   return alerts;
 }
@@ -1935,7 +2038,7 @@ function showExpiryAlertModal(){
   var root=MODAL_ROOT;
   if(!list.length){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:360px">'+
-      '<h3>⚠ 만료임박 확인</h3><p style="color:var(--muted);font-size:13px">신용평가(7일 이내)·안전보건(1개월 이내) 만료 예정 또는 일자리 A조건 유효월 불일치 업체가 없습니다.</p>'+
+      '<h3>⚠ 만료임박 확인</h3><p style="color:var(--muted);font-size:13px">신용평가(7일 이내)·안전보건(1개월 이내) 만료 예정 또는 일자리 B조건 연1회 재확인 필요 업체가 없습니다.</p>'+
       '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
       '</div></div>';
     $('#m-cancel').onclick=function(){root.innerHTML='';};
@@ -1956,7 +2059,7 @@ function showExpiryAlertModal(){
   }).join('');
   root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:460px;max-width:96vw">'+
     '<h3 style="color:#dc2626">⚠ 만료임박 업체 ('+list.length+'건)</h3>'+
-    '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">신용평가 만료 7일 전 / 안전보건 만료 1개월 전 / 일자리 A조건 유효월 불일치 기준 · 체크 시 해당 업체는 다음부터 알림에서 제외됩니다</p>'+
+    '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">신용평가 만료 7일 전 / 안전보건 만료 1개월 전 / 일자리 B조건 연1회 재확인(4/1~4/15) 기준 · 체크 시 해당 업체는 다음부터 알림에서 제외됩니다</p>'+
     '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px">업체명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
     '</div></div>';
@@ -3095,7 +3198,7 @@ function setGroupPickerValues(prefix,groups){
 function openCompanyModal(idx){
   if(!canManageCompanyDB()){toast('업체 등록/수정 권한이 없습니다','bad');return;}
   var isNew=(idx==null);
-  var c=isNew?{지역:'',일자리가점:0,일자리A유효월:null,감점:0,업체명:'',실적5:0,시평액:0,실적3:0,신용평가:'',안전보건시스템:'',사업자번호:'',참고:'',is실적:false,is자사:false,개별최대지분율:null,부채비율:null,유동비율:null,공사업등록일:'',대표자:'',공사업종:'',통신_시평액:0,통신_실적3:0,통신_실적5:0,통신_부채비율:null,통신_유동비율:null,통신_공사업등록일:'',소방_시평액:0,소방_실적3:0,소방_실적5:0,소방_부채비율:null,소방_유동비율:null,소방_공사업등록일:'',전기_우선협정:'',통신_우선협정:'',소방_우선협정:''}:Object.assign({},state.db[idx]);
+  var c=isNew?{지역:'',일자리가점:0,감점:0,업체명:'',실적5:0,시평액:0,실적3:0,신용평가:'',안전보건시스템:'',사업자번호:'',참고:'',is실적:false,is자사:false,개별최대지분율:null,부채비율:null,유동비율:null,공사업등록일:'',대표자:'',공사업종:'',통신_시평액:0,통신_실적3:0,통신_실적5:0,통신_부채비율:null,통신_유동비율:null,통신_공사업등록일:'',소방_시평액:0,소방_실적3:0,소방_실적5:0,소방_부채비율:null,소방_유동비율:null,소방_공사업등록일:'',전기_우선협정:'',통신_우선협정:'',소방_우선협정:''}:Object.assign({},state.db[idx]);
   var root=MODAL_ROOT;
   var _업종=(c.공사업종||'');
   var _chkE=(_업종===''&&!c._공종수동설정)?(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0:_업종.indexOf('전기')>=0;
@@ -3103,7 +3206,7 @@ function openCompanyModal(idx){
   var _chkS=_업종.indexOf('소방')>=0;
   root.innerHTML=
     '<div class="modal-back"><div class="modal" style="min-width:800px;max-width:96vw">'+
-    '<h3>'+(isNew?'업체 추가':'업체등록정보')+'</h3>'+
+    '<h3>'+(isNew?'업체 추가':'업체등록정보')+(!isNew&&c.등록일시?' <span style="font-size:11px;font-weight:400;color:#9ca3af">(등록일 '+esc(String(c.등록일시).slice(0,10))+')</span>':'')+'</h3>'+
     '<div class="form-grid">'+
       '<label>업체명 *</label><div style="display:flex;gap:6px"><input id="m-업체명" autocomplete="off" style="flex:1" value="'+esc(c.업체명||'')+'"><input id="m-약어" autocomplete="off" style="width:90px" placeholder="약어" title="조합결과TXT에서 업체명 대신 표시" value="'+esc(c.약어||'')+'"></div>'+
       '<label>사업자번호</label><input id="m-사업자번호" autocomplete="off" value="'+esc(c.사업자번호||'')+'">'+
@@ -3126,17 +3229,12 @@ function openCompanyModal(idx){
         '<span style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">'+
           '<input type="checkbox" id="m-일자리A" style="cursor:pointer" '+(Number(c.일자리가점||0)>=2.5?'checked':'')+'>'+
           '<span><b>A조건</b> · 최근 6개월 고용인원·급여 증가 <b style="color:#166534">+2.5점</b><b style="color:#6b7280;font-size:10px">(LH 1점)</b></span>'+
-          '<span style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 6px;background:#fef2f2;border:1px solid #fecaca;border-radius:4px">'+
-            '<span style="font-size:10px;color:#b91c1c;font-weight:700">유효기간</span>'+
-            '<select id="m-일자리A유효월" style="font-size:11px;padding:1px 2px;border:1px solid #fca5a5;border-radius:3px;color:#b91c1c;font-weight:700;background:#fff" title="A조건은 매월 변동되는 자료 — 확인한 월을 선택하면 현재 월과 다를 때 만료임박 확인에 표시됩니다">'+
-              '<option value="">-</option>'+
-              (function(){var o='';for(var mI=1;mI<=12;mI++){o+='<option value="'+mI+'" '+(Number(c.일자리A유효월)===mI?'selected':'')+'>'+mI+'월</option>';}return o;})()+
-            '</select>'+
-          '</span>'+
+          '<span style="font-size:10px;color:#9ca3af;margin-left:4px" title="매월 변동되는 자료라 매월 1일 0시가 지나면 이 체크는 자동으로 해제됩니다">(매월 1일 자동해제)</span>'+
         '</span>'+
         '<span style="display:flex;align-items:center;gap:6px;font-size:12px;margin-top:3px">'+
           '<input type="checkbox" id="m-일자리B" style="cursor:pointer" '+((Number(c.일자리가점||0)===0.5||Number(c.일자리가점||0)===3.0)?'checked':'')+'>'+
           '<span><b>B조건</b> · 전년도 급여액 증가 <b style="color:#166534">+0.5점</b></span>'+
+          '<span style="font-size:10px;color:#9ca3af;margin-left:4px" title="매년 4/1부터 재확인이 필요합니다. 이 화면에서 저장하면 확인 완료로 처리되며, 4/15까지 저장하지 않으면 이 체크는 자동으로 해제됩니다">(연1회 4/1~4/15 재확인)</span>'+
         '</span>'+
         '<div style="font-size:11px;color:#6b7280;margin-top:3px">합산: <span id="m-일자리합계">'+Number(c.일자리가점||0).toFixed(1)+'</span>점 (A+B 동시 가능)</div>'+
       '</div>'+
@@ -3237,7 +3335,6 @@ function openCompanyModal(idx){
     if($('#m-일자리A'))$('#m-일자리A').checked=ja>=2.5;
     if($('#m-일자리B'))$('#m-일자리B').checked=(ja===0.5||ja===3.0);
     var jh=$('#m-일자리합계');if(jh)jh.textContent=ja.toFixed(1);
-    var jm=$('#m-일자리A유효월');if(jm)jm.value=(c.일자리A유효월!=null&&c.일자리A유효월!=='')?String(c.일자리A유효월):'';
     var ml=$('#m-개별최대지분율');if(ml)ml.value=c.개별최대지분율!=null?c.개별최대지분율:'';
     function setM(id,v){var el=$('#'+id);if(el)el.value=v>0?FMT_NUM(v):'';}
     function setN(id,v){var el=$('#'+id);if(el)el.value=v!=null?v:'';}
@@ -3265,7 +3362,7 @@ function openCompanyModal(idx){
     var obj={
       지역:NFC($('#m-지역').value),
       일자리가점:_일자리가점,
-      일자리A유효월:(function(){var jel=$('#m-일자리A유효월');var v=jel?jel.value.trim():'';return v===''?null:Number(v);})(),
+      _B저장연도:jobBCycleYear(new Date()), // 업체등록 화면 저장 = 일자리B조건 연1회 재확인 완료로 처리
       신인도:_일자리가점,
       약어:$('#m-약어').value.trim(),감점:(function(){var gv=($('#m-감점').value||'').trim();var gm=gv.match(/^(-?[\d.]+)/);return gm?Number(gm[1]):0;})(),업체명:$('#m-업체명').value.trim(),
       시평액:readMoney($('#m-전기-시평액'))||0,실적5:readMoney($('#m-전기-실적5'))||0,
@@ -3294,7 +3391,7 @@ function openCompanyModal(idx){
       전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||''
     };
     if(!obj.업체명){toast('업체명을 입력하세요','bad');return;}
-    if(isNew)state.db.push(obj);
+    if(isNew)state.db.push(stampNewCompanyDefaults(obj));
     else state.db[idx]=Object.assign({},state.db[idx],obj);
     save();
     root.innerHTML='';
@@ -3879,7 +3976,7 @@ function showCertImageModal(dataUrl, preloaded, rawText){
     }
     // ────────────────────────────────────────────────────────
     if(existIdx>=0){Object.assign(state.db[existIdx],newData);}
-    else{state.db.push(Object.assign({신인도:0,일자리가점:0,감점:0,신용평가:'',안전보건시스템:'',is실적:false,is자사:false,개별최대지분율:null,대표자:'',공사업종:'',약어:'',groups:[]},newData));}
+    else{state.db.push(stampNewCompanyDefaults(Object.assign({신인도:0,일자리가점:0,감점:0,신용평가:'',안전보건시스템:'',is실적:false,is자사:false,개별최대지분율:null,대표자:'',공사업종:'',약어:'',groups:[]},newData)));}
     save();refreshDB();refreshBidStats();refreshCombos();
     root.innerHTML='';
     toast(existIdx>=0?'업체 정보 업데이트 완료':'신규 업체 등록 완료','ok');
@@ -4714,8 +4811,8 @@ function importXlsx(file,mode){
           대표자:대표자||'',공사업종:공사업종||'',groups:[]
         });
       }
-      if(mode==='replace')state.db=rows;
-      else if(mode==='append')state.db=state.db.concat(rows);
+      if(mode==='replace')state.db=rows.map(function(r){return stampNewCompanyDefaults(r);});
+      else if(mode==='append')state.db=state.db.concat(rows.map(function(r){return stampNewCompanyDefaults(r);}));
       else{
         var map=new Map(state.db.map(function(c){return[c.업체명,c];}));
         for(var ri=0;ri<rows.length;ri++){
@@ -4724,7 +4821,7 @@ function importXlsx(file,mode){
             var ex=map.get(rr.업체명);
             var keep={is실적:ex.is실적,is자사:ex.is자사,groups:ex.groups||[]};
             Object.assign(ex,rr,keep);
-          }else{state.db.push(rr);map.set(rr.업체명,rr);}
+          }else{state.db.push(stampNewCompanyDefaults(rr));map.set(rr.업체명,rr);}
         }
       }
       save();refreshDB();toast('임포트 완료: '+rows.length+'개 업체','ok');
