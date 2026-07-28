@@ -4048,21 +4048,20 @@ function extractBidFields(t){
   if(_isLHpre)r.적격기준='LH';
   // ── 공종 감지: 전기/통신 단독 또는 그 외 종목 혼재 시 복합(전기+분담) ──
   (function(){
-    // 1순위: '종목' 줄에서 복합공종 감지
-    var _tmatch=t.match(/종\s*목[^\r\n]{0,120}/);
+    // 1순위: '종목[2칸+공백]종목명[2칸+공백]전화번호(또는 개행/끝)' 패턴에서 종목명만 추출. 2026-07-28 수정.
+    // 이전 버전은 '종목' 뒤 120자를 통째로 스캔해 다음 컬럼(전화번호/지역제한 등)까지 업종으로 오인식하는 버그가 있었음.
+    var _tmatch=t.match(/종\s*목[ \t]{2,}([^\r\n]{1,80}?)(?:[ \t]{2,}|[\r\n]|$)/);
     if(_tmatch){
-      var _tt=_tmatch[0];
-      // 토큰 단위 분석: 공백/쉼표/대쉬/슬래시 등 구분자로 분리된 개별 업종명 기준.
-      // 전기 + (통신 포함 그 외 업종 무엇이든) 혼재 시 복합(전기+분담)으로 판정.
-      // (예: 전기/전문소방 → 복합, 전기/금속구조물.창호.온실/지붕판금.건축물조립 → 복합)
-      // 소방 계열 합성어(전기소방/기계소방/전문소방처럼 구분자 없이 붙은 단어)는 그 자체로 전기 근거로 보지 않음(레거시 규칙 유지).
-      var _tokens=_tt.match(/[가-힣]+/g)||[];
+      var _tt=_tmatch[1];
+      // 복합 표기는 슬래시(/)로 구분: "전기/전문소방", "금속구조물.창호.온실/지붕판금.건축물조립" 등
+      // 슬래시 없이 하나의 값만 있으면 단일 공종.
+      var _segs=_tt.split('/').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
       var _has전기=false,_has통신=false,_has소방=false,_hasOther=false;
-      _tokens.forEach(function(tok){
-        if(tok==='종목')return;
-        if(tok.indexOf('소방')>=0){_has소방=true;return;}
-        if(tok.indexOf('통신')>=0){_has통신=true;return;}
-        if(tok.indexOf('전기')>=0){_has전기=true;return;}
+      _segs.forEach(function(seg){
+        // 소방 계열 합성어(전기소방/기계소방/전문소방처럼 구분자 없이 붙은 단어)는 그 자체로 전기 근거로 보지 않음(레거시 규칙 유지).
+        if(seg.indexOf('소방')>=0){_has소방=true;return;}
+        if(seg.indexOf('통신')>=0){_has통신=true;return;}
+        if(seg.indexOf('전기')>=0){_has전기=true;return;}
         _hasOther=true;
       });
       if(_has전기&&(_has소방||_has통신||_hasOther)){r.공종='복합(전기+분담)';return;}
