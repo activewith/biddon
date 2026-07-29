@@ -166,14 +166,9 @@ body.role-user #btn-gist-sync,
 body.role-user #btn-add-company,
 body.role-user #btn-import-cert,
 body.role-user #btn-import-xlsx,
-body.role-user #btn-grp-add,
-body.role-user #btn-grp-unassign,
 body.role-user .db-edit-btn,
 body.role-user .db-del-btn,
-body.role-user .db-row-chk,
-body.role-user #db-chk-all,
 body.role-user #m-memo-save{display:none!important}
-body.role-user #db-table input[data-flag]{pointer-events:none;opacity:.55}
 body.role-user #m-memo-txt{pointer-events:none;background:#f3f4f6}
 body.role-user #btn-railtech-add,
 body.role-user .railtech-delcompany,
@@ -453,28 +448,19 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <label class="small"><input type="checkbox" id="db-filter-소방"> 소방</label>
       </div>
       <div class="toolbar" id="db-group-toolbar" style="flex-wrap:wrap;gap:6px;align-items:center;min-height:30px">
-        <div style="position:relative;display:inline-block">
-          <button class="btn btn-sm" id="btn-grp-add" style="background:#0369a1;color:#fff;font-weight:700" title="그룹 선택 또는 새 그룹 추가">그룹+</button>
-          <div id="grp-dropdown" style="display:none;position:absolute;top:100%;left:0;z-index:400;background:#fff;border:1px solid #e3e6ec;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.15);min-width:300px;margin-top:4px;overflow:hidden">
-            <div id="grp-dropdown-inner"></div>
-          </div>
-        </div>
+        <span style="font-size:12px;color:#6b7280">그룹 보기:</span>
         <select id="db-group-filter" style="padding:3px 6px;border:1px solid #e3e6ec;border-radius:4px;font-size:12px;font-family:inherit">
           <option value="">전체</option>
         </select>
-        <button class="btn btn-sm" id="btn-grp-unassign" style="display:none;background:#fee2e2;color:#dc2626;border:1px solid #fecaca">선택업체 그룹 해제</button>
-        <span id="db-group-sel-info" class="small" style="color:#0369a1;font-weight:600"></span>
+        <span style="font-size:11px;color:#9ca3af">그룹 등록/이름변경/삭제는 업체등록화면의 "그룹" 메뉴에서 합니다</span>
       </div>
       <div style="max-height:600px;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch">
         <table id="db-table" style="width:auto;min-width:1150px">
           <thead><tr>
-            <th class="c" style="width:28px"><input type="checkbox" id="db-chk-all" title="전체 선택/해제"></th>
             <th class="l">지역</th><th title="일자리창출가점+안전보건시스템 (별표7A기준 / 괄호:별표6)&#10;일자리창출: 최대+3.0(7A)/+1.0(6)&#10;K(YYMM)=KOSHA-MS: +2.0(7A)/+1.0(6)&#10;S(YYMM)=ISO45001: +1.6(7A)/+0.8(6)&#10;수자원공사: KOSHA·ISO 공통 +1.0(10~50억)/+0.5(50억+)" style="cursor:help">가점 ℹ</th><th title="경영상태 배점 대비 감점 (별표7A기준 / 괄호:별표6)">감점</th><th class="l">업체명</th>
             <th class="sort-hd" data-sort="실적5">5년실적 <span class="sicon">⇅</span></th>
             <th class="sort-hd" data-sort="시평액">시평액 <span class="sicon">⇅</span></th>
             <th class="sort-hd" data-sort="실적3">3년실적 <span class="sicon">⇅</span></th>
-            <th class="c" style="color:#1d4ed8" title="실적업체 여부">실적</th>
-            <th class="c" style="color:#166534" title="자사 여부">자사</th>
             <th class="c" style="color:#7c3aed" title="지역업체 약정지분율(%)">약정(%)</th>
             <th class="c" style="color:#7c3aed" title="부채비율(%)">부채%</th>
             <th class="c" style="color:#7c3aed" title="유동비율(%)">유동%</th>
@@ -2070,11 +2056,11 @@ function showExpiryAlertModal(){
     return '<tr><td style="padding:5px 8px;text-align:center"><input type="checkbox" class="exp-exclude-cb" data-comp="'+esc(item.업체명)+'" '+(item.excluded?'checked':'')+' title="알림 제외"></td>'+
            '<td style="padding:5px 8px;font-weight:600'+(item.excluded?';color:#9ca3af;text-decoration:line-through':'')+'">'+esc(item.업체명)+'</td>'+
            '<td style="padding:5px 8px;font-size:12px">'+detail+'</td>'+
-           '<td style="padding:5px 8px;font-size:11px;color:#9ca3af;white-space:nowrap" title="이 업체 DB 레코드가 마지막으로 저장된 시각 — 위 만료 항목이 최근에 실제로 반영됐는지 참고용">'+(item.수정일시?esc(String(item.수정일시).slice(0,10)):'-')+'</td></tr>';
+           '<td style="padding:5px 8px;font-size:11px;color:#9ca3af;white-space:nowrap" title="시평액/실적/부채·유동비율/공사업등록일/신용평가/안전보건시스템/공사업종 중 하나라도 실제로 바뀐 마지막 시점 — 위 만료 항목이 최근에 실제로 반영됐는지 참고용">'+(item.수정일시?esc(String(item.수정일시).slice(0,10)):'-')+'</td></tr>';
   }).join('');
   root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:460px;max-width:96vw">'+
     '<h3 style="color:#dc2626">⚠ 만료임박 업체 ('+list.length+'건)</h3>'+
-    '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">신용평가 만료 7일 전 / 안전보건 만료 1개월 전 / 일자리 B조건 연1회 재확인(4/1~4/15) 기준 · 체크 시 해당 업체는 다음부터 알림에서 제외됩니다 · "최종수정"은 DB 레코드가 마지막으로 저장된 날짜로, 만료된 자격 정보가 실제로 갱신되었는지 판단하는 데 참고하세요</p>'+
+    '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">신용평가 만료 7일 전 / 안전보건 만료 1개월 전 / 일자리 B조건 연1회 재확인(4/1~4/15) 기준 · 체크 시 해당 업체는 다음부터 알림에서 제외됩니다 · "최종수정"은 재무/자격 관련 정보(시평액·실적·부채유동비율·공사업등록일·신용평가·안전보건시스템·공사업종)가 실제로 바뀐 날짜로(메모 등 단순 수정은 반영 안 됨), 만료된 자격 정보가 실제로 갱신되었는지 판단하는 데 참고하세요</p>'+
     '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px">업체명</th><th class="l" style="padding:5px 8px">상세</th><th class="l" style="padding:5px 8px">최종수정</th></tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
     '</div></div>';
@@ -2714,11 +2700,11 @@ function dbGapHTML(c){
   return '<span title="'+tip.join(' | ')+'" style="color:'+(ps.valid&&s7A>0?'#166534':'#d97706')+';font-size:11px">+'
          +t7A+'(+'+t6+')</span>';
 }
-function dbGamHTML(c){
+function dbGamHTML(c,공종override){
   var credit=getCreditDeduction(c);
   var avgD=Number(state.bid.업계평균부채비율)||0;
   var avgU=Number(state.bid.업계평균유동비율)||0;
-  var _pd0=getCompPerfData(c,state.bid.공종||'전기');
+  var _pd0=getCompPerfData(c,공종override||state.bid.공종||'전기');
   var hasD=c.부채만점||_pd0.부채비율!=null;
   var hasU=c.유동만점||_pd0.유동비율!=null;
   if(!avgD||!avgU||!hasD||!hasU){
@@ -2766,7 +2752,6 @@ function dbGamHTML(c){
 
 // ████ SECTION: 그룹관리 (refreshGroupToolbar/addGroup) ████
 window._dbActiveGroup = null; // 현재 활성 그룹 필터 (null=전체)
-window._dbCheckedIdxs = new Set(); // 선택된 업체 인덱스 집합
 
 function refreshGroupToolbar(){
   // 그룹 보기 select 동기화
@@ -2782,190 +2767,26 @@ function refreshGroupToolbar(){
       gfSel.appendChild(opt);
     });
   }
-  // 그룹+ 버튼 상태 반영
-  var addBtn = document.getElementById('btn-grp-add');
-  if(addBtn){
-    var sel = window._dbCheckedIdxs ? window._dbCheckedIdxs.size : 0;
-    addBtn.style.background = sel > 0 ? '#0f766e' : '#0369a1';
-    addBtn.title = sel > 0 ? sel+'개 선택됨 — 클릭해서 그룹 선택' : '그룹 선택 또는 새 그룹 추가';
-  }
-  updateGroupSelInfo();
 }
 
-function buildGrpDropdown(){
-  var inner = document.getElementById('grp-dropdown-inner');
-  if(!inner) return;
-  var selCount = window._dbCheckedIdxs ? window._dbCheckedIdxs.size : 0;
-  var html2 = '';
-  // 상단: 그룹추가 버튼
-  html2 += '<div id="grp-dd-new" style="display:flex;align-items:center;gap:6px;padding:8px 12px;cursor:pointer;background:#f0f9ff;border-bottom:2px solid #e3e6ec;font-size:12px;font-weight:700;color:#0369a1">'+
-    '<span style="font-size:15px">＋</span> 그룹추가</div>';
-  // 구분선 + 기존 그룹 리스트
-  if(state.groups.length > 0){
-    html2 += '<div style="padding:4px 12px 2px;font-size:10px;color:#9ca3af;font-weight:600;letter-spacing:.05em">기존 그룹에 등록</div>';
-    state.groups.forEach(function(g){
-      var count = state.db.filter(function(c){return c.groups&&c.groups.indexOf(g)>=0;}).length;
-      html2 += '<div class="grp-dd-item" data-grp="'+esc(g)+'" style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6">'+
-        '<span>'+esc(g)+'</span>'+
-        '<span style="display:flex;align-items:center;gap:6px">'+
-          '<span style="font-size:11px;color:#6b7280;background:#f3f4f6;border-radius:3px;padding:1px 5px">'+count+'개</span>'+
-          '<button class="grp-dd-rename" data-grp="'+esc(g)+'" style="font-size:11px;padding:1px 6px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;cursor:pointer;color:#374151" title="그룹명 변경">수정</button>'+
-          '<span class="grp-dd-del" data-grp="'+esc(g)+'" style="font-size:11px;color:#dc2626;cursor:pointer" title="그룹 삭제">✕</span>'+
-        '</span>'+
-      '</div>';
-    });
+// 업체가 실제 참여하는 공종(전기/통신/소방) 판정 + 대표종목(우선순위 전기>통신>소방) 산출.
+// 공사업종 필드가 비어있고 수동설정도 안 된 legacy 레코드는 실적/시평 데이터 존재 여부로 추정(기존 필터 로직과 동일 기준).
+function companyTradeInfo(c){
+  var jt=c.공사업종||'';
+  var hasE,hasT,hasS;
+  if(jt!==''||c._공종수동설정){
+    hasE=jt.indexOf('전기')>=0;hasT=jt.indexOf('통신')>=0;hasS=jt.indexOf('소방')>=0;
   } else {
-    html2 += '<div style="padding:10px 12px;font-size:12px;color:#9ca3af;text-align:center">등록된 그룹이 없습니다</div>';
+    hasE=(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0;
+    hasT=(Number(c.통신_시평액||0)+Number(c.통신_실적5||0)+Number(c.통신_실적3||0))>0;
+    hasS=(Number(c.소방_시평액||0)+Number(c.소방_실적5||0)+Number(c.소방_실적3||0))>0;
   }
-  inner.innerHTML = html2;
-
-  // 그룹추가 클릭
-  inner.querySelector('#grp-dd-new').addEventListener('click', function(){
-    closeGrpDropdown();
-    var name = prompt('새 그룹명을 입력하세요 (예: 우선협력사, 전기전문, A팀)');
-    if(!name||!name.trim()) return;
-    name = name.trim();
-    if(state.groups.indexOf(name)>=0){toast('이미 같은 이름의 그룹이 있습니다','bad');return;}
-    state.groups.push(name);
-    // 선택된 업체가 있으면 바로 등록
-    if(selCount > 0){
-      window._dbCheckedIdxs.forEach(function(i){
-        if(!state.db[i].groups)state.db[i].groups=[];
-        if(state.db[i].groups.indexOf(name)<0)state.db[i].groups.push(name);
-      });
-      window._dbCheckedIdxs = new Set();
-      save();refreshDB();toast('"'+name+'" 그룹 추가 + '+selCount+'개 업체 등록','ok');
-    } else {
-      save();refreshDB();toast('"'+name+'" 그룹 추가','ok');
-    }
-  });
-
-  // 기존 그룹 클릭 → 선택업체 등록
-  inner.querySelectorAll('.grp-dd-item').forEach(function(el){
-    el.addEventListener('click', function(e){
-      if(e.target.classList.contains('grp-dd-rename')||e.target.classList.contains('grp-dd-del')) return;
-      var g = this.dataset.grp;
-      closeGrpDropdown();
-      if(selCount === 0){toast('업체를 먼저 체크하세요','bad');return;}
-      var added=0;
-      window._dbCheckedIdxs.forEach(function(i){
-        if(!state.db[i].groups)state.db[i].groups=[];
-        if(state.db[i].groups.indexOf(g)<0){state.db[i].groups.push(g);added++;}
-      });
-      window._dbCheckedIdxs = new Set();
-      save();refreshDB();
-      toast(selCount+'개 → "'+g+'" 등록'+(added<selCount?' (중복 제외)':''),'ok');
-    });
-  });
-
-  // 그룹명 변경 (인라인 수정 UI)
-  inner.querySelectorAll('.grp-dd-rename').forEach(function(el){
-    el.addEventListener('click', function(e){
-      e.stopPropagation();
-      var g = this.dataset.grp;
-      var row = this.closest('.grp-dd-item');
-      if(!row) return;
-      if(row.querySelector('.grp-inline-input')) return; // 이미 편집 중
-      var nameSpan = row.querySelector('span:first-child');
-      var ctrlSpan = this.parentNode;
-      nameSpan.style.display='none';
-      ctrlSpan.style.display='none';
-      var wrap = document.createElement('div');
-      wrap.style.cssText='display:flex;align-items:center;gap:4px;flex:1;padding:0 2px';
-      var inp = document.createElement('input');
-      inp.className='grp-inline-input';
-      inp.value=g;
-      inp.style.cssText='flex:1;font-size:13px;padding:2px 6px;border:1.5px solid #0369a1;border-radius:4px;outline:none';
-      var btnSave=document.createElement('button');
-      btnSave.textContent='저장';
-      btnSave.style.cssText='font-size:11px;padding:2px 7px;background:#0369a1;color:#fff;border:none;border-radius:3px;cursor:pointer';
-      var btnCancel=document.createElement('button');
-      btnCancel.textContent='취소';
-      btnCancel.style.cssText='font-size:11px;padding:2px 7px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;cursor:pointer';
-      wrap.appendChild(inp); wrap.appendChild(btnSave); wrap.appendChild(btnCancel);
-      row.appendChild(wrap);
-      inp.focus(); inp.select();
-      function doSave(){
-        var newName=inp.value.trim();
-        if(!newName){toast('그룹명을 입력하세요','bad');inp.focus();return;}
-        if(state.groups.indexOf(newName)>=0&&newName!==g){toast('이미 같은 이름의 그룹이 있습니다','bad');inp.focus();return;}
-        var idx2=state.groups.indexOf(g);
-        if(idx2>=0) state.groups[idx2]=newName;
-        state.db.forEach(function(c){
-          if(c.groups){var gi=c.groups.indexOf(g);if(gi>=0)c.groups[gi]=newName;}
-        });
-        if(window._dbActiveGroup===g) window._dbActiveGroup=newName;
-        save(); refreshDB(); toast('"'+g+'" → "'+newName+'" 변경','ok');
-      }
-      function doCancel(){
-        row.removeChild(wrap);
-        nameSpan.style.display=''; ctrlSpan.style.display='';
-      }
-      btnSave.addEventListener('click',function(e){e.stopPropagation();doSave();});
-      btnCancel.addEventListener('click',function(e){e.stopPropagation();doCancel();});
-      inp.addEventListener('keydown',function(e){
-        if(e.key==='Enter'){e.preventDefault();doSave();}
-        if(e.key==='Escape'){e.preventDefault();doCancel();}
-      });
-      inp.addEventListener('click',function(e){e.stopPropagation();});
-    });
-  });
-
-  // 그룹 삭제
-  inner.querySelectorAll('.grp-dd-del').forEach(function(el){
-    el.addEventListener('click', function(e){
-      e.stopPropagation();
-      var g = this.dataset.grp;
-      closeGrpDropdown();
-      if(!confirm('"'+g+'" 그룹을 삭제할까요?\n(업체의 그룹 지정은 해제되지만 업체 자체는 삭제되지 않습니다)')) return;
-      state.groups.splice(state.groups.indexOf(g),1);
-      state.db.forEach(function(c){
-        if(c.groups){var gi=c.groups.indexOf(g);if(gi>=0)c.groups.splice(gi,1);}
-      });
-      save();refreshDB();toast('"'+g+'" 그룹 삭제','ok');
-    });
-  });
+  return{hasE:hasE,hasT:hasT,hasS:hasS,rep:hasE?'전기':hasT?'통신':hasS?'소방':null};
 }
-
-function closeGrpDropdown(){
-  var dd = document.getElementById('grp-dropdown');
-  if(dd) dd.style.display='none';
+// 정렬용 업체명 정규화: 괄호(반각/전각) 및 그 안의 문자 제거 후 트림. 예) "(주)마린테크" → "마린테크"
+function cleanCompanyNameForSort(name){
+  return String(name||'').replace(/[（(][^）)]*[）)]/g,'').trim();
 }
-
-function updateGroupSelInfo(){
-  var sel = window._dbCheckedIdxs ? window._dbCheckedIdxs.size : 0;
-  var info = document.getElementById('db-group-sel-info');
-  var unassignBtn = document.getElementById('btn-grp-unassign');
-  if(info) info.textContent = sel > 0 ? sel+'개 선택 — 그룹+버튼 클릭으로 등록' : '';
-  if(unassignBtn) unassignBtn.style.display = sel > 0 ? '' : 'none';
-}
-
-function restoreRowChecks(){
-  document.querySelectorAll('.db-row-chk').forEach(function(chk){
-    var idx = Number(chk.dataset.idx);
-    chk.checked = window._dbCheckedIdxs && window._dbCheckedIdxs.has(idx);
-  });
-  var allChk = document.getElementById('db-chk-all');
-  if(allChk){
-    var rows = document.querySelectorAll('.db-row-chk');
-    allChk.checked = rows.length > 0 && Array.from(rows).every(function(c){return c.checked;});
-    allChk.indeterminate = !allChk.checked && Array.from(rows).some(function(c){return c.checked;});
-  }
-  updateGroupSelInfo();
-}
-
-
-
-
-
-function unassignGroupFromSelected(idxSet){
-  if(!idxSet||idxSet.size===0){toast('업체를 먼저 선택하세요','bad');return;}
-  if(!confirm(idxSet.size+'개 업체의 모든 그룹 지정을 해제할까요?'))return;
-  idxSet.forEach(function(i){if(state.db[i])state.db[i].groups=[];});
-  window._dbCheckedIdxs=new Set();
-  save();refreshDB();toast('그룹 해제 완료','ok');
-}
-
 function refreshDB(){
   $('#db-count').textContent=state.db.length;
   var search=($('#db-search').value||'').toLowerCase();
@@ -2980,6 +2801,13 @@ function refreshDB(){
   if(dbSort.key){
     var sk=dbSort.key;
     entries.sort(function(a,b){return dbSort.dir*((Number(a.c[sk])||0)-(Number(b.c[sk])||0));});
+  } else {
+    // 기본 정렬: 최초 등록일시 오름차순 → 동일(주로 등록일시 없는 legacy 레코드끼리)하면 업체명(괄호 제외) 가나다/숫자/알파벳 순
+    entries.sort(function(a,b){
+      var da=a.c.등록일시||'',db_=b.c.등록일시||'';
+      if(da!==db_)return da<db_?-1:1;
+      return cleanCompanyNameForSort(a.c.업체명).localeCompare(cleanCompanyNameForSort(b.c.업체명),'ko',{numeric:true,sensitivity:'base'});
+    });
   }
   updateDbSortHeaders();
   var tbody=$('#db-table tbody');tbody.innerHTML='';
@@ -2989,42 +2817,43 @@ function refreshDB(){
     if(onlyPerf&&!c.is실적)return;
     if(only자사&&!c.is자사)return;
     if(onlyExpiring&&getExpiryAlerts(c).length===0)return;
+    var _ti=companyTradeInfo(c);
     if(only미참여||fE||fT||fS){
-      // 공사업종이 비어있으면(=아직 분류 안 됨) 실제 실적/시평 데이터 존재 여부로 참여 종목 추정 (업체등록정보 팝업과 동일 기준)
-      var jt=c.공사업종||'';
-      var hasE,hasT,hasS;
-      if(jt!==''||c._공종수동설정){
-        hasE=jt.indexOf('전기')>=0;hasT=jt.indexOf('통신')>=0;hasS=jt.indexOf('소방')>=0;
-      } else {
-        hasE=(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0;
-        hasT=(Number(c.통신_시평액||0)+Number(c.통신_실적5||0)+Number(c.통신_실적3||0))>0;
-        hasS=(Number(c.소방_시평액||0)+Number(c.소방_실적5||0)+Number(c.소방_실적3||0))>0;
-      }
-      if(only미참여&&(hasE||hasT||hasS))return;
+      if(only미참여&&(_ti.hasE||_ti.hasT||_ti.hasS))return;
       if(fE||fT||fS){
-        var matched=(fE&&hasE)||(fT&&hasT)||(fS&&hasS);
+        var matched=(fE&&_ti.hasE)||(fT&&_ti.hasT)||(fS&&_ti.hasS);
         if(!matched)return;
-        if(!fE&&hasE)return;
-        if(!fT&&hasT)return;
-        if(!fS&&hasS)return;
+        if(!fE&&_ti.hasE)return;
+        if(!fT&&_ti.hasT)return;
+        if(!fS&&_ti.hasS)return;
       }
     }
     if(activeGrp&&!(c.groups&&c.groups.indexOf(activeGrp)>=0))return;
     if(search){var hay=(c.업체명+' '+(c.사업자번호||'')).toLowerCase();if(!hay.includes(search))return;}
     shown++;
-    // 영업기간 표시
-    var yr=calcYears(c.공사업등록일);
+    // 대표종목(우선순위 전기>통신>소방) 데이터로 실적/시평/부채유동/공사업등록일 표시
+    var repJong=_ti.rep;
+    var pd=repJong?getCompPerfData(c,repJong):{실적5:0,실적3:0,시평액:0,공사업등록일:'',부채비율:c.부채비율,유동비율:c.유동비율};
+    var yr=calcYears(pd.공사업등록일);
     var yrStr=yr!=null?(yr>=3?'<span style="color:#16a34a">'+yr.toFixed(1)+'년</span>':'<span style="color:#d97706">'+yr.toFixed(1)+'년</span>'):'';
+    // 참여종목 배지(체크된 것만, 세로 나열, 종목별 색상). 칸 높이를 늘리지 않도록 개수에 따라 폰트 크기를 줄임(1개:10px/2개:9px/3개:8px).
+    var _trades=[];
+    if(_ti.hasE)_trades.push({t:'전기',col:'#2563eb'});
+    if(_ti.hasT)_trades.push({t:'통신',col:'#059669'});
+    if(_ti.hasS)_trades.push({t:'소방',col:'#dc2626'});
+    var _tfs=_trades.length<=1?'10px':_trades.length===2?'9px':'8px';
+    var tradeBadgeHTML=_trades.length?(' <span style="display:inline-flex;flex-direction:column;line-height:1.05;vertical-align:middle">'+
+      _trades.map(function(x){return '<span style="font-size:'+_tfs+';font-weight:700;color:'+x.col+'">'+x.t+'</span>';}).join('')+
+      '</span>'):'';
     var tr=document.createElement('tr');tr.className='hover';
     tr.innerHTML=
-      '<td class="c" style="width:28px"><input type="checkbox" class="db-row-chk" data-idx="'+idx+'"></td>'+
       '<td class="l">'+esc(c.지역||'')+'</td>'+
       '<td>'+dbGapHTML(c)+'</td>'+
-      '<td>'+dbGamHTML(c)+'</td>'+
-      '<td class="l" style="white-space:normal;word-break:keep-all;max-width:130px;vertical-align:top">'+
-        esc(c.업체명)+expiryWarnHTML(c)+
+      '<td>'+dbGamHTML(c,repJong)+'</td>'+
+      '<td class="l" style="white-space:normal;word-break:keep-all;max-width:150px;vertical-align:top">'+
+        '<span style="display:inline-flex;align-items:center">'+esc(c.업체명)+tradeBadgeHTML+'</span>'+expiryWarnHTML(c)+
         ((c.등록일시||c.수정일시)?
-          '<br><span style="font-size:9px;color:#9ca3af;white-space:nowrap" title="DB 등록/수정 일시">'+
+          '<br><span style="font-size:9px;color:#9ca3af;white-space:nowrap" title="등록: 최초 등록일 / 수정: 재무·자격 관련 정보가 마지막으로 실제 변경된 날짜(메모 등 단순 수정은 반영 안 됨)">'+
             [c.등록일시?('등록 '+esc(String(c.등록일시).slice(0,10))):'',c.수정일시?('수정 '+esc(String(c.수정일시).slice(0,10))):''].filter(Boolean).join(' · ')+
           '</span>'
           :'')+
@@ -3032,16 +2861,14 @@ function refreshDB(){
           '<br>'+c.groups.map(function(g){return '<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:10px;border-radius:3px;padding:1px 5px;margin-top:2px;margin-right:2px">'+esc(g)+'</span>';}).join('')
           :'')+
       '</td>'+
-      '<td>'+FMT_NUM(c.실적5)+'</td>'+
-      '<td>'+FMT_NUM(c.시평액)+'</td>'+
-      '<td>'+FMT_NUM(c.실적3)+'</td>'+
-      '<td class="c"><input type="checkbox" data-flag="is실적-'+idx+'" '+(c.is실적?'checked':'')+'></td>'+
-      '<td class="c"><input type="checkbox" data-flag="is자사-'+idx+'" '+(c.is자사?'checked':'')+'></td>'+
+      '<td>'+FMT_NUM(pd.실적5)+'</td>'+
+      '<td>'+FMT_NUM(pd.시평액)+'</td>'+
+      '<td>'+FMT_NUM(pd.실적3)+'</td>'+
       '<td class="c" style="color:#7c3aed;font-weight:600">'+(c.개별최대지분율!=null&&c.개별최대지분율!==''?c.개별최대지분율+'%':'')+'</td>'+
-      '<td class="c" style="color:#7c3aed">'+(c.부채비율!=null?c.부채비율+'%':'<span style="color:#d1d5db">-</span>')+'</td>'+
-      '<td class="c" style="color:#7c3aed">'+(c.유동비율!=null?c.유동비율+'%':'<span style="color:#d1d5db">-</span>')+'</td>'+
+      '<td class="c" style="color:#7c3aed">'+(pd.부채비율!=null?pd.부채비율+'%':'<span style="color:#d1d5db">-</span>')+'</td>'+
+      '<td class="c" style="color:#7c3aed">'+(pd.유동비율!=null?pd.유동비율+'%':'<span style="color:#d1d5db">-</span>')+'</td>'+
       '<td class="c" style="font-size:11px">'+
-        (c.공사업등록일?'<span title="'+esc(c.공사업등록일)+'">'+esc(c.공사업등록일.slice(0,7))+'</span>':
+        (pd.공사업등록일?'<span title="'+esc(pd.공사업등록일)+'">'+esc(pd.공사업등록일.slice(0,7))+'</span>':
         '<span style="color:#d1d5db">-</span>')+
         (yrStr?' <br>'+yrStr:'')+'</td>'+
       '<td class="l">'+esc(c.신용평가||'')+'</td>'+
@@ -3061,7 +2888,6 @@ function refreshDB(){
   applyRegionSelects(state.bid.지역선택);
   if(state.bid.적격기준)$('#in-적격기준').value=state.bid.적격기준;
   refreshGroupToolbar();
-  restoreRowChecks();
 }
 
 
@@ -3137,19 +2963,29 @@ function renderGroupPickerHTML(prefix,curGroups){
       '<input id="'+prefix+'-grp-new-inp" type="text" placeholder="새 그룹명..." style="flex:1;font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;min-width:0" onclick="event.stopPropagation()">'+
       '<button type="button" id="'+prefix+'-grp-new-btn" style="font-size:11px;padding:3px 8px;background:#0369a1;color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">＋추가</button>'+
     '</div>'+
-    '<div id="'+prefix+'-grp-list">';
-  if(state.groups.length===0){
-    html2+='<div style="padding:8px 14px;font-size:12px;color:#9ca3af">등록된 그룹 없음</div>';
-  } else {
-    state.groups.forEach(function(g){
-      var checked=cg.indexOf(g)>=0;
-      html2+='<label style="display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;font-size:13px;background:'+(checked?'#eff6ff':'#fff')+'">'+
-        '<input type="checkbox" class="'+prefix+'-grp-chk" data-grp="'+esc(g)+'" '+(checked?'checked':'')+' style="cursor:pointer">'+
-        '<span style="color:'+(checked?'#1d4ed8':'#374151')+'">'+esc(g)+'</span></label>';
-    });
-  }
-  html2+='</div></div>';
+    '<div id="'+prefix+'-grp-list">'+groupRowsHTML(prefix,cg)+
+    '</div></div>';
   return html2;
+}
+// 그룹 선택 패널 안의 그룹 행(체크박스+이름+수정/삭제) 목록 HTML — 최초 렌더/추가/수정/삭제 후 재렌더에서 공용으로 사용.
+function groupRowsHTML(prefix,curGroups){
+  var cg=curGroups||[];
+  if(state.groups.length===0){
+    return '<div style="padding:8px 14px;font-size:12px;color:#9ca3af">등록된 그룹 없음</div>';
+  }
+  return state.groups.map(function(g){
+    var checked=cg.indexOf(g)>=0;
+    return '<div class="'+prefix+'-grp-row" data-grp="'+esc(g)+'" style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 14px;cursor:pointer;font-size:13px;background:'+(checked?'#eff6ff':'#fff')+'">'+
+      '<span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;overflow:hidden">'+
+        '<input type="checkbox" class="'+prefix+'-grp-chk" data-grp="'+esc(g)+'" '+(checked?'checked':'')+' style="cursor:pointer;pointer-events:none;flex-shrink:0">'+
+        '<span class="'+prefix+'-grp-name" style="color:'+(checked?'#1d4ed8':'#374151')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(g)+'</span>'+
+      '</span>'+
+      '<span style="display:flex;gap:4px;flex-shrink:0">'+
+        '<button type="button" class="'+prefix+'-grp-rename" data-grp="'+esc(g)+'" style="font-size:10px;padding:1px 6px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;cursor:pointer;color:#374151" title="그룹명 변경">수정</button>'+
+        '<span class="'+prefix+'-grp-del" data-grp="'+esc(g)+'" style="font-size:11px;color:#dc2626;cursor:pointer;padding:1px 4px" title="그룹 삭제">✕</span>'+
+      '</span>'+
+    '</div>';
+  }).join('');
 }
 function bindGroupPicker(prefix){
   var btn=document.getElementById(prefix+'-grp-btn');
@@ -3162,6 +2998,18 @@ function bindGroupPicker(prefix){
   });
   var newInp=document.getElementById(prefix+'-grp-new-inp');
   var newBtn=document.getElementById(prefix+'-grp-new-btn');
+  function currentChecked(){
+    var gs=[];panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(c){if(c.checked)gs.push(c.dataset.grp);});
+    return gs;
+  }
+  // 그룹 추가/이름변경/삭제 후 목록 UI를 통째로 재생성(체크 상태는 유지).
+  function rebuildList(){
+    var checkedNow=currentChecked();
+    var list=document.getElementById(prefix+'-grp-list');
+    if(!list)return;
+    list.innerHTML=groupRowsHTML(prefix,checkedNow);
+    bindRowEvents();
+  }
   function addNewGroup(){
     if(!newInp)return;
     var name=newInp.value.trim();
@@ -3169,38 +3017,97 @@ function bindGroupPicker(prefix){
     if(state.groups.indexOf(name)>=0){toast('이미 같은 이름의 그룹이 있습니다','bad');newInp.select();return;}
     state.groups.push(name);
     save();
-    var list=document.getElementById(prefix+'-grp-list');
-    if(list){
-      var noMsg=list.querySelector('div');
-      if(noMsg&&noMsg.style.color==='rgb(156, 163, 175)')noMsg.remove();
-      var lbl=document.createElement('label');
-      lbl.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;font-size:13px;background:#eff6ff';
-      lbl.innerHTML='<input type="checkbox" class="'+prefix+'-grp-chk" data-grp="'+esc(name)+'" checked style="cursor:pointer"><span style="color:#1d4ed8">'+esc(name)+'</span>';
-      list.appendChild(lbl);
-      lbl.querySelector('input').addEventListener('change',function(){updateGrpLabel();});
-    }
+    rebuildList();
+    // 방금 추가한 그룹은 바로 체크된 상태로
+    var chk=panel.querySelector('.'+prefix+'-grp-chk[data-grp="'+CSS.escape(name)+'"]');
+    if(chk){chk.checked=true;var row=chk.closest('.'+prefix+'-grp-row');if(row)row.style.background='#eff6ff';}
     newInp.value='';
     updateGrpLabel();
+    try{refreshGroupToolbar();}catch(e){}
     toast('"'+name+'" 그룹 추가','ok');
   }
   if(newBtn)newBtn.addEventListener('click',function(e){e.stopPropagation();addNewGroup();});
   if(newInp)newInp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();e.stopPropagation();addNewGroup();}});
   panel.addEventListener('click',function(e){e.stopPropagation();});
   function updateGrpLabel(){
-    var sel=[];
-    panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(c2){
-      if(c2.checked) sel.push(c2.dataset.grp);
-      var lbl=c2.closest('label');
-      if(lbl) lbl.style.background=c2.checked?'#eff6ff':'#fff';
-      var span=lbl&&lbl.querySelector('span');
-      if(span) span.style.color=c2.checked?'#1d4ed8':'#374151';
+    var sel=currentChecked();
+    panel.querySelectorAll('.'+prefix+'-grp-row').forEach(function(row){
+      var chk=row.querySelector('.'+prefix+'-grp-chk');
+      var nameSpan=row.querySelector('.'+prefix+'-grp-name');
+      row.style.background=chk&&chk.checked?'#eff6ff':'#fff';
+      if(nameSpan)nameSpan.style.color=chk&&chk.checked?'#1d4ed8':'#374151';
     });
     var lbl2=document.getElementById(prefix+'-grp-label');
     if(lbl2){lbl2.textContent=sel.length>0?sel.join(', '):'그룹 선택...';lbl2.style.color=sel.length>0?'#1d4ed8':'#9ca3af';}
   }
-  panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(chk){
-    chk.addEventListener('change',function(){updateGrpLabel();});
-  });
+  // 인라인 그룹명 변경 UI (저장/취소) — 기존 "그룹+" 드롭다운에 있던 것과 동일한 방식을 모달 그룹패널로 이전.
+  function startRenameInline(row,g){
+    if(!row||row.querySelector('.grp-inline-input'))return;
+    var leftSpan=row.children[0],rightSpan=row.children[1];
+    leftSpan.style.display='none';rightSpan.style.display='none';
+    var wrap=document.createElement('div');
+    wrap.style.cssText='display:flex;align-items:center;gap:4px;flex:1;padding:0 2px';
+    var inp=document.createElement('input');
+    inp.className='grp-inline-input';inp.value=g;
+    inp.style.cssText='flex:1;font-size:12px;padding:2px 6px;border:1.5px solid #0369a1;border-radius:4px;outline:none';
+    var btnSave=document.createElement('button');btnSave.type='button';btnSave.textContent='저장';
+    btnSave.style.cssText='font-size:10px;padding:2px 7px;background:#0369a1;color:#fff;border:none;border-radius:3px;cursor:pointer';
+    var btnCancel=document.createElement('button');btnCancel.type='button';btnCancel.textContent='취소';
+    btnCancel.style.cssText='font-size:10px;padding:2px 7px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;cursor:pointer';
+    wrap.appendChild(inp);wrap.appendChild(btnSave);wrap.appendChild(btnCancel);
+    row.appendChild(wrap);
+    inp.focus();inp.select();
+    inp.addEventListener('click',function(e){e.stopPropagation();});
+    function doSave(){
+      var newName=inp.value.trim();
+      if(!newName){toast('그룹명을 입력하세요','bad');inp.focus();return;}
+      if(state.groups.indexOf(newName)>=0&&newName!==g){toast('이미 같은 이름의 그룹이 있습니다','bad');inp.focus();return;}
+      var gi=state.groups.indexOf(g);if(gi>=0)state.groups[gi]=newName;
+      state.db.forEach(function(c){if(c.groups){var ci=c.groups.indexOf(g);if(ci>=0)c.groups[ci]=newName;}});
+      if(window._dbActiveGroup===g)window._dbActiveGroup=newName;
+      save();toast('"'+g+'" → "'+newName+'" 변경','ok');
+      rebuildList();updateGrpLabel();
+      try{refreshDB();}catch(e2){}
+      try{refreshGroupToolbar();}catch(e2){}
+    }
+    function doCancel(){row.removeChild(wrap);leftSpan.style.display='';rightSpan.style.display='';}
+    btnSave.addEventListener('click',function(e){e.stopPropagation();doSave();});
+    btnCancel.addEventListener('click',function(e){e.stopPropagation();doCancel();});
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();doSave();}if(e.key==='Escape'){e.preventDefault();doCancel();}});
+  }
+  function bindRowEvents(){
+    panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(chk){
+      chk.addEventListener('change',function(){updateGrpLabel();});
+    });
+    panel.querySelectorAll('.'+prefix+'-grp-row').forEach(function(row){
+      row.addEventListener('click',function(e){
+        if(e.target.closest('button')||e.target.classList.contains(prefix+'-grp-del')||e.target.classList.contains('grp-inline-input'))return;
+        var chk=row.querySelector('.'+prefix+'-grp-chk');
+        if(chk){chk.checked=!chk.checked;chk.dispatchEvent(new Event('change'));}
+      });
+    });
+    panel.querySelectorAll('.'+prefix+'-grp-rename').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.stopPropagation();
+        startRenameInline(btn.closest('.'+prefix+'-grp-row'),btn.dataset.grp);
+      });
+    });
+    panel.querySelectorAll('.'+prefix+'-grp-del').forEach(function(el){
+      el.addEventListener('click',function(e){
+        e.stopPropagation();
+        var g=this.dataset.grp;
+        if(!confirm('"'+g+'" 그룹을 삭제할까요?\n(업체의 그룹 지정은 해제되지만 업체 자체는 삭제되지 않습니다)'))return;
+        var gi=state.groups.indexOf(g);if(gi>=0)state.groups.splice(gi,1);
+        state.db.forEach(function(c){if(c.groups){var ci=c.groups.indexOf(g);if(ci>=0)c.groups.splice(ci,1);}});
+        if(window._dbActiveGroup===g)window._dbActiveGroup=null;
+        save();toast('"'+g+'" 그룹 삭제','ok');
+        rebuildList();updateGrpLabel();
+        try{refreshDB();}catch(e2){}
+        try{refreshGroupToolbar();}catch(e2){}
+      });
+    });
+  }
+  bindRowEvents();
   function closePanel(e){if(panel)panel.style.display='none';}
   setTimeout(function(){document.addEventListener('click',closePanel,{once:true});},0);
 }
@@ -3408,9 +3315,22 @@ function openCompanyModal(idx){
       소방_부채비율:null,소방_유동비율:null,
       소방_공사업등록일:$('#m-소방-공사업등록일').value.trim(),
       groups:readGroupPickerValues('m'),
-      전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||'',
-      수정일시:new Date().toISOString()
+      전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||''
     };
+    // ── 수정일시: "저장 버튼을 눌렀다"가 아니라 "재무/자격 관련 정보가 실제로 바뀌었다"를 기준으로 갱신.
+    // 2026-07-29 절충안: 메모/그룹/대표자 같은 행정성 필드만 고쳐서 재저장해도 최종수정일이 갱신되면
+    // 만료임박 알림의 "최종수정" 참고값이 왜곡되므로(실제로는 안 바뀐 재무데이터가 방금 확인된 것처럼 보임),
+    // 아래 필드들만 비교해 하나라도 달라졌을 때만 수정일시를 오늘로 찍는다. 신규 등록은 항상 갱신.
+    var _FIN_FIELDS=['시평액','실적5','실적3','통신_시평액','통신_실적5','통신_실적3','소방_시평액','소방_실적5','소방_실적3',
+      '부채비율','유동비율','부채만점','유동만점','공사업등록일','통신_공사업등록일','소방_공사업등록일',
+      '신용평가','안전보건시스템','공사업종'];
+    var _oldC=isNew?null:state.db[idx];
+    var _finChanged=isNew||!_oldC||_FIN_FIELDS.some(function(k){
+      var a=_oldC[k],b=obj[k];
+      if(a==null)a=null;if(b==null)b=null;
+      return a!==b;
+    });
+    if(_finChanged)obj.수정일시=new Date().toISOString();
     if(!obj.업체명){toast('업체명을 입력하세요','bad');return;}
     if(isNew)state.db.push(stampNewCompanyDefaults(obj));
     else state.db[idx]=Object.assign({},state.db[idx],obj);
@@ -6376,58 +6296,8 @@ function bind(){
   })();
 
   // DB 탭 이벤트
-  // 전체선택 체크박스
-  document.getElementById('db-chk-all').addEventListener('change',function(){
-    var checked=this.checked;
-    document.querySelectorAll('.db-row-chk').forEach(function(chk){
-      chk.checked=checked;
-      var idx=Number(chk.dataset.idx);
-      if(checked)window._dbCheckedIdxs.add(idx);
-      else window._dbCheckedIdxs.delete(idx);
-    });
-    updateGroupSelInfo();
-  });
-  // 행 체크박스 (이벤트 위임)
-  document.getElementById('db-table').addEventListener('change',function(e){
-    if(e.target.classList.contains('db-row-chk')){
-      var idx=Number(e.target.dataset.idx);
-      if(e.target.checked)window._dbCheckedIdxs.add(idx);
-      else window._dbCheckedIdxs.delete(idx);
-      updateGroupSelInfo();
-      // 전체선택 상태 업데이트
-      var rows=document.querySelectorAll('.db-row-chk');
-      var allChk=document.getElementById('db-chk-all');
-      allChk.checked=rows.length>0&&Array.from(rows).every(function(c){return c.checked;});
-      allChk.indeterminate=!allChk.checked&&Array.from(rows).some(function(c){return c.checked;});
-    }
-  });
   // 그룹 보기 select (필터)
   document.getElementById('db-group-filter').addEventListener('change',function(){refreshDB();});
-  // 그룹+ 버튼 → 드롭다운 토글
-  document.getElementById('btn-grp-add').addEventListener('click',function(e){
-    e.stopPropagation();
-    if(!canManageCompanyDB())return;
-    var dd=document.getElementById('grp-dropdown');
-    if(!dd)return;
-    if(dd.style.display==='none'||!dd.style.display){
-      buildGrpDropdown();
-      dd.style.display='block';
-      // 외부 클릭 시 닫기
-      var close=function(ev){
-        if(!dd.contains(ev.target)&&ev.target!==document.getElementById('btn-grp-add')){
-          dd.style.display='none';document.removeEventListener('click',close);
-        }
-      };
-      setTimeout(function(){document.addEventListener('click',close);},10);
-    } else {
-      dd.style.display='none';
-    }
-  });
-  // 선택업체 그룹 해제
-  document.getElementById('btn-grp-unassign').addEventListener('click',function(){
-    if(!canManageCompanyDB())return;
-    unassignGroupFromSelected(window._dbCheckedIdxs);
-  });
   $('#btn-import-xlsx').addEventListener('click',function(){$('#file-import').click();});
   $('#file-import').addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;importXlsx(f,$('#import-mode').value);e.target.value='';});
   $('#btn-add-company').addEventListener('click',function(){openCompanyModal(null);});
@@ -6486,13 +6356,6 @@ function bind(){
       if(confirm(state.db[di].업체명+' 삭제할까요?')){state.db.splice(di,1);save();refreshDB();refreshCombos();}
       return;
     }
-  });
-  $('#db-table').addEventListener('change',function(e){
-    var t=e.target;var flag=t.dataset&&t.dataset.flag;if(!flag)return;
-    if(!canManageCompanyDB())return;
-    var parts=flag.split('-');var key=parts[0];var idx=Number(parts[1]);
-    if(state.db[idx])state.db[idx][key]=t.checked;
-    save();refreshCombos();
   });
   // ── 철도기술점수 탭 바인딩 ──────────────────────────────────────
   (function(){
