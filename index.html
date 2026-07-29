@@ -324,7 +324,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       <div class="summary" style="margin-top:10px">
         <div class="stat"><div class="k">기초가격(자동) H4</div><div class="v" id="o-기초자동">-</div><div id="o-기초자동-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat"><div class="k">시평제한</div><div class="v" id="o-시평제한">미적용</div><div id="o-시평제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
-        <div class="stat" id="stat-분담시평" style="display:none;background:#f1f5f9;border-color:#94a3b8"><div class="k" style="color:#334155">분담시평 대비</div><div class="v" style="color:#334155" id="o-분담시평">미적용</div></div>
+        <div class="stat" id="stat-분담시평" style="display:none;background:#f1f5f9;border-color:#94a3b8"><div class="k" style="color:#334155">분담시평제한</div><div class="v" style="color:#334155" id="o-분담시평">미적용</div><div id="o-분담시평-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat"><div class="k">실적제한 E6</div><div class="v" id="o-실적제한">-</div><div id="o-실적제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-lh지분율기준" style="display:none;background:#fef3c7;border-color:#fde68a"><div class="k" style="color:#92400e">지분율기준</div><div class="v" style="color:#92400e" id="o-lh지분율기준">-</div><div id="o-lh지분율기준-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" title="A값 미입력: 기초금액×사정률×낙찰하한율 | A값 입력 시: (기초금액×사정률 - A값)×낙찰하한율 + A값"><div class="k">예상투찰금액 E7</div><div class="v" id="o-투찰금액">-</div></div>
@@ -2221,8 +2221,15 @@ function getEligibilityChecklist(b, c, damLabel) {
   var n=Number(b.구성업체수)||2;
   var 최소str=(b.최소지분율!=null&&b.최소지분율!==''&&!isNaN(b.최소지분율))?Number(b.최소지분율)+'%':'';
   var 구성str=n+'인'+(n<=2?'':(최소str||''));
-  var 시평str='';
-  if(c.E3!=null&&c.E3>0){var 시평억=Math.ceil(c.E3/10000000)/10;시평str='시평 '+시평억.toFixed(1)+'억';}
+  function _eokTrim(krw){ // 억 단위 변환(올림, 소수1자리), 유효숫자만 표시(끝자리 .0 제거)
+    var v=Math.ceil(krw/10000000)/10;
+    var s=v.toFixed(1);
+    return s.slice(-2)==='.0'?s.slice(0,-2):s;
+  }
+  var 시평parts=[];
+  if(c.E3!=null&&c.E3>0)시평parts.push('시평 '+_eokTrim(c.E3)+'억');
+  if(c.분담시평!=null&&c.분담시평>0)시평parts.push('분담시평'+_eokTrim(c.분담시평)+'억');
+  var 시평str=시평parts.join(' / ');
   var 실적억=c.E6>0?Math.ceil(c.E6/10000000)/10:0;
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
   var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정)':'');
@@ -4808,6 +4815,28 @@ function importXlsx(file,mode){
   reader.readAsArrayBuffer(file);
 }
 
+// 확정메세지/조합결과TXT에서 구성업체 표시 순서 규칙 (2026-07-29):
+// 1) 분담(레거시 소방/통신 포함) 슬롯은 항상 맨 끝(밑)
+// 2) 대표사(분담 제외 중 지분율 최댓값인 업체)는 항상 맨 앞(위)
+// 3) 그 외는 지역 > 자사 > 실적 > (기타) 순으로 배치, 동일 그룹 내에서는 지분율 내림차순, 지분율도 같으면 가나다순
+function sortComboRowsForDisplay(rows,nameFn){
+  var GRP_PRI={'지역':0,'자사':1,'실적':2,'검색':3,'1회':4};
+  function pri(g){return GRP_PRI.hasOwnProperty(g)?GRP_PRI[g]:9;}
+  var dam=rows.filter(function(r){return r.grp==='분담'||r.grp==='소방'||r.grp==='통신';});
+  var rest=rows.filter(function(r){return !(r.grp==='분담'||r.grp==='소방'||r.grp==='통신');});
+  if(!rest.length)return dam;
+  var repIdx=0,repPct=-Infinity;
+  rest.forEach(function(r,i){var p=Number(r.지분율)||0;if(p>repPct){repPct=p;repIdx=i;}});
+  var others=rest.filter(function(r,i){return i!==repIdx;});
+  others.sort(function(a,b){
+    var pa=pri(a.grp||'지역'),pb=pri(b.grp||'지역');
+    if(pa!==pb)return pa-pb;
+    var sa=Number(a.지분율)||0,sb=Number(b.지분율)||0;
+    if(sb!==sa)return sb-sa;
+    return String(nameFn(a)).localeCompare(String(nameFn(b)),'ko');
+  });
+  return [rest[repIdx]].concat(others,dam);
+}
 function exportCombosText(){
   var b=state.bid; var c=calcBid();
   // 1. 협정메세지 (<구성현황> 라인 제외, "협정 부탁 드립니다." 및 그 앞 빈 줄 제거, 끝 빈줄 제거)
@@ -4831,8 +4860,11 @@ function exportCombosText(){
     var r=calcSlot(combo,c);
     var active=r.ROW.filter(function(row){return(row.업체명||'').trim()!=='';});
     if(!active.length)return;
-    // 지분율 내림차순 정렬
-    active.sort(function(a,b2){return (Number(b2.지분율)||0)-(Number(a.지분율)||0);});
+    // 표시 순서: 분담 맨 끝 / 대표사(최대지분율) 맨 앞 / 나머지는 지역>자사>실적 순(동률은 지분율↓·가나다)
+    active=sortComboRowsForDisplay(active,function(row){
+      var _dbN=state.db.find(function(x){return x.업체명===row.업체명;});
+      return (_dbN&&_dbN.약어)?_dbN.약어:(row.업체명||'').trim();
+    });
     var hasDed=active.some(function(row){return ROUND3((row.신인도||0)-(row.감점||0))<0;});
     var line=active.map(function(row){
       var _dbE3=state.db.find(function(x){return x.업체명===row.업체명;});
@@ -5466,7 +5498,10 @@ function refreshBidStats(){
   if(_damStat){
     var _isComplex=(normGongjong(state.bid.공종)==='복합(전기+분담)');
     _damStat.style.display=_isComplex?'':'none';
-    if(_isComplex){var _dEl=$('#o-분담시평');if(_dEl)_dEl.textContent=c.분담시평==null?'미적용':FMT_NUM(c.분담시평);}
+    if(_isComplex){
+      var _dEl=$('#o-분담시평');if(_dEl)_dEl.textContent=c.분담시평==null?'미적용':FMT_NUM(c.분담시평);
+      var _dEok=document.getElementById('o-분담시평-eok');if(_dEok)_dEok.textContent=c.분담시평!=null?fmtEok(c.분담시평):'';
+    }
   }
   $('#o-지역선택').textContent=getRegionStr()||'미선택';
   $('#o-적격기준').textContent=state.bid.적격기준||'미선택';
@@ -6834,7 +6869,11 @@ function showConfirmPop(ci){
   var _comboCalc=comboCalcFor(combo,_globalCalc);
   var _result=calcSlot(combo,_comboCalc);
   var slots=_result.ROW.filter(function(r){return(r.업체명||'').trim()!=='';});
-  slots=slots.slice().sort(function(a,b){return(Number(b.지분율)||0)-(Number(a.지분율)||0);});
+  // 표시 순서: 분담 맨 끝 / 대표사(최대지분율) 맨 앞 / 나머지는 지역>자사>실적 순(동률은 지분율↓·가나다)
+  slots=sortComboRowsForDisplay(slots,function(s){
+    var _dbN=state.db.find(function(x){return x.업체명===s.업체명;});
+    return (_dbN&&_dbN.약어)?_dbN.약어:(s.업체명||'').trim();
+  });
   if(!slots.length){toast('슬롯에 업체가 없습니다','bad');return;}
   var hasDed=slots.some(function(s){return (Number(s.감점)||0)>0;});
   var compLines=slots.map(function(s){
