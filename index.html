@@ -322,7 +322,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
           </select></div>
         <button class="btn" id="btn-paste-text" title="스캔 PDF 등 직접 추출이 안 될 때 텍스트를 붙여넣어 분석" style="background:#2563eb;color:#fff;border-color:#1d4ed8">📋 공고문분석(텍스트)</button>
         <button class="btn" id="btn-reset-bid" style="background:#111827;color:#fff;border-color:#111827">공고 초기화</button>
-        <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 협정메세지 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 메세지/요약</button>
+        <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 메모 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 메세지/요약</button>
       </div>
       <!-- 업계평균 입력은 DB탭에서 관리 -->
       <div class="summary" style="margin-top:10px">
@@ -525,7 +525,7 @@ window.addEventListener('error', function(e){
 });
 
 const STORE_KEY='jodal_app_v2';
-const SCHEMA_VERSION=13;
+const SCHEMA_VERSION=14;
 const MAX_SLOTS=5;
 const DEFAULT_COMBOS=3;
 
@@ -656,7 +656,7 @@ function gistStatus(st,label){
 
 function gistApplyData(obj){
   migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
-  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);
+  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);migrateV13(obj);
   if(obj.db)state.db=obj.db;
   if(obj.groups)state.groups=obj.groups;
   if(obj.bid)Object.assign(state.bid,obj.bid);
@@ -943,7 +943,7 @@ function renderBackupPanel(){
 //   (구버전 백업이라 bidScreensByUser가 없으면 migrateV10이 obj.accounts 기준으로 만들어주므로 그 결과에서 내 파티션만 가져옴)
 function restoreStateFromBackupObj(obj){
   migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
-  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);
+  migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);migrateV13(obj);
   if(obj.db)state.db=obj.db;
   if(obj.groups)state.groups=obj.groups;
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
@@ -1011,7 +1011,7 @@ function load(){
   try{
     var raw=localStorage.getItem(STORE_KEY);if(!raw)return;
     var obj=JSON.parse(raw);
-    migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);
+    migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);migrateV13(obj);
     if(obj.db)state.db=obj.db;
     if(obj.groups)state.groups=obj.groups;
     if(obj.bid)Object.assign(state.bid,obj.bid);
@@ -1234,6 +1234,20 @@ function migrateV12(obj){
   if(!obj.settings)obj.settings={};
   if(obj.settings._A조건초기화월==null)obj.settings._A조건초기화월=currentYM(now);
   obj.schemaVersion=13;
+}
+// v14(2026-07-29): 업체 최종수정일시(수정일시) 필드 도입. 등록일시는 v13에서 이미 자동기록되지만
+// 수정일시가 없어 "이 업체 데이터가 최근에 확인/갱신됐는지" 판단이 불가능했음(예: 경영상태확인서가
+// 갱신됐는데 DB에는 예전 수치가 그대로 남아있는 경우를 구분할 방법이 없었음).
+// 기존 레코드는 수정일시가 없으므로 등록일시가 있으면 그 값을 시작점으로 채우고,
+// 없으면 빈 값으로 두어(다음 저장 시 자동 기록됨) 이번 배포를 "이미 확인 완료"로 오인하지 않게 함.
+function migrateV13(obj){
+  if((obj.schemaVersion||1)>=14)return;
+  if(obj.db){
+    obj.db.forEach(function(c){
+      if(!('수정일시' in c))c.수정일시=c.등록일시||'';
+    });
+  }
+  obj.schemaVersion=14;
 }
 
 // ████ SECTION: 유틸 (toast/esc/moneyHandler/regionOptions) ████
@@ -2033,7 +2047,7 @@ function showExpiryAlertModal(){
   var list=[];
   state.db.forEach(function(c){
     var alerts=getExpiryAlerts(c);
-    if(alerts.length)list.push({업체명:c.업체명,alerts:alerts,excluded:!!c.만료알림제외});
+    if(alerts.length)list.push({업체명:c.업체명,alerts:alerts,excluded:!!c.만료알림제외,수정일시:c.수정일시||''});
   });
   var root=MODAL_ROOT;
   if(!list.length){
@@ -2055,12 +2069,13 @@ function showExpiryAlertModal(){
     }).join('');
     return '<tr><td style="padding:5px 8px;text-align:center"><input type="checkbox" class="exp-exclude-cb" data-comp="'+esc(item.업체명)+'" '+(item.excluded?'checked':'')+' title="알림 제외"></td>'+
            '<td style="padding:5px 8px;font-weight:600'+(item.excluded?';color:#9ca3af;text-decoration:line-through':'')+'">'+esc(item.업체명)+'</td>'+
-           '<td style="padding:5px 8px;font-size:12px">'+detail+'</td></tr>';
+           '<td style="padding:5px 8px;font-size:12px">'+detail+'</td>'+
+           '<td style="padding:5px 8px;font-size:11px;color:#9ca3af;white-space:nowrap" title="이 업체 DB 레코드가 마지막으로 저장된 시각 — 위 만료 항목이 최근에 실제로 반영됐는지 참고용">'+(item.수정일시?esc(String(item.수정일시).slice(0,10)):'-')+'</td></tr>';
   }).join('');
   root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:460px;max-width:96vw">'+
     '<h3 style="color:#dc2626">⚠ 만료임박 업체 ('+list.length+'건)</h3>'+
-    '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">신용평가 만료 7일 전 / 안전보건 만료 1개월 전 / 일자리 B조건 연1회 재확인(4/1~4/15) 기준 · 체크 시 해당 업체는 다음부터 알림에서 제외됩니다</p>'+
-    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px">업체명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">신용평가 만료 7일 전 / 안전보건 만료 1개월 전 / 일자리 B조건 연1회 재확인(4/1~4/15) 기준 · 체크 시 해당 업체는 다음부터 알림에서 제외됩니다 · "최종수정"은 DB 레코드가 마지막으로 저장된 날짜로, 만료된 자격 정보가 실제로 갱신되었는지 판단하는 데 참고하세요</p>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px">업체명</th><th class="l" style="padding:5px 8px">상세</th><th class="l" style="padding:5px 8px">최종수정</th></tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
     '</div></div>';
   $('#m-cancel').onclick=function(){root.innerHTML='';};
@@ -3008,6 +3023,11 @@ function refreshDB(){
       '<td>'+dbGamHTML(c)+'</td>'+
       '<td class="l" style="white-space:normal;word-break:keep-all;max-width:130px;vertical-align:top">'+
         esc(c.업체명)+expiryWarnHTML(c)+
+        ((c.등록일시||c.수정일시)?
+          '<br><span style="font-size:9px;color:#9ca3af;white-space:nowrap" title="DB 등록/수정 일시">'+
+            [c.등록일시?('등록 '+esc(String(c.등록일시).slice(0,10))):'',c.수정일시?('수정 '+esc(String(c.수정일시).slice(0,10))):''].filter(Boolean).join(' · ')+
+          '</span>'
+          :'')+
         ((c.groups&&c.groups.length>0)?
           '<br>'+c.groups.map(function(g){return '<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:10px;border-radius:3px;padding:1px 5px;margin-top:2px;margin-right:2px">'+esc(g)+'</span>';}).join('')
           :'')+
@@ -3206,7 +3226,7 @@ function openCompanyModal(idx){
   var _chkS=_업종.indexOf('소방')>=0;
   root.innerHTML=
     '<div class="modal-back"><div class="modal" style="min-width:800px;max-width:96vw">'+
-    '<h3>'+(isNew?'업체 추가':'업체등록정보')+(!isNew&&c.등록일시?' <span style="font-size:11px;font-weight:400;color:#9ca3af">(등록일 '+esc(String(c.등록일시).slice(0,10))+')</span>':'')+'</h3>'+
+    '<h3>'+(isNew?'업체 추가':'업체등록정보')+(!isNew&&(c.등록일시||c.수정일시)?' <span style="font-size:11px;font-weight:400;color:#9ca3af">'+[c.등록일시?('등록 '+esc(String(c.등록일시).slice(0,10))):'',c.수정일시?('수정 '+esc(String(c.수정일시).slice(0,10))):''].filter(Boolean).join(' · ')+'</span>':'')+'</h3>'+
     '<div class="form-grid">'+
       '<label>업체명 *</label><div style="display:flex;gap:6px"><input id="m-업체명" autocomplete="off" style="flex:1" value="'+esc(c.업체명||'')+'"><input id="m-약어" autocomplete="off" style="width:90px" placeholder="약어" title="조합결과TXT에서 업체명 대신 표시" value="'+esc(c.약어||'')+'"></div>'+
       '<label>사업자번호</label><input id="m-사업자번호" autocomplete="off" value="'+esc(c.사업자번호||'')+'">'+
@@ -3388,7 +3408,8 @@ function openCompanyModal(idx){
       소방_부채비율:null,소방_유동비율:null,
       소방_공사업등록일:$('#m-소방-공사업등록일').value.trim(),
       groups:readGroupPickerValues('m'),
-      전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||''
+      전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||'',
+      수정일시:new Date().toISOString()
     };
     if(!obj.업체명){toast('업체명을 입력하세요','bad');return;}
     if(isNew)state.db.push(stampNewCompanyDefaults(obj));
@@ -4166,6 +4187,13 @@ function extractBidFields(t){
       if(_has통신){r.공종='통신';return;}
       if(_has전기){r.공종='전기';return;}
       // 전기·통신·소방 어느 것도 아닌 업종만 있는 경우는 자동판정하지 않음(사용자 직접 선택)
+      // ★ 2026-07-29 수정: "종목" 필드를 이미 찾아 파싱했다면(_tmatch 성공) 그 결과를 최종으로 신뢰하고
+      // 아래 2/3순위(문서 전체에서 "복합업종"/"분담이행"+"전기공사" 키워드를 promiscuous하게 찾는 로직)로
+      // 넘어가지 않는다. 예전에는 여기서 return이 없어 종목이 전기/통신/소방 어디에도 안 걸리는 업종(예: 기계설비)일
+      // 때도 2순위로 흘러가버렸는데, 공동수급체 관련 공고문에는 본문 어딘가에 "분담이행"·"복합업종"·"전기공사"
+      // 같은 boilerplate 문구가 실제 종목과 무관하게 등장하는 경우가 많아 거의 항상 복합(전기+분담)으로
+      // 오판정되는 버그가 있었음.
+      return;
     }
     // 2순위: 복합업종/분담이행 명시 + 전기공사 키워드 조합 감지
     // ※ 낙찰방법 boilerplate("전기·정보통신·소방시설..." 등) 오탐 방지: _is복합 = "복합업종"/"분담이행" 명시 키워드만
@@ -5921,7 +5949,7 @@ function bind(){
         '</div>'+
         // 하단: 협정메세지
         '<div style="padding:12px 16px 14px">'+
-          '<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.04em">■ 협정메세지</div>'+
+          '<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.04em">■ 메모</div>'+
           '<textarea id="m-jeong-edit" rows="8" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #c4b5fd;border-radius:4px;font-family:monospace;resize:vertical;line-height:1.6;box-sizing:border-box">'+esc(msg)+'</textarea>'+
           '<div style="font-size:10px;color:#9ca3af;margin-top:3px">직접 수정 후 저장 가능. 비워두면 확정메세지·조합결과TXT에서 공고명/공고번호/추정가격/마감일로 자동 채워집니다.</div>'+
           '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px">'+
@@ -5936,11 +5964,11 @@ function bind(){
       };
       document.getElementById('m-jeong-copy').onclick=function(){
         var t=document.getElementById('m-jeong-edit');
-        copyToClipboard(t.value, '협정메세지 복사');
+        copyToClipboard(t.value, '메모 복사');
       };
       document.getElementById('m-jeong-save').onclick=function(){
         state.bid.협정메세지=document.getElementById('m-jeong-edit').value;
-        save();toast('협정메세지 저장','ok');mr.innerHTML='';
+        save();toast('메모 저장','ok');mr.innerHTML='';
       };
       mr.querySelector('.modal-back').addEventListener('click',function(ev){if(ev.target===this)mr.innerHTML='';});
       setTimeout(function(){var t=document.getElementById('m-sum-txt');if(t)t.select();},50);
