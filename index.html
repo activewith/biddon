@@ -458,6 +458,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <table id="db-table" style="width:auto;min-width:1150px">
           <thead><tr>
             <th class="l">지역</th><th title="일자리창출가점+안전보건시스템 (별표7A기준 / 괄호:별표6)&#10;일자리창출: 최대+3.0(7A)/+1.0(6)&#10;K(YYMM)=KOSHA-MS: +2.0(7A)/+1.0(6)&#10;S(YYMM)=ISO45001: +1.6(7A)/+0.8(6)&#10;수자원공사: KOSHA·ISO 공통 +1.0(10~50억)/+0.5(50억+)" style="cursor:help">가점 ℹ</th><th title="경영상태 배점 대비 감점 (별표7A기준 / 괄호:별표6)">감점</th><th class="l">업체명</th>
+            <th class="c" style="width:36px" title="참여 공종(전기/통신/소방)">종목</th>
             <th class="sort-hd" data-sort="실적5">5년실적 <span class="sicon">⇅</span></th>
             <th class="sort-hd" data-sort="시평액">시평액 <span class="sicon">⇅</span></th>
             <th class="sort-hd" data-sort="실적3">3년실적 <span class="sicon">⇅</span></th>
@@ -2842,16 +2843,16 @@ function refreshDB(){
     if(_ti.hasT)_trades.push({t:'통신',col:'#059669'});
     if(_ti.hasS)_trades.push({t:'소방',col:'#dc2626'});
     var _tfs=_trades.length<=1?'10px':_trades.length===2?'9px':'8px';
-    var tradeBadgeHTML=_trades.length?(' <span style="display:inline-flex;flex-direction:column;line-height:1.05;vertical-align:middle">'+
+    var tradeColHTML=_trades.length?('<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15">'+
       _trades.map(function(x){return '<span style="font-size:'+_tfs+';font-weight:700;color:'+x.col+'">'+x.t+'</span>';}).join('')+
-      '</span>'):'';
+      '</span>'):'<span style="color:#d1d5db">-</span>';
     var tr=document.createElement('tr');tr.className='hover';
     tr.innerHTML=
       '<td class="l">'+esc(c.지역||'')+'</td>'+
       '<td>'+dbGapHTML(c)+'</td>'+
       '<td>'+dbGamHTML(c,repJong)+'</td>'+
       '<td class="l" style="white-space:normal;word-break:keep-all;max-width:150px;vertical-align:top">'+
-        '<span style="display:inline-flex;align-items:center">'+esc(c.업체명)+tradeBadgeHTML+'</span>'+expiryWarnHTML(c)+
+        esc(c.업체명)+expiryWarnHTML(c)+
         ((c.등록일시||c.수정일시)?
           '<br><span style="font-size:9px;color:#9ca3af;white-space:nowrap" title="등록: 최초 등록일 / 수정: 재무·자격 관련 정보가 마지막으로 실제 변경된 날짜(메모 등 단순 수정은 반영 안 됨)">'+
             [c.등록일시?('등록 '+esc(String(c.등록일시).slice(0,10))):'',c.수정일시?('수정 '+esc(String(c.수정일시).slice(0,10))):''].filter(Boolean).join(' · ')+
@@ -2861,6 +2862,7 @@ function refreshDB(){
           '<br>'+c.groups.map(function(g){return '<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:10px;border-radius:3px;padding:1px 5px;margin-top:2px;margin-right:2px">'+esc(g)+'</span>';}).join('')
           :'')+
       '</td>'+
+      '<td class="c">'+tradeColHTML+'</td>'+
       '<td>'+FMT_NUM(pd.실적5)+'</td>'+
       '<td>'+FMT_NUM(pd.시평액)+'</td>'+
       '<td>'+FMT_NUM(pd.실적3)+'</td>'+
