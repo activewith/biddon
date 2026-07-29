@@ -2208,7 +2208,9 @@ function getOneLineSummary(b, c, hideLHNote) {
 }
 
 // 확정 메세지용 "적격 요약" 체크리스트 (지자체 30억 미만은 제외, 그 외는 모두 삽입)
-function getEligibilityChecklist(b, c) {
+// damLabel: 해당 조합의 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티"→"창호")가 있으면
+// "복합(전기+분담)" 표기의 "분담"을 이 라벨로 치환해서 보여주기 위한 값 (2026-07-29)
+function getEligibilityChecklist(b, c, damLabel) {
   if(b.적격기준==='지자체' && !(c.E5>=LIMIT_30) && !(c.E3!=null&&c.E3>0)) return '';
   var 의무=(b.지역의무지분!=null&&b.지역의무지분!=='')?'의무 '+Number(b.지역의무지분)+'%':'';
   var n=Number(b.구성업체수)||2;
@@ -2231,6 +2233,7 @@ function getEligibilityChecklist(b, c) {
   var _showSiPy2=!((b.적격기준==='지자체'&&c.jijaTier===1)||b.적격기준==='LH'||b.적격기준==='도로공사'||b.적격기준==='철도공단');
   if(_showSiPy2)lines.push('시평>투찰금액*지분율');
   var 공종=b.공종||'전기';
+  if(공종==='복합(전기+분담)'&&damLabel)공종='복합(전기+'+damLabel+')';
   if(공종!=='전기')lines.push(공종);
   return '- 적격 -\n'+lines.map(function(l,i){return (i+1)+'. '+l;}).join('\n');
 }
@@ -6827,7 +6830,14 @@ function showConfirmPop(ci){
   }else{
     result=msg+'\n\n'+TAG+'\n'+compLines+'\n\n협정 부탁 드립니다.';
   }
-  var _elig=getEligibilityChecklist(state.bid,_globalCalc);
+  // 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티")를 라벨로 추출해 "복합(전기+분담)"의 "분담"을 대체
+  var _damLabels=slots.filter(function(s){return s.grp==='분담';}).map(function(s){
+    var _nm=(s.업체명||'').trim();
+    var _m=_nm.match(/^\(([^)]+)\)/);
+    return _m?_m[1]:_nm;
+  }).filter(Boolean);
+  var _damLabel=_damLabels.length?_damLabels.join('+'):null;
+  var _elig=getEligibilityChecklist(state.bid,_globalCalc,_damLabel);
   if(_elig)result+='\n\n'+_elig;
   var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:420px;max-width:96vw;padding:0;overflow:hidden">'+
