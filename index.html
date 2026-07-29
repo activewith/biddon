@@ -254,6 +254,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span></h2>
       <div class="row" style="gap:12px">
         <div class="field"><label>시평제한 (E3, 비우면 미적용)</label><input type="text" inputmode="numeric" class="money" id="in-시평제한" placeholder="예: 30,000,000,000"></div>
+        <div class="field"><label>분담 시평제한 <span style="font-size:10px;color:#6b7280">(복합공종, 비우면 미적용)</span></label><input type="text" inputmode="numeric" class="money" id="in-분담시평" placeholder="예: 100,000,000" style="background:#f1f5f9;border-color:#94a3b8"></div>
         <div class="field"><label>기초금액 E4 (없으면 비움)</label><input type="text" inputmode="numeric" class="money" id="in-기초금액" placeholder="자동: 추정×1.1"></div>
         <div class="field"><label>추정가격 E5</label><input type="text" inputmode="numeric" class="money" id="in-추정가격" placeholder="예: 5,000,000,000"></div>
         <div class="field"><label>배수 H6</label><input type="number" id="in-배수" step="0.01" placeholder="자동(50억↑=2)"></div>
@@ -323,6 +324,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       <div class="summary" style="margin-top:10px">
         <div class="stat"><div class="k">기초가격(자동) H4</div><div class="v" id="o-기초자동">-</div><div id="o-기초자동-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat"><div class="k">시평제한</div><div class="v" id="o-시평제한">미적용</div><div id="o-시평제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
+        <div class="stat" id="stat-분담시평" style="display:none;background:#f1f5f9;border-color:#94a3b8"><div class="k" style="color:#334155">분담시평 대비</div><div class="v" style="color:#334155" id="o-분담시평">미적용</div></div>
         <div class="stat"><div class="k">실적제한 E6</div><div class="v" id="o-실적제한">-</div><div id="o-실적제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-lh지분율기준" style="display:none;background:#fef3c7;border-color:#fde68a"><div class="k" style="color:#92400e">지분율기준</div><div class="v" style="color:#92400e" id="o-lh지분율기준">-</div><div id="o-lh지분율기준-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" title="A값 미입력: 기초금액×사정률×낙찰하한율 | A값 입력 시: (기초금액×사정률 - A값)×낙찰하한율 + A값"><div class="k">예상투찰금액 E7</div><div class="v" id="o-투찰금액">-</div></div>
@@ -598,7 +600,7 @@ function emptyCombo(){
 }
 
 function defaultBidObj(){
-  return {시평제한:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
+  return {시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
        지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,
        업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:'',공고번호:'',마감일:''};
 }
@@ -614,7 +616,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null}},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null}},
   combos:_initCombos,
   bidScreens:[{name:'입찰적격판정A',bid:_initBid,combos:_initCombos}],
   activeBidScreenIndex:0,
@@ -2126,6 +2128,9 @@ function calcBid(){
   var 예정가격=E4_eff*D7; // 기초금액(E4) × 사정률(D7)
   var E7=A값!==null?(예정가격-A값)*H7+A값:예정가격*H7;
   var E3=(b.시평제한!=null&&b.시평제한!==''&&!isNaN(b.시평제한))?Number(b.시평제한):null;
+  // 분담 시평제한(복합공종의 분담 파트에 대한 별도 시평 제한). 분담 슬롯의 다른 값(지분율·신인도·감점 등)과 달리
+  // 이 값만은 적격판정에 직접 반영됨(분담 그룹 시평액 합산이 이 값을 넘어야 함). 2026-07-29 추가
+  var 분담시평=(b.분담시평!=null&&b.분담시평!==''&&!isNaN(b.분담시평))?Number(b.분담시평):null;
   // 3년실적: 지자체이면서 추정가격 50억 이상인 경우만 (tier 3,4)
   var use3yr=isJija&&E5>=LIMIT_50;
   // ── LH 기준 ──────────────────────────────────────────────────────
@@ -2146,7 +2151,7 @@ function calcBid(){
   // ── 철도공단 기준 (국가철도공단, 조달청과 시공경험/입찰가격 산식 동일 — 경영상태 배점표/신인도만 차이) ──
   var isRail=(b.적격기준==='철도공단');
   // E6 계산은 조달청과 동일 (이미 위에서 H6*E4_eff 로 계산됨)
-  return{E3:E3,E4_eff:E4_eff,E5:E5,H4:H4,H6:H6,H7:H7,D7:D7,E6:E6,E7:E7,A값:A값,예정가격:예정가격,
+  return{E3:E3,분담시평:분담시평,E4_eff:E4_eff,E5:E5,H4:H4,H6:H6,H7:H7,D7:D7,E6:E6,E7:E7,A값:A값,예정가격:예정가격,
          is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,공종:normGongjong(state.bid.공종)||'전기',
          auto배수:auto배수,auto투찰률:auto투찰률};
 }
@@ -2333,10 +2338,11 @@ function calcSlot(combo,calc){
   var 신인도환산=적격계산ROW.reduce(function(a,r){return a+r.신인도가점;},0);
   var 감점환산=적격계산ROW.reduce(function(a,r){return a+r.감점가점;},0);
   var 순신인도=신인도환산-감점환산;
-  // 분담(레거시 소방/통신 포함)은 실적·시평 계산에서는 제외하되, 조합 전체 지분율(100% 검증)에는 포함한다. 2026-07-28
+  // 분담(레거시 소방/통신 포함)은 실적·시평 계산은 물론 조합 전체 지분율(100% 검증)에서도 제외한다.
+  // 분담 슬롯의 지분율 입력값(0이든 100이든)은 적격판정·조합결과TXT·확정메세지 등 어디에도 영향을 주지 않음. 2026-07-29 변경
   var 분담ROW=ROW.filter(function(r){return r.grp==='분담'||r.grp==='소방'||r.grp==='통신';});
   var hasDam=분담ROW.some(function(r){return (r.업체명||'').trim()!=='';});
-  var 지분합_pct=ROW.reduce(function(a,r){return a+(Number(r.지분율)||0);},0);
+  var 지분합_pct=적격계산ROW.reduce(function(a,r){return a+(Number(r.지분율)||0);},0);
   // ── 신용등급 2차 대체(②): 경영상태비율(①) 기준으로 부적격일 때만 시도 ──────────
   // 감점업체 중 신용등급 감점이 재무비율 감점보다 유리한 경우에 한해 대체 적용 후 재판정.
   // 대체해도 여전히 부적격이면 원복(①로 확정). 성공하면 해당 업체에 creditApplied 플래그.
@@ -2364,7 +2370,7 @@ function calcSlot(combo,calc){
   var anyOver=적격계산ROW.some(function(r){return r.over;});
   var anyUnder=적격계산ROW.some(function(r){return r.under;});
   var used=적격계산ROW.filter(function(r){return(r.업체명||'').trim()!=='';}).length;
-  // 지분율 합계(분담 포함)는 항상 정확히 100%여야 적격. 분담 지분율이 0이면 나머지 슬롯끼리 100%를 채워야 함. 2026-07-28 정정(이전 100%이하 허용 로직 제거)
+  // 지분율 합계(분담 제외)는 항상 정확히 100%여야 적격. 분담 슬롯의 지분율은 이 합계에 관여하지 않음. 2026-07-29 정정(분담 지분율 완전 배제)
   var 지분율OK=Math.abs(지분합_pct-100)<1e-6&&!anyOver&&!anyUnder;
   // 지역의무지분 체크: 지역 슬롯 지분율 합산이 의무비율 미달 시 부적격
   var 지역의무지분=Number(state.bid.지역의무지분)||0;
@@ -2372,6 +2378,10 @@ function calcSlot(combo,calc){
   var 지역의무미달=지역의무지분>0&&지역지분합<지역의무지분-1e-9;
   // 복합(전기+분담) 공종은 분담 슬롯(업체명 입력)이 1개 이상 필요. 2026-07-28
   var 분담누락=calc.공종==='복합(전기+분담)'&&used>0&&!hasDam;
+  // 분담 슬롯의 시평액 합산(지분율 미적용, 분담업체 실제 보유 시평 그대로 합산) — 분담시평 제한 게이트 전용.
+  // 분담의 다른 값(지분율·신인도·감점·실적 등)은 적격판정과 무관하지만, 분담시평만은 예외로 적격판정에 영향을 준다. 2026-07-29 추가
+  var 분담시평합산=분담ROW.filter(function(r){return(r.업체명||'').trim()!=='';}).reduce(function(a,r){return a+(Number(r.시평액)||0);},0);
+  var 분담시평미달=used>0&&calc.분담시평!=null&&calc.분담시평>0&&분담시평합산<=calc.분담시평;
   // 기술점수(Func) 합산: Func × 지분율 (철도공단 경력기술자 배점 등 수동입력 점수의 조합 단위 합산 — 신인도/감점 게이트보다 먼저 계산해 철도 100점제에서도 사용)
   var 기술점수합계=적격계산ROW.reduce(function(a,r){return a+(Number(r.Func)||0)*((Number(r.지분율)||0)/100);},0);
   var 적격=false,적격사유='';
@@ -2383,6 +2393,7 @@ function calcSlot(combo,calc){
   else if(Math.abs(지분합_pct-100)>1e-6)적격사유='지분율 합 '+TRIMDEC(지분합_pct)+'% (≠100%)';
   else if(지역의무미달)적격사유='지역의무지분 미달 (지역 '+TRIMDEC(지역지분합)+'% / 기준 '+지역의무지분+'%)';
   else if(분담누락)적격사유='분담업체 미등록 (복합(전기+분담)은 분담 슬롯 1개 이상 필요)';
+  else if(분담시평미달)적격사유='분담 시평 부족 (합산 '+FMT_NUM(Math.round(분담시평합산))+' / 제한 '+FMT_NUM(calc.분담시평)+')';
   else if(calc.isLH){
     // ── LH 시평제한 선행 체크 (지분율 미적용 합산) ──────────────────────
     if(calc.E3!=null&&합산시평_raw<=calc.E3){
@@ -2477,7 +2488,7 @@ function calcSlot(combo,calc){
     else if(!시평OK)적격사유='시평 부족';
     else 적격사유='신인도 감점 초과(순신인도 '+TRIM3(순신인도)+')';
   }
-  return Object.assign({ROW:ROW,합산실적:합산실적,합산시평:합산시평,합산시평_raw:합산시평_raw,신인도환산:신인도환산,감점환산:감점환산,순신인도:순신인도,지분합_pct:지분합_pct,지분율OK:지분율OK,적격:적격,적격사유:적격사유,used:used,기술점수합계:기술점수합계},lh데이터,railData);
+  return Object.assign({ROW:ROW,합산실적:합산실적,합산시평:합산시평,합산시평_raw:합산시평_raw,신인도환산:신인도환산,감점환산:감점환산,순신인도:순신인도,지분합_pct:지분합_pct,지분율OK:지분율OK,적격:적격,적격사유:적격사유,used:used,기술점수합계:기술점수합계,분담시평합산:분담시평합산},lh데이터,railData);
 }
 
 // ████ SECTION: DB-타입필터 (지역/실적/자사 분류) ████
@@ -4198,6 +4209,19 @@ function extractBidFields(t){
     r.시평제한=r.추정가격;
   }
   _tryKW(t,'시평제한',r);
+  // ── 복합공종 "분담 시평제한" 다중 추출 ──────────────────────────────────
+  // "시공능력평가액으로 입찰 참가자격을 제한하는 공사"(지자체 예규 문구) 마커가 있는 공고는, 마커 이후 구간에
+  // 전기 공종과 분담(타공종) 각각의 시평 금액이 "공종명 ... 금액" 형태로 줄바꿈되어 표처럼 나열되는 경우가 많아
+  // 위의 단일 시평제한 정규식들이 매칭에 실패하는 경우가 있음. 마커 이후 등장 순서대로 금액을 최대 2개 추출해
+  // 1번째=전기(시평제한 E3), 2번째=분담 시평제한으로 사용한다. 2026-07-29 추가
+  var _mkIdx=t.search(/시\s*공\s*능\s*력\s*평\s*가\s*액\s*으\s*로\s*입\s*찰\s*참\s*가\s*자\s*격\s*을\s*제\s*한\s*하\s*는\s*공\s*사/);
+  if(_mkIdx>=0){
+    var _mkSeg=t.slice(_mkIdx,_mkIdx+600);
+    var _mkNums=_mkSeg.match(/\d{1,3}(?:,\d{3}){2,}/g)||[];
+    if(r.시평제한==null&&_mkNums.length>=1)r.시평제한=parseMoney(_mkNums[0]);
+    if(r.공종==='복합(전기+분담)'&&_mkNums.length>=2)r.분담시평=parseMoney(_mkNums[1]);
+  }
+  _tryKW(t,'분담시평',r);
   // ── LH 전용: 추정금액(지분율기준) 파싱 ────────────────────────────
   // 공고문의 "추정금액 ######원" → lh지분율기준
   // ★ 추정금액 ≠ 추정가격: 두 용어는 LH 공고에서 명확히 구분됨
@@ -4413,7 +4437,7 @@ function extractBidFields(t){
 }
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
-  var labels={기초금액:'기초금액 E4',추정가격:'추정가격 E5',시평제한:'시평제한 E3',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수 H6',투찰률:'투찰률 H7(%)'};
+  var labels={기초금액:'기초금액 E4',추정가격:'추정가격 E5',시평제한:'시평제한 E3',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수 H6',투찰률:'투찰률 H7(%)'};
   var root=MODAL_ROOT;
   if(keys.length===0){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:400px">'+
@@ -4444,7 +4468,7 @@ function showPdfResultModal(found,preview){
   }
   function _dispVal(k){
     var val=found[k];
-    return (k==='기초금액'||k==='추정가격'||k==='시평제한'||k==='A값'||k==='lh지분율기준')?FMT_NUM(val):
+    return (k==='기초금액'||k==='추정가격'||k==='시평제한'||k==='분담시평'||k==='A값'||k==='lh지분율기준')?FMT_NUM(val):
       String(Array.isArray(val)?val.join(','):val)+(k==='지역의무지분'||k==='투찰률'||k==='최소지분율'?'%':k==='배수'?'배':k==='구성업체수'?'개사':'');
   }
   function _manualInput(k){
@@ -4467,7 +4491,7 @@ function showPdfResultModal(found,preview){
       '</div>';
     }
     // 나머지 항목은 숫자 직접입력형
-    var numAttrs={추정가격:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"'};
+    var numAttrs={추정가격:'min="0" step="1"',분담시평:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"'};
     var ph=(k==='최소지분율'||k==='지역의무지분'||k==='투찰률')?'예: 10':(k==='구성업체수'?'예: 3':'직접입력');
     return '<input type="number" data-pdf-manual="'+k+'" '+(numAttrs[k]||'')+' placeholder="'+ph+'" style="'+st+'">';
   }
@@ -4514,7 +4538,7 @@ function showPdfResultModal(found,preview){
         '<select data-pdf-region-idx="3" style="'+sst+'">'+regOpts('지역3',curArr[2])+'</select>'+
       '</div>';
     }
-    var numAttrs={추정가격:'min="0" step="1"',기초금액:'min="0" step="1"',시평제한:'min="0" step="1"',A값:'min="0" step="1"',lh지분율기준:'min="0" step="1"',lh순공사원가:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"',배수:'min="0" step="0.1"'};
+    var numAttrs={추정가격:'min="0" step="1"',기초금액:'min="0" step="1"',시평제한:'min="0" step="1"',분담시평:'min="0" step="1"',A값:'min="0" step="1"',lh지분율기준:'min="0" step="1"',lh순공사원가:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"',배수:'min="0" step="0.1"'};
     var ph=(k==='최소지분율'||k==='지역의무지분'||k==='투찰률')?'예: 10':(k==='구성업체수'?'예: 3':'직접입력');
     var v=found[k];
     var vAttr=(v!=null&&v!=='')?' value="'+esc(String(v))+'"':'';
@@ -4647,6 +4671,7 @@ function showPdfResultModal(found,preview){
       if(k==='기초금액'){state.bid.기초금액=v;$('#in-기초금액').value=FMT_NUM(v);}
       else if(k==='추정가격'){state.bid.추정가격=v;$('#in-추정가격').value=FMT_NUM(v);}
       else if(k==='시평제한'){state.bid.시평제한=v;$('#in-시평제한').value=FMT_NUM(v);}
+      else if(k==='분담시평'){state.bid.분담시평=v;var _dEl2=$('#in-분담시평');if(_dEl2)_dEl2.value=FMT_NUM(v);}
       else if(k==='지역선택'){
         state.bid.지역선택=Array.isArray(v)?v:(v?[v]:[]);
         syncAllRegionOptions(getRegionMasterList());
@@ -4944,6 +4969,7 @@ function exportResultXlsx(){
   aoa.push(['지역 선택',state.bid.지역선택||'']);
   aoa.push(['적격기준',state.bid.적격기준||'']);
   aoa.push(['시평제한',calc.E3!=null?calc.E3:'']);
+  if(calc.분담시평!=null)aoa.push(['분담 시평제한',calc.분담시평]);
   aoa.push(['기초금액(유효)',calc.E4_eff]);aoa.push(['추정가격',calc.E5]);
   aoa.push(['배수',calc.H6]);aoa.push(['투찰률',calc.H7]);aoa.push(['사정률',+(calc.D7*100).toFixed(3)+'%','(기준값 '+(state.bid.사정률기준||'0')+'% 기준)']);
   aoa.push(['실적제한 E6',calc.E6]);aoa.push(['예상투찰금액 E7',calc.E7,(calc.A값!=null?'(A값 적용)':'')]);
@@ -5101,6 +5127,8 @@ function renderEconCell(r){
 function renderSlotRow(ci,si,r,calc){
   var grp=r.grp||'지역';
   var isDam=grp==='분담'||grp==='소방'||grp==='통신'; // 분담계열: 적격계산 제외
+  // 시평액만은 예외: '분담' 그룹은 분담시평 게이트에 쓰이므로 입력 가능해야 함(레거시 소방/통신 그룹은 계속 비활성).
+  var isDamSiPyeongLock=grp==='소방'||grp==='통신';
   var bg=TYPE_BG[grp]||'#f3f4f6';
   var bd=TYPE_BD[grp]||'#d1d5db';
   var _expWarnSlot=(r.업체명&&r.업체명.trim())?expiryWarnHTML(state.db.find(function(x){return x.업체명===r.업체명;})):'';
@@ -5147,7 +5175,7 @@ function renderSlotRow(ci,si,r,calc){
         :' value="'+FMT_REP(Math.abs(r.감점||0))+'"')+
     '></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
-    '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
+    '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDamSiPyeongLock?' disabled style="color:#9ca3af;background:#f3f4f6"':(grp==='분담'?' title="분담 업체의 시공능력평가액 — 분담시평 제한 판정에 사용"':''))+' ></td>'+
     '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':(calc&&calc.isRail?' style="color:#d1d5db" title="철도공단: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isDoRo?' style="color:#d1d5db" title="도로공사: 시평 기반 최대지분율 제한 미적용"':'')))+'>'+TRIMDEC(r.최대지분율_pct||0)+'%</td>'+
     '<td><input type="number" class="pct '+(r.over?'over':(r.under?'under':(r.isRec?'isrec':'')))+'" step="0.01" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율" value="'+(r.지분율||0)+'"></td>'+
     '<td data-cell="'+ci+'-'+si+'-환산실적">'+FMT_NUM(Math.round(r.지분환산실적))+'</td>'+
@@ -5207,6 +5235,7 @@ function refreshCombos(){
     var rowsHtml=result.ROW.map(function(r,si){return renderSlotRow(ci,si,r,comboCalc);}).join('');
     var _시평표시=comboCalc.isLH?(result.합산시평_raw||0):result.합산시평;
         var 시평제한대비=(comboCalc.E3==null)?'미적용':'<span data-stat="합산시평2">'+FMT_NUM(Math.round(_시평표시))+'</span>'+(comboCalc.isLH?' <span style="font-size:10px;color:#6b7280">(지분율미적용)</span>':'')+' / '+FMT_NUM(comboCalc.E3);
+    var 분담시평대비=(comboCalc.분담시평==null)?'미적용':'<span data-stat="분담시평합산">'+FMT_NUM(Math.round(result.분담시평합산||0))+'</span> / '+FMT_NUM(comboCalc.분담시평);
     var slotFull=combo.slots.length>=MAX_SLOTS;
     // 사정률 표시값 (0% 기준으로 고정)
     var _sjDisp=combo.사정률D7!=null?+((combo.사정률D7-1)*100).toFixed(3):'';
@@ -5260,6 +5289,7 @@ function refreshCombos(){
         '<div data-scorefoot="'+ci+'" style="display:contents">'+scoreFootHtml+'</div>'+
         '<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>'+
         '<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>'+
+        (comboCalc.분담시평!=null?('<div class="item"><span class="k">분담시평 대비</span><span class="v">'+분담시평대비+'</span></div>'):'')+
         '<div class="item"><span class="k">순 신인도</span><span class="v" data-stat="순신인도2">'+FMT_REP(result.순신인도)+'</span></div>'+
       '</div>';
     root.appendChild(card);
@@ -5284,6 +5314,7 @@ function updateSlotMath(ci){
   if(ae){ae.textContent=result.적격?'OK':result.적격사유;ae.className='v '+(result.적격?'ok-text':'bad-text');}
   set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(calc.isLH?(result.합산시평_raw||0):result.합산시평)));
   set('순신인도2',FMT_REP(result.순신인도));
+  set('분담시평합산',FMT_NUM(Math.round(result.분담시평합산||0)));
   var sf=card.querySelector('[data-scorefoot]');
   if(sf)sf.innerHTML=buildScoreFootHtml(calc,result);  // LH/철도 점수 상세(Func×지분율 합산 등)도 실시간 반영
   result.ROW.forEach(function(r,si){
@@ -5431,6 +5462,12 @@ function refreshBidStats(){
   }
   var _시평El=$('#o-시평제한');if(_시평El)_시평El.textContent=c.E3==null?'미적용':FMT_NUM(c.E3);
   var _eok2=document.getElementById('o-시평제한-eok');if(_eok2)_eok2.textContent=c.E3!=null?fmtEok(c.E3):'';
+  var _damStat=$('#stat-분담시평');
+  if(_damStat){
+    var _isComplex=(normGongjong(state.bid.공종)==='복합(전기+분담)');
+    _damStat.style.display=_isComplex?'':'none';
+    if(_isComplex){var _dEl=$('#o-분담시평');if(_dEl)_dEl.textContent=c.분담시평==null?'미적용':FMT_NUM(c.분담시평);}
+  }
   $('#o-지역선택').textContent=getRegionStr()||'미선택';
   $('#o-적격기준').textContent=state.bid.적격기준||'미선택';
   var 최하=state.bid.최소지분율;
@@ -5471,7 +5508,7 @@ function bind(){
   });
 
   (function(){state.bid.공종=normGongjong(state.bid.공종)||'전기';var _g=$('#in-공종');if(_g)_g.value=state.bid.공종;})();
-  ['in-시평제한','in-기초금액','in-추정가격'].forEach(function(id){
+  ['in-시평제한','in-분담시평','in-기초금액','in-추정가격'].forEach(function(id){
     attachMoneyHandlers($('#'+id));
     $('#'+id).addEventListener('blur',function(){
       var key=id.replace('in-','');state.bid[key]=readMoney($('#'+id));
@@ -5526,6 +5563,7 @@ function bind(){
   var b=state.bid;
   (function(){b.공종=normGongjong(b.공종)||'전기';var _ge=$('#in-공종');if(_ge)_ge.value=b.공종;syncAvgRatios(b.공종);var _lge=$('#o-공종-label');if(_lge)_lge.textContent=b.공종;})();
   if(b.시평제한!=null)$('#in-시평제한').value=FMT_NUM(b.시평제한);
+  if(b.분담시평!=null)$('#in-분담시평').value=FMT_NUM(b.분담시평);
   if(b.기초금액!=null)$('#in-기초금액').value=FMT_NUM(b.기초금액);
   if(b.추정가격!=null)$('#in-추정가격').value=FMT_NUM(b.추정가격);
   if(b.배수!=null)$('#in-배수').value=b.배수;
@@ -5654,12 +5692,12 @@ function bind(){
   // 공고 초기화
   $('#btn-reset-bid').addEventListener('click',function(){
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
-    Object.assign(state.bid,{시평제한:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
+    Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
       지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고번호:'',마감일:''});
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
     if($('#in-기본지분율'))$('#in-기본지분율').value=65;
     state.combos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
-    ['in-시평제한','in-기초금액','in-추정가격'].forEach(function(id){$('#'+id).value='';});
+    ['in-시평제한','in-분담시평','in-기초금액','in-추정가격'].forEach(function(id){$('#'+id).value='';});
     ['in-배수','in-투찰률'].forEach(function(id){$('#'+id).value='';})
     if($('#in-A값'))$('#in-A값').value='';
     $('#in-투찰배수').value='2';var _sjSel=$('#sel-사정률기준');if(_sjSel)_sjSel.value='0';$('#in-지역의무지분').value='';$('#in-최소지분율').value='';
@@ -5905,6 +5943,7 @@ function bind(){
       {key:'기초금액',   label:'기초금액 E4',       hint:'기초금액, 공사비'},
       {key:'추정가격',   label:'추정가격 E5',       hint:'추정가격, 도급금액'},
       {key:'시평제한',   label:'시평제한 E3',       hint:'시평제한, 평가기준금액'},
+      {key:'분담시평',   label:'분담 시평제한',     hint:'분담 시평, 타공종 시평'},
       {key:'lh지분율기준',label:'지분율기준(LH)',   hint:'추정금액'},
       {key:'lh순공사원가',label:'순공사원가(LH)',   hint:'순공사원가'},
       {key:'지역의무지분',label:'지역의무지분(%)',  hint:'지역의무, 시공참여비율'},
@@ -7336,6 +7375,7 @@ function restoreBidInputsFromState(){
   syncAvgRatios(b.공종);
   var _lge=$('#o-공종-label');if(_lge)_lge.textContent=b.공종;
   var _e1=$('#in-시평제한');if(_e1)_e1.value=(b.시평제한!=null)?FMT_NUM(b.시평제한):'';
+  var _e1b=$('#in-분담시평');if(_e1b)_e1b.value=(b.분담시평!=null)?FMT_NUM(b.분담시평):'';
   var _e2=$('#in-기초금액');if(_e2)_e2.value=(b.기초금액!=null)?FMT_NUM(b.기초금액):'';
   var _e3=$('#in-추정가격');if(_e3)_e3.value=(b.추정가격!=null)?FMT_NUM(b.추정가격):'';
   var _e4=$('#in-배수');if(_e4)_e4.value=(b.배수!=null)?b.배수:'';
