@@ -420,22 +420,22 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <button class="btn" id="btn-import-cert" style="background:#7c3aed">📋 경영확인서 등록</button>
         <button class="btn btn-ghost" id="btn-exp-alert" style="border-color:#dc2626;color:#dc2626" title="신용평가(7일 이내)/안전보건(1개월 이내) 만료 임박 · 일자리 B조건 연1회 재확인 필요 업체만 아래 목록에 필터링 (다시 누르면 해제)">⚠ 만료임박 확인</button>
         <span style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:nowrap" id="avg-display-area">
-          <table style="border-collapse:collapse;font-size:11px;line-height:1.4"><tr>
-            <th style="padding:1px 6px;color:#7c3aed;font-size:10px;border-bottom:1px solid #e5e7eb">업체평균비율</th>
-            <th style="padding:1px 7px;color:#7c3aed;font-size:10px;border-bottom:1px solid #e5e7eb;text-align:right">부채%</th>
-            <th style="padding:1px 7px;color:#7c3aed;font-size:10px;border-bottom:1px solid #e5e7eb;text-align:right">유동%</th>
+          <table style="border-collapse:collapse;font-size:11px;line-height:1.4;text-align:center"><tr>
+            <th style="padding:1px 6px;color:#7c3aed;font-size:10px;border-bottom:1px solid #e5e7eb;text-align:center">업종평균비율</th>
+            <th style="padding:1px 7px;color:#7c3aed;font-size:10px;border-bottom:1px solid #e5e7eb;text-align:center">부채%</th>
+            <th style="padding:1px 7px;color:#7c3aed;font-size:10px;border-bottom:1px solid #e5e7eb;text-align:center">유동%</th>
           </tr><tr>
-            <td style="padding:1px 6px;font-size:11px">전기</td>
-            <td style="padding:1px 7px;text-align:right;font-weight:700;color:#7c3aed" id="avg-disp-전기부채">-</td>
-            <td style="padding:1px 7px;text-align:right;font-weight:700;color:#7c3aed" id="avg-disp-전기유동">-</td>
+            <td style="padding:1px 6px;font-size:11px;text-align:center">전기</td>
+            <td style="padding:1px 7px;text-align:center;font-weight:700;color:#7c3aed" id="avg-disp-전기부채">-</td>
+            <td style="padding:1px 7px;text-align:center;font-weight:700;color:#7c3aed" id="avg-disp-전기유동">-</td>
           </tr><tr>
-            <td style="padding:1px 6px;font-size:11px">통신</td>
-            <td style="padding:1px 7px;text-align:right;font-weight:700;color:#7c3aed" id="avg-disp-통신부채">-</td>
-            <td style="padding:1px 7px;text-align:right;font-weight:700;color:#7c3aed" id="avg-disp-통신유동">-</td>
+            <td style="padding:1px 6px;font-size:11px;text-align:center">통신</td>
+            <td style="padding:1px 7px;text-align:center;font-weight:700;color:#7c3aed" id="avg-disp-통신부채">-</td>
+            <td style="padding:1px 7px;text-align:center;font-weight:700;color:#7c3aed" id="avg-disp-통신유동">-</td>
           </tr><tr>
-            <td style="padding:1px 6px;font-size:11px">소방</td>
-            <td style="padding:1px 7px;text-align:right;font-weight:700;color:#7c3aed" id="avg-disp-소방부채">-</td>
-            <td style="padding:1px 7px;text-align:right;font-weight:700;color:#7c3aed" id="avg-disp-소방유동">-</td>
+            <td style="padding:1px 6px;font-size:11px;text-align:center">소방</td>
+            <td style="padding:1px 7px;text-align:center;font-weight:700;color:#7c3aed" id="avg-disp-소방부채">-</td>
+            <td style="padding:1px 7px;text-align:center;font-weight:700;color:#7c3aed" id="avg-disp-소방유동">-</td>
           </tr></table>
           <span id="db-avg-stale-note" style="display:none;font-size:10px;color:#dc2626;font-weight:700;white-space:nowrap">⚠ 갱신필요</span>
           <button class="btn btn-ghost" id="btn-edit-avg" title="업체DB설정(전체 계정 공통) — 설정 메뉴에서 관리합니다" style="border-color:#c4b5fd;color:#7c3aed;padding:3px 10px;font-size:12px;white-space:nowrap">⚙ 설정</button>
@@ -1724,18 +1724,12 @@ function calcEconScoreJija(rD,rU,yr,tier){
   return null;
 }
 
-// 업종별(전기/통신/소방) 부채·유동비율 + 만점플래그를 반환.
-// 해당 업종 전용값(xx_부채비율/xx_유동비율/xx_부채만점/xx_유동만점) 중 하나라도 입력돼 있으면 그 값을 그대로 쓰고,
-// 하나도 입력 안 됐으면(과거 데이터 호환) 전기(최상위) 값으로 대체한다.
-function _jongEconRatio(cc,pfx){
-  var 비율D=cc[pfx+'_부채비율'],비율U=cc[pfx+'_유동비율'],만점D=!!cc[pfx+'_부채만점'],만점U=!!cc[pfx+'_유동만점'];
-  var hasOwn=(비율D!=null)||(비율U!=null)||만점D||만점U;
-  if(hasOwn)return{부채비율:비율D,유동비율:비율U,부채만점:만점D,유동만점:만점U};
-  return{부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:!!cc.부채만점,유동만점:!!cc.유동만점};
-}
+// 부채·유동비율(원자값)은 업종과 무관하게 회사 전체 공통값(cc.부채비율/cc.유동비율) 하나만 쓴다.
+// 다만 그 값을 어떤 등급으로 환산하느냐는 업종별 업계평균(분모)이 달라서 결과 등급이 달라질 수 있고,
+// "만점(A) 강제" 여부도 업종별로 별도 지정 가능(예: 소방 협회 확인서만 다르게 처리해야 하는 경우 등).
 function getCompPerfData(cc,공종){
-  if(공종==='소방'){var r=_jongEconRatio(cc,'소방');return{실적5:cc.소방_실적5||0,실적3:cc.소방_실적3||0,시평액:cc.소방_시평액||0,공사업등록일:cc.소방_공사업등록일||'',부채비율:r.부채비율,유동비율:r.유동비율,부채만점:r.부채만점,유동만점:r.유동만점};}
-  if(공종==='통신'){var r=_jongEconRatio(cc,'통신');return{실적5:cc.통신_실적5||0,실적3:cc.통신_실적3||0,시평액:cc.통신_시평액||0,공사업등록일:cc.통신_공사업등록일||'',부채비율:r.부채비율,유동비율:r.유동비율,부채만점:r.부채만점,유동만점:r.유동만점};}
+  if(공종==='소방')return{실적5:cc.소방_실적5||0,실적3:cc.소방_실적3||0,시평액:cc.소방_시평액||0,공사업등록일:cc.소방_공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:!!cc.소방_부채만점,유동만점:!!cc.소방_유동만점};
+  if(공종==='통신')return{실적5:cc.통신_실적5||0,실적3:cc.통신_실적3||0,시평액:cc.통신_시평액||0,공사업등록일:cc.통신_공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:!!cc.통신_부채만점,유동만점:!!cc.통신_유동만점};
   return{실적5:cc.실적5||0,실적3:cc.실적3||0,시평액:cc.시평액||0,공사업등록일:cc.공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:!!cc.부채만점,유동만점:!!cc.유동만점};
 }
 function syncAvgRatios(공종){
@@ -3165,16 +3159,21 @@ function openCompanyModal(idx){
   var _업종=(c.공사업종||'');
   var _chkE=(_업종===''&&!c._공종수동설정)?(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0:_업종.indexOf('전기')>=0;
   var _chkT=_업종.indexOf('통신')>=0;
-  // 부채·유동비율 테이블 행(전기/통신/소방 각각 입력+만점체크박스) 생성 헬퍼
-  function _econRow(label,field,valOf,mjOf){
-    var cols=['전기','통신','소방'].map(function(k){
-      var val=valOf(k),mj=mjOf(k);
-      return '<td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><div style="display:flex;align-items:center;gap:3px;justify-content:center"><input id="m-'+k+'-'+field+'" autocomplete="off" type="number" step="0.01" min="0" style="width:56px;font-size:11px;padding:2px 3px;border-color:#c4b5fd" value="'+(val!=null?val:'')+'">'+
-        '<span id="m-'+k+'-'+field+'-등급" style="font-weight:700;font-size:11px;min-width:11px;display:inline-block"></span>'+
-        '<label style="font-size:9px;color:#7c3aed;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:1px" title="신설법인 등 해당 없는 경우 만점(A) 강제 적용"><input type="checkbox" id="m-'+k+'-'+field+'만점" '+(mj?'checked':'')+'>만점</label>'+
-        '</div></td>';
-    }).join('');
-    return '<tr><td style="padding:3px 8px;font-size:11px;color:#7c3aed;border:1px solid #ddd6fe;background:#f9fafb;white-space:nowrap">'+label+'</td>'+cols+'</tr>';
+  // 경영비율 결과등급 표시 행(전기/통신/소방 각 열에 "부채 [등급] [만점] · 유동 [등급] [만점]") 생성 헬퍼.
+  // 부채비율/유동비율 원자값은 업종과 무관하게 회사 공통 하나뿐이라 입력칸은 아래 별도 단일 입력을 쓰고,
+  // 여기서는 업종별 업계평균이 달라서 갈리는 등급 결과 + 업종별 만점(A) 강제 체크박스만 보여준다.
+  function _econGradeCell(k){
+    function part(field,mjChecked){
+      return '<span style="display:inline-flex;align-items:center;gap:2px">'+(field==='부채비율'?'부채':'유동')+
+        ' <b id="m-'+k+'-'+field+'-등급" style="min-width:11px;display:inline-block"></b>'+
+        ' <input type="checkbox" id="m-'+k+'-'+field+'만점" '+(mjChecked?'checked':'')+' title="'+k+' 평가에서만 만점(A) 강제 적용">'+
+        '</span>';
+    }
+    var 부채mj=k==='전기'?c.부채만점:c[k+'_부채만점'];
+    var 유동mj=k==='전기'?c.유동만점:c[k+'_유동만점'];
+    return '<td style="padding:3px 4px;border:1px solid #ddd6fe;text-align:center;font-size:11px">'+
+      part('부채비율',부채mj)+' <span style="color:#d1d5db">|</span> '+part('유동비율',유동mj)+
+      '</td>';
   }
   var _chkS=_업종.indexOf('소방')>=0;
   root.innerHTML=
@@ -3194,11 +3193,11 @@ function openCompanyModal(idx){
       '<tr><td style="padding:3px 8px;font-size:11px;color:#374151;border:1px solid #ddd6fe;background:#f9fafb;white-space:nowrap">3년실적(억)</td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-전기-실적3" autocomplete="off" type="text" inputmode="numeric" style="width:90px;font-size:11px;padding:2px 4px" value="'+((c.실적3)>0?FMT_NUM(c.실적3):'')+'"></td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-통신-실적3" autocomplete="off" type="text" inputmode="numeric" style="width:90px;font-size:11px;padding:2px 4px" value="'+((c.통신_실적3)>0?FMT_NUM(c.통신_실적3):'')+'"></td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-소방-실적3" autocomplete="off" type="text" inputmode="numeric" style="width:90px;font-size:11px;padding:2px 4px" value="'+((c.소방_실적3)>0?FMT_NUM(c.소방_실적3):'')+'"></td></tr>'+
       '<tr><td style="padding:3px 8px;font-size:11px;color:#374151;border:1px solid #ddd6fe;background:#f9fafb;white-space:nowrap">5년실적(억)</td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-전기-실적5" autocomplete="off" type="text" inputmode="numeric" style="width:90px;font-size:11px;padding:2px 4px" value="'+((c.실적5)>0?FMT_NUM(c.실적5):'')+'"></td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-통신-실적5" autocomplete="off" type="text" inputmode="numeric" style="width:90px;font-size:11px;padding:2px 4px" value="'+((c.통신_실적5)>0?FMT_NUM(c.통신_실적5):'')+'"></td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-소방-실적5" autocomplete="off" type="text" inputmode="numeric" style="width:90px;font-size:11px;padding:2px 4px" value="'+((c.소방_실적5)>0?FMT_NUM(c.소방_실적5):'')+'"></td></tr>'+
       '<tr><td style="padding:3px 8px;font-size:11px;color:#7c3aed;border:1px solid #ddd6fe;background:#f9fafb;white-space:nowrap">공사업등록일</td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-전기-공사업등록일" autocomplete="off" type="text" maxlength="10" placeholder="YYYY-MM-DD" style="width:92px;font-size:11px;padding:2px 3px;border-color:#c4b5fd" value="'+esc(c.공사업등록일||'')+'"></td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-통신-공사업등록일" autocomplete="off" type="text" maxlength="10" placeholder="YYYY-MM-DD" style="width:92px;font-size:11px;padding:2px 3px;border-color:#c4b5fd" value="'+esc(c.통신_공사업등록일||'')+'"></td><td style="padding:2px 4px;border:1px solid #ddd6fe;text-align:center"><input id="m-소방-공사업등록일" autocomplete="off" type="text" maxlength="10" placeholder="YYYY-MM-DD" style="width:92px;font-size:11px;padding:2px 3px;border-color:#c4b5fd" value="'+esc(c.소방_공사업등록일||'')+'"></td></tr>'+
-      _econRow('부채비율(%)','부채비율',function(k){return k==='전기'?c.부채비율:c[k+'_부채비율'];},function(k){return k==='전기'?c.부채만점:c[k+'_부채만점'];})+
-      _econRow('유동비율(%)','유동비율',function(k){return k==='전기'?c.유동비율:c[k+'_유동비율'];},function(k){return k==='전기'?c.유동만점:c[k+'_유동만점'];})+
+      '<tr><td style="padding:3px 8px;font-size:11px;color:#7c3aed;border:1px solid #ddd6fe;background:#f9fafb;white-space:nowrap">경영비율<br><span style="font-size:9px;color:#9ca3af;font-weight:400">업종평균 대비 등급</span></td>'+_econGradeCell('전기')+_econGradeCell('통신')+_econGradeCell('소방')+'</tr>'+
             '</table>'+
-      '<div style="font-size:10px;color:#6b7280;margin-top:2px">※ 통신·소방 경영비율을 비워두면 전기 값이 그대로 적용됩니다(별도 확인서로 값이 다를 때만 입력)</div>'+
       '</div></div>'+
+      '<label style="color:#7c3aed">부채비율(%)</label><input id="m-부채비율" autocomplete="off" type="number" step="0.01" min="0" style="border-color:#c4b5fd" value="'+((c.부채비율)!=null?(c.부채비율):'')+'">'+
+      '<label style="color:#7c3aed">유동비율(%)</label><input id="m-유동비율" autocomplete="off" type="number" step="0.01" min="0" style="border-color:#c4b5fd" value="'+((c.유동비율)!=null?(c.유동비율):'')+'">'+
       '<label style="color:#166534">일자리창출 가점<br><span style="font-size:10px;color:#6b7280">별표7A 최대+3.0 / 별표6 ×1/3 최대+1.0</span></label>'+
       '<div style="padding:4px 0;line-height:1.9">'+
         '<span style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">'+
@@ -3282,33 +3281,31 @@ function openCompanyModal(idx){
     ['시평액','실적3','실적5'].forEach(function(f){attachCheonMoneyHandlers($('#m-'+k+'-'+f));});
   });
   (function(){
-    // 전기/통신/소방 각각의 경영비율 입력 → 해당 업종 업계평균 대비 등급(A~E) 실시간 표시 + 만점 체크박스 처리
+    // 부채비율/유동비율은 공통 단일값(#m-부채비율/#m-유동비율) — 업종별 업계평균(분모)이 달라서
+    // 갈리는 등급(A~E) 결과만 전기/통신/소방 각 칸에 표시. 업종별 만점(A) 강제 체크박스는 그 칸의 등급만 덮어씀.
     var _gD2=function(r){return r<50?'A':r<75?'B':r<100?'C':r<125?'D':'E';};
     var _gU2=function(r){return r>=150?'A':r>=120?'B':r>=100?'C':r>=70?'D':'E';};
-    ['전기','통신','소방'].forEach(function(k){
-      [{f:'부채비율',g:_gD2,avgKey:k+'_평균부채'},{f:'유동비율',g:_gU2,avgKey:k+'_평균유동'}].forEach(function(spec){
-        var el=$('#m-'+k+'-'+spec.f),sp=$('#m-'+k+'-'+spec.f+'-등급'),mj=$('#m-'+k+'-'+spec.f+'만점');
-        if(!el)return;
-        function upd(){
-          var _ca3=state.settings.companyAvg||{};
+    var bEl=$('#m-부채비율'),uEl=$('#m-유동비율');
+    function updAll(){
+      var _ca3=state.settings.companyAvg||{};
+      var bv=bEl?parseFloat(bEl.value):NaN,uv=uEl?parseFloat(uEl.value):NaN;
+      ['전기','통신','소방'].forEach(function(k){
+        [{f:'부채비율',g:_gD2,avgKey:k+'_평균부채',v:bv},{f:'유동비율',g:_gU2,avgKey:k+'_평균유동',v:uv}].forEach(function(spec){
+          var sp=$('#m-'+k+'-'+spec.f+'-등급'),mj=$('#m-'+k+'-'+spec.f+'만점');
+          if(!sp)return;
+          if(mj&&mj.checked){sp.textContent='A';sp.style.color=econGradeColor('A');return;}
           var avg=Number(_ca3[spec.avgKey])||0;
-          if(mj&&mj.checked){
-            if(sp){sp.textContent='A';sp.style.color=econGradeColor('A');}
-            el.disabled=true;el.style.opacity='0.4';
-            return;
-          }
-          el.disabled=false;el.style.opacity='';
-          var v=parseFloat(el.value);
-          if(sp){
-            if(!isNaN(v)&&avg>0){var g=spec.g(v/avg*100);sp.textContent=g;sp.style.color=econGradeColor(g);}
-            else sp.textContent='';
-          }
-        }
-        el.addEventListener('input',upd);
-        if(mj)mj.addEventListener('change',upd);
-        upd();
+          if(!isNaN(spec.v)&&avg>0){var g=spec.g(spec.v/avg*100);sp.textContent=g;sp.style.color=econGradeColor(g);}
+          else sp.textContent='';
+        });
       });
-    });
+    }
+    if(bEl)bEl.addEventListener('input',updAll);
+    if(uEl)uEl.addEventListener('input',updAll);
+    ['전기','통신','소방'].forEach(function(k){['부채비율','유동비율'].forEach(function(f){
+      var mj=$('#m-'+k+'-'+f+'만점');if(mj)mj.addEventListener('change',updAll);
+    });});
+    updAll();
   })();
   $('#m-cancel').onclick=function(){root.innerHTML=''};
   attachCompanyAutocomplete('m-업체명',function(c){
@@ -3330,21 +3327,17 @@ function openCompanyModal(idx){
     function setN(id,v){var el=$('#'+id);if(el)el.value=v!=null?v:'';}
     function setC(id,v){var el=$('#'+id);if(el)el.checked=!!v;}
     setM('m-전기-시평액',c.시평액);setM('m-전기-실적3',c.실적3);setM('m-전기-실적5',c.실적5);
-    setN('m-전기-부채비율',c.부채비율);setN('m-전기-유동비율',c.유동비율);
-    setC('m-전기-부채만점',c.부채만점);setC('m-전기-유동만점',c.유동만점);
+    setN('m-부채비율',c.부채비율);setN('m-유동비율',c.유동비율);
+    setC('m-전기-부채비율만점',c.부채만점);setC('m-전기-유동비율만점',c.유동만점);
     fv('m-전기-공사업등록일',c.공사업등록일||'');
     setM('m-통신-시평액',c.통신_시평액);setM('m-통신-실적3',c.통신_실적3);setM('m-통신-실적5',c.통신_실적5);
-    setN('m-통신-부채비율',c.통신_부채비율);setN('m-통신-유동비율',c.통신_유동비율);
-    setC('m-통신-부채만점',c.통신_부채만점);setC('m-통신-유동만점',c.통신_유동만점);
+    setC('m-통신-부채비율만점',c.통신_부채만점);setC('m-통신-유동비율만점',c.통신_유동만점);
     fv('m-통신-공사업등록일',c.통신_공사업등록일||'');
     setM('m-소방-시평액',c.소방_시평액);setM('m-소방-실적3',c.소방_실적3);setM('m-소방-실적5',c.소방_실적5);
-    setN('m-소방-부채비율',c.소방_부채비율);setN('m-소방-유동비율',c.소방_유동비율);
-    setC('m-소방-부채만점',c.소방_부채만점);setC('m-소방-유동만점',c.소방_유동만점);
+    setC('m-소방-부채비율만점',c.소방_부채만점);setC('m-소방-유동비율만점',c.소방_유동만점);
     fv('m-소방-공사업등록일',c.소방_공사업등록일||'');
-    ['전기','통신','소방'].forEach(function(k){['부채비율','유동비율'].forEach(function(f){
-      var el=$('#m-'+k+'-'+f);if(el)el.dispatchEvent(new Event('input'));
-      var mj=$('#m-'+k+'-'+f+'만점');if(mj)mj.dispatchEvent(new Event('change'));
-    });});
+    if($('#m-부채비율'))$('#m-부채비율').dispatchEvent(new Event('input'));
+    if($('#m-유동비율'))$('#m-유동비율').dispatchEvent(new Event('input'));
     var _업종=c.공사업종||'';
     setC('m-chk-전기',c._공종수동설정?_업종.indexOf('전기')>=0:(_업종.indexOf('전기')>=0||(Number(c.시평액||0)+Number(c.실적5||0))>0));
     setC('m-chk-통신',_업종.indexOf('통신')>=0);
@@ -3356,11 +3349,9 @@ function openCompanyModal(idx){
 
   $('#m-save').onclick=function(){
     try{
-    // 만점 체크 시 원자값은 무시(null)하고 만점 플래그만 저장 — 목록에 남은 수치가 등급과 어긋나 보이지 않도록.
-    function _readEconRatio(k,field){
-      var mj=$('#m-'+k+'-'+field+'만점');
-      if(mj&&mj.checked)return null;
-      var el=$('#m-'+k+'-'+field);var v=el?el.value.trim():'';
+    // 부채비율/유동비율은 업종 무관 공통 단일값. 읽기값 그대로 저장(만점 체크와 무관 — 만점은 업종별 등급 강제용 별도 플래그).
+    function _readSingleRatio(field){
+      var el=$('#m-'+field);var v=el?el.value.trim():'';
       return v===''?null:Number(v);
     }
     var _일자리가점=(document.getElementById('m-일자리A').checked?2.5:0)+(document.getElementById('m-일자리B').checked?0.5:0);
@@ -3381,18 +3372,16 @@ function openCompanyModal(idx){
       참고:$('#m-참고').value.trim(),
       is실적:$('#m-is실적').checked,is자사:$('#m-is자사').checked,
       개별최대지분율:(function(){var v=$('#m-개별최대지분율').value.trim();return v===''?null:Number(v);})(),
-      부채비율:_readEconRatio('전기','부채비율'),
-      유동비율:_readEconRatio('전기','유동비율'),
-      부채만점:!!($('#m-전기-부채만점')&&$('#m-전기-부채만점').checked),
-      유동만점:!!($('#m-전기-유동만점')&&$('#m-전기-유동만점').checked),
+      부채비율:_readSingleRatio('부채비율'),
+      유동비율:_readSingleRatio('유동비율'),
+      부채만점:!!($('#m-전기-부채비율만점')&&$('#m-전기-부채비율만점').checked),
+      유동만점:!!($('#m-전기-유동비율만점')&&$('#m-전기-유동비율만점').checked),
       공사업등록일:$('#m-전기-공사업등록일').value.trim(),
       통신_시평액:readMoney($('#m-통신-시평액'))||0,통신_실적5:readMoney($('#m-통신-실적5'))||0,통신_실적3:readMoney($('#m-통신-실적3'))||0,
-      통신_부채비율:_readEconRatio('통신','부채비율'),통신_유동비율:_readEconRatio('통신','유동비율'),
-      통신_부채만점:!!($('#m-통신-부채만점')&&$('#m-통신-부채만점').checked),통신_유동만점:!!($('#m-통신-유동만점')&&$('#m-통신-유동만점').checked),
+      통신_부채만점:!!($('#m-통신-부채비율만점')&&$('#m-통신-부채비율만점').checked),통신_유동만점:!!($('#m-통신-유동비율만점')&&$('#m-통신-유동비율만점').checked),
       통신_공사업등록일:$('#m-통신-공사업등록일').value.trim(),
       소방_시평액:readMoney($('#m-소방-시평액'))||0,소방_실적5:readMoney($('#m-소방-실적5'))||0,소방_실적3:readMoney($('#m-소방-실적3'))||0,
-      소방_부채비율:_readEconRatio('소방','부채비율'),소방_유동비율:_readEconRatio('소방','유동비율'),
-      소방_부채만점:!!($('#m-소방-부채만점')&&$('#m-소방-부채만점').checked),소방_유동만점:!!($('#m-소방-유동만점')&&$('#m-소방-유동만점').checked),
+      소방_부채만점:!!($('#m-소방-부채비율만점')&&$('#m-소방-부채비율만점').checked),소방_유동만점:!!($('#m-소방-유동비율만점')&&$('#m-소방-유동비율만점').checked),
       소방_공사업등록일:$('#m-소방-공사업등록일').value.trim(),
       groups:readGroupPickerValues('m'),
       전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||''
@@ -3402,9 +3391,7 @@ function openCompanyModal(idx){
     // 만료임박 알림의 "최종수정" 참고값이 왜곡되므로(실제로는 안 바뀐 재무데이터가 방금 확인된 것처럼 보임),
     // 아래 필드들만 비교해 하나라도 달라졌을 때만 수정일시를 오늘로 찍는다. 신규 등록은 항상 갱신.
     var _FIN_FIELDS=['시평액','실적5','실적3','통신_시평액','통신_실적5','통신_실적3','소방_시평액','소방_실적5','소방_실적3',
-      '부채비율','유동비율','부채만점','유동만점',
-      '통신_부채비율','통신_유동비율','통신_부채만점','통신_유동만점',
-      '소방_부채비율','소방_유동비율','소방_부채만점','소방_유동만점',
+      '부채비율','유동비율','부채만점','유동만점','통신_부채만점','통신_유동만점','소방_부채만점','소방_유동만점',
       '공사업등록일','통신_공사업등록일','소방_공사업등록일',
       '신용평가','안전보건시스템','공사업종'];
     var _oldC=isNew?null:state.db[idx];
