@@ -3290,9 +3290,12 @@ function openCompanyModal(idx){
       var _ca3=state.settings.companyAvg||{};
       var bv=bEl?parseFloat(bEl.value):NaN,uv=uEl?parseFloat(uEl.value):NaN;
       ['전기','통신','소방'].forEach(function(k){
+        var 참여El=$('#m-chk-'+k),참여=!참여El||참여El.checked; // 참여 체크박스가 없으면(방어적으로) 참여로 간주
         [{f:'부채비율',g:_gD2,avgKey:k+'_평균부채',v:bv},{f:'유동비율',g:_gU2,avgKey:k+'_평균유동',v:uv}].forEach(function(spec){
           var sp=$('#m-'+k+'-'+spec.f+'-등급'),mj=$('#m-'+k+'-'+spec.f+'만점');
           if(!sp)return;
+          if(mj)mj.disabled=!참여;
+          if(!참여){sp.textContent='';return;} // 미참여 업종은 경영비율 계산/표시 안 함
           if(mj&&mj.checked){sp.textContent='A';sp.style.color=econGradeColor('A');return;}
           var avg=Number(_ca3[spec.avgKey])||0;
           if(!isNaN(spec.v)&&avg>0){var g=spec.g(spec.v/avg*100);sp.textContent=g;sp.style.color=econGradeColor(g);}
@@ -3302,9 +3305,12 @@ function openCompanyModal(idx){
     }
     if(bEl)bEl.addEventListener('input',updAll);
     if(uEl)uEl.addEventListener('input',updAll);
-    ['전기','통신','소방'].forEach(function(k){['부채비율','유동비율'].forEach(function(f){
-      var mj=$('#m-'+k+'-'+f+'만점');if(mj)mj.addEventListener('change',updAll);
-    });});
+    ['전기','통신','소방'].forEach(function(k){
+      ['부채비율','유동비율'].forEach(function(f){
+        var mj=$('#m-'+k+'-'+f+'만점');if(mj)mj.addEventListener('change',updAll);
+      });
+      var 참여El=$('#m-chk-'+k);if(참여El)참여El.addEventListener('change',updAll);
+    });
     updAll();
   })();
   $('#m-cancel').onclick=function(){root.innerHTML=''};
