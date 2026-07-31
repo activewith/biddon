@@ -1749,10 +1749,14 @@ function refreshCompanyAvgDisplay(){
   updateSettingsAlertBadge();
 }
 // 매년 7/31 기준으로 업체DB 평균비율이 개정되어 8/1부터 새 값이 적용됨.
-// 8월 이후면 올해가 기준연도, 1~7월이면 작년이 기준연도.
+// 단, 통계자료(경영상태확인서 등) 자체가 7/31에 발급되므로 7/31 당일부터는 새 연도로 미리 등록 가능해야 함.
+// ── 2026-07-31: 컷오프를 "8월 이후"(getMonth()>=7)에서 "7/31 0시 이후"로 앞당김 —
+//    이전 기준으로는 7/31에 미리 새해 값을 등록해도 "작년 기준값 필요" 경고가 잘못 표시됐음.
 function companyAvgFiscalYear(d){
   d=d||new Date();
-  return (d.getMonth()>=7)?d.getFullYear():d.getFullYear()-1;
+  var y=d.getFullYear();
+  var cut=new Date(y,6,31); // 7/31 0시
+  return (d>=cut)?y:y-1;
 }
 function isCompanyAvgStale(){
   var ca=state.settings.companyAvg||{};
