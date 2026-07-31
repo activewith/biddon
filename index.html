@@ -18,6 +18,8 @@ header h1{margin:0;font-size:16px;font-weight:700}
 header nav{display:flex;gap:4px;margin-left:auto;flex:0 0 auto}
 header nav button{background:#334155;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}
 header nav button.active{background:var(--primary)}
+/* ── 2026-07-31: '입찰적격판정' 버튼 색상 실험(짙은 네이비 → 오렌지)을 모두 원복. 다른 nav 버튼과
+   동일한 기본 스타일(header nav button/.active)을 그대로 씀 — 별도 색상 규칙 없음 ── */
 /* ── 입찰적격판정 화면 탭바(브라우저 탭 스타일) — 2026-07-31: 헤더에서 분리, 항상 한 줄로 표시되어
    화면 수가 늘어나도 상단 헤더 높이가 변하지 않고, 우측(업체DB관리 등) 버튼이 잘리지 않도록 함.
    가로 스크롤 대신 flex-shrink로 탭 너비를 줄여 창 너비에 맞춤(크롬/엣지 탭과 동일한 축소 방식) ── */
@@ -259,6 +261,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
   </span>
   <span id="session-info"><span id="session-user-label"></span><button id="btn-mypw" class="btn btn-ghost btn-sm" title="내 비밀번호 변경" style="padding:2px 6px">🔑</button><button id="btn-logout" class="btn btn-sm" style="background:#475569" title="로그아웃">로그아웃</button></span>
   <nav>
+    <button data-tab="bid" id="btn-nav-bid" class="active">입찰적격판정</button>
     <button data-tab="db">업체 DB 관리</button>
     <button data-tab="railtech">🚄 철도기술점수</button>
     <button data-tab="analyzer">📊 투찰금액산출</button>
@@ -5695,6 +5698,10 @@ function bind(){
     btn.addEventListener('click',function(){
       document.querySelectorAll('header nav button[data-tab]').forEach(function(b){b.classList.toggle('active',b===btn);});
       document.querySelectorAll('section[id^="tab-"]').forEach(function(s){s.classList.toggle('hidden',s.id!=='tab-'+btn.dataset.tab);});
+      // 입찰적격판정 화면탭 줄(#bid-screen-tabs)은 '입찰적격판정' 버튼을 눌렀을 때만 보이도록 함 —
+      // 2026-07-31: 업체DB관리/철도기술점수/투찰금액산출 화면에서도 탭 줄이 계속 보이던 문제 수정
+      var _tb=document.getElementById('bid-screen-tabs');
+      if(_tb)_tb.classList.toggle('hidden',btn.dataset.tab!=='bid');
       // 분析기 탭: iframe lazy load
       if(btn.dataset.tab==='analyzer'){
         var fr=document.getElementById('analyzer-iframe');
@@ -7626,9 +7633,17 @@ function switchBidScreen(idx){
   renderBidScreenTabs();
   save();
 }
-function selectBidScreenTab(idx){
-  document.querySelectorAll('header nav button[data-tab="db"], header nav button[data-tab="analyzer"]').forEach(function(b){b.classList.remove('active');});
+// 상단 nav를 '입찰적격판정' 버튼 활성 상태로 맞추고 tab-bid 섹션 + 화면탭 줄(#bid-screen-tabs)을 보여줌.
+// 2026-07-31: 화면탭 클릭/추가 시 다른 nav 버튼(업체DB관리 등)이 눌려있던 상태로 남아 화면탭 줄이
+// 계속 보이던 문제를 막기 위해 이 헬퍼로 통일.
+function activateBidNavSection(){
+  document.querySelectorAll('header nav button[data-tab]').forEach(function(b){b.classList.toggle('active',b.id==='btn-nav-bid');});
   document.querySelectorAll('section[id^="tab-"]').forEach(function(s){s.classList.toggle('hidden',s.id!=='tab-bid');});
+  var _tb=document.getElementById('bid-screen-tabs');
+  if(_tb)_tb.classList.remove('hidden');
+}
+function selectBidScreenTab(idx){
+  activateBidNavSection();
   switchBidScreen(idx);
 }
 function nextBidScreenName(){
@@ -7645,8 +7660,7 @@ function addBidScreen(){
   // unshift로 기존 활성 화면의 배열 위치가 1칸 밀렸으므로 인덱스 보정(안 하면 switchBidScreen 내부의
   // syncActiveBidScreen()이 엉뚱한 화면에 현재 데이터를 덮어씀)
   state.activeBidScreenIndex=(state.activeBidScreenIndex||0)+1;
-  document.querySelectorAll('header nav button[data-tab="db"], header nav button[data-tab="analyzer"]').forEach(function(b){b.classList.remove('active');});
-  document.querySelectorAll('section[id^="tab-"]').forEach(function(s){s.classList.toggle('hidden',s.id!=='tab-bid');});
+  activateBidNavSection();
   switchBidScreen(0);
   toast('새 화면 추가: '+newScreen.name,'ok');
 }
@@ -7669,7 +7683,14 @@ function deleteBidScreen(idx){
 function renderBidScreenTabs(){
   var root=document.getElementById('bid-screen-tabs');
   if(!root)return;
-  // ── 2026-07-31: '+' 버튼을 가장 왼쪽에 고정. 새 탭은 addBidScreen()에서 배열 맨 앞(unshift)에 추가되므로
+  // ── 2026-07-31: 탭 이름을 매 렌더링마다 '공고명 앞6글자'로 재정리(구버전에 저장된 '~4글자_적격판정' 같은
+  //    예전 이름도 자동으로 새 규칙으로 교정됨 — 별도 마이그레이션 없이 다음 렌더링에서 바로 정리됨).
+  //    공고명이 아직 없는 빈 화면(신규 추가 직후 등)은 건드리지 않음(기본값 '입찰적격판정' 유지).
+  state.bidScreens.forEach(function(scr){
+    var nm=(scr.bid&&scr.bid.공고명)?String(scr.bid.공고명).trim():'';
+    if(nm){var want=nm.slice(0,6);if(scr.name!==want)scr.name=want;}
+  });
+  // ── '+' 버튼을 가장 왼쪽에 고정. 새 탭은 addBidScreen()에서 배열 맨 앞(unshift)에 추가되므로
   //    렌더링 순서(state.bidScreens 배열 순서)를 그대로 따라가면 최신 탭이 자동으로 '+' 바로 오른쪽(맨 왼쪽)에 옴.
   var html='<button type="button" id="btn-add-bid-screen" title="입찰적격판정 화면 추가">＋</button>'+state.bidScreens.map(function(scr,i){
     var isActive=(i===state.activeBidScreenIndex);
