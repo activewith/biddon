@@ -1958,17 +1958,37 @@ function runExpiryMaintenance(){
   var bY=jobBCycleYear(today);
   var pastGrace=isPastJobBGrace(today,bY);
   var ym=currentYM(today);
-  state.db.forEach(function(c){
-    // (a) 매년 8/1: 시평액/3년실적/5년실적(전기·통신·소방)·부채비율·유동비율 0으로 초기화
-    if(c._fin초기화연도!==finY){
-      c.시평액=0;c.실적3=0;c.실적5=0;
-      c.통신_시평액=0;c.통신_실적3=0;c.통신_실적5=0;
-      c.소방_시평액=0;c.소방_실적3=0;c.소방_실적5=0;
-      c.부채비율=0;c.유동비율=0;
-      c.부채만점=false;c.유동만점=false;
-      c._fin초기화연도=finY;
-      changed=true;
+  // (a) 매년 8/1: 시평액/3년실적/5년실적(전기·통신·소방)·부채비율·유동비율 0으로 초기화
+  // ── 2026-07-31: 자동 실행하지 않고 사용자 확인(2단계 confirm) 후에만 실행하도록 변경.
+  //    거부 시 _fin초기화연도를 갱신하지 않으므로 다음 실행(재부팅/동기화) 때 다시 확인을 받는다.
+  var _fin초기화대상=state.db.filter(function(c){return c._fin초기화연도!==finY;});
+  if(_fin초기화대상.length>0){
+    var _fin1차=confirm(
+      '매년 8/1 기준 재무데이터 자동 초기화 시점입니다.\n'+
+      '대상 업체: '+_fin초기화대상.length+'개\n'+
+      '(시평액·3년실적·5년실적(전기/통신/소방)·부채비율·유동비율이 0으로 초기화됩니다)\n\n'+
+      '지금 초기화를 진행할까요?'
+    );
+    if(_fin1차){
+      var _fin2차=confirm(
+        '한 번 더 확인합니다.\n'+
+        '초기화하면 되돌릴 수 없습니다.\n\n'+
+        '정말로 '+_fin초기화대상.length+'개 업체의 재무데이터를 0으로 초기화할까요?'
+      );
+      if(_fin2차){
+        _fin초기화대상.forEach(function(c){
+          c.시평액=0;c.실적3=0;c.실적5=0;
+          c.통신_시평액=0;c.통신_실적3=0;c.통신_실적5=0;
+          c.소방_시평액=0;c.소방_실적3=0;c.소방_실적5=0;
+          c.부채비율=0;c.유동비율=0;
+          c.부채만점=false;c.유동만점=false;
+          c._fin초기화연도=finY;
+        });
+        changed=true;
+      }
     }
+  }
+  state.db.forEach(function(c){
     // (b) 매년 4/1~4/15: 일자리창출 B조건 재확인 — 업체등록 화면 저장 전까지 경고 유지, 4/15까지 미저장 시 B조건 자동 해제
     if(c._B저장연도==null)c._B저장연도=bY; // 구버전 데이터 보정(그레이스 기간 부여)
     var hasB=(Number(c.일자리가점||0)===0.5||Number(c.일자리가점||0)===3.0);
