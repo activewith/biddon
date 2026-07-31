@@ -1960,34 +1960,24 @@ function runExpiryMaintenance(){
   var ym=currentYM(today);
   // (a) 매년 8/1: 시평액/3년실적/5년실적(전기·통신·소방)·부채비율·유동비율 0으로 초기화
   // ── 2026-07-31: 자동 실행하지 않고 사용자 확인(2단계 confirm) 후에만 실행하도록 변경.
-  //    거부 시 _fin초기화연도를 갱신하지 않으므로 다음 실행(재부팅/동기화) 때 다시 확인을 받는다.
-  var _fin초기화대상=state.db.filter(function(c){return c._fin초기화연도!==finY;});
-  if(_fin초기화대상.length>0){
-    var _fin1차=confirm(
-      '매년 8/1 기준 재무데이터 자동 초기화 시점입니다.\n'+
-      '대상 업체: '+_fin초기화대상.length+'개\n'+
-      '(시평액·3년실적·5년실적(전기/통신/소방)·부채비율·유동비율이 0으로 초기화됩니다)\n\n'+
-      '지금 초기화를 진행할까요?'
-    );
-    if(_fin1차){
-      var _fin2차=confirm(
-        '한 번 더 확인합니다.\n'+
-        '초기화하면 되돌릴 수 없습니다.\n\n'+
-        '정말로 '+_fin초기화대상.length+'개 업체의 재무데이터를 0으로 초기화할까요?'
-      );
-      if(_fin2차){
-        _fin초기화대상.forEach(function(c){
-          c.시평액=0;c.실적3=0;c.실적5=0;
-          c.통신_시평액=0;c.통신_실적3=0;c.통신_실적5=0;
-          c.소방_시평액=0;c.소방_실적3=0;c.소방_실적5=0;
-          c.부채비율=0;c.유동비율=0;
-          c.부채만점=false;c.유동만점=false;
-          c._fin초기화연도=finY;
-        });
-        changed=true;
-      }
-    }
-  }
+  // ── 2026-08-01: 초기화 기준일(8/1) 바로 전날(7/31) 등록·수정된 업체는 방금 갱신한 경영상태확인서 등
+  //    최신 자료일 수 있으므로, 별도 목록에서 개별 "포함" 체크(기본 제외) 후 처리하도록 변경.
+  //    체크 안 한 업체는 값은 보존하고 이번 사이클은 "처리 완료"로 표시(재확인 팝업 반복 방지).
+  //    거부 시(취소) 아무것도 갱신하지 않으므로 다음 실행(재부팅/동기화) 때 다시 확인을 받는다.
+  (function(){
+    var _fin초기화대상=state.db.filter(function(c){return c._fin초기화연도!==finY;});
+    if(_fin초기화대상.length===0)return;
+    var _731날짜=finY+'-07-31';
+    var _isEdited731=function(c){
+      var r=(c.등록일시||'').slice(0,10);
+      var m=(c.수정일시||'').slice(0,10);
+      return r===_731날짜||m===_731날짜;
+    };
+    var _특이=_fin초기화대상.filter(_isEdited731);
+    var _일반=_fin초기화대상.filter(function(c){return!_isEdited731(c);});
+    if(_특이.length>0)showFinResetReviewModal(_특이,_일반,finY);
+    else doFinResetConfirm(_일반,[],finY);
+  })();
   state.db.forEach(function(c){
     // (b) 매년 4/1~4/15: 일자리창출 B조건 재확인 — 업체등록 화면 저장 전까지 경고 유지, 4/15까지 미저장 시 B조건 자동 해제
     if(c._B저장연도==null)c._B저장연도=bY; // 구버전 데이터 보정(그레이스 기간 부여)
@@ -2020,6 +2010,90 @@ function runExpiryMaintenance(){
     if(ps&&ps.expiry&&ps.expiry<today){c.안전보건시스템='';changed=true;}
   });
   return changed;
+}
+// ── 8/1 재무데이터 초기화: 2단계 confirm 실행 + 값 초기화(resetList) / 값 보존·연도만 표시(preserveList) ──
+// preserveList는 7/31에 등록·수정되어 "포함" 체크를 하지 않은(=보존 선택된) 업체들.
+// resetList가 비어있으면(전부 보존 선택) confirm 없이 preserveList만 처리 완료 표시.
+function doFinResetConfirm(resetList,preserveList,finY){
+  preserveList=preserveList||[];
+  if(!resetList||resetList.length===0){
+    if(preserveList.length>0){
+      preserveList.forEach(function(c){c._fin초기화연도=finY;});
+      save();
+      if(typeof refreshDB==='function')refreshDB();
+      if(typeof refreshBidStats==='function')refreshBidStats();
+      if(typeof refreshCombos==='function')refreshCombos();
+      toast('7/31 등록·수정 업체 '+preserveList.length+'개는 값을 보존하고 이번 초기화 대상에서 제외했습니다','ok');
+    }
+    return;
+  }
+  var ok1=confirm(
+    '매년 8/1 기준 재무데이터 자동 초기화 시점입니다.\n'+
+    '초기화 대상: '+resetList.length+'개'+
+    (preserveList.length>0?('\n(7/31 등록·수정으로 보존 선택된 '+preserveList.length+'개는 제외)'):'')+
+    '\n(시평액·3년실적·5년실적(전기/통신/소방)·부채비율·유동비율이 0으로 초기화됩니다)\n\n'+
+    '지금 초기화를 진행할까요?'
+  );
+  if(!ok1)return;
+  var ok2=confirm(
+    '한 번 더 확인합니다.\n'+
+    '초기화하면 되돌릴 수 없습니다.\n\n'+
+    '정말로 '+resetList.length+'개 업체의 재무데이터를 0으로 초기화할까요?'
+  );
+  if(!ok2)return;
+  resetList.forEach(function(c){
+    c.시평액=0;c.실적3=0;c.실적5=0;
+    c.통신_시평액=0;c.통신_실적3=0;c.통신_실적5=0;
+    c.소방_시평액=0;c.소방_실적3=0;c.소방_실적5=0;
+    c.부채비율=0;c.유동비율=0;
+    c.부채만점=false;c.유동만점=false;
+    c._fin초기화연도=finY;
+  });
+  preserveList.forEach(function(c){c._fin초기화연도=finY;});
+  save();
+  if(typeof refreshDB==='function')refreshDB();
+  if(typeof refreshBidStats==='function')refreshBidStats();
+  if(typeof refreshCombos==='function')refreshCombos();
+  toast(resetList.length+'개 업체 재무데이터 초기화 완료'+(preserveList.length>0?' ('+preserveList.length+'개는 보존)':''),'ok');
+}
+// ── 8/1 초기화 전, 7/31 등록·수정 업체를 먼저 검토하는 팝업 ──────────────
+// 기본값은 체크 해제(=보존/초기화 제외). 체크한 업체만 일반 대상과 합쳐 초기화 진행.
+function showFinResetReviewModal(특이목록,일반목록,finY){
+  var root=MODAL_ROOT;
+  var _731날짜=finY+'-07-31';
+  var rows=특이목록.map(function(c,i){
+    var 근거=[];
+    if((c.등록일시||'').slice(0,10)===_731날짜)근거.push('등록');
+    if((c.수정일시||'').slice(0,10)===_731날짜)근거.push('수정');
+    return '<tr><td style="padding:5px 8px;text-align:center"><input type="checkbox" class="fin-include-cb" data-idx="'+i+'"></td>'+
+      '<td style="padding:5px 8px;font-weight:600">'+esc(c.업체명||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:12px;color:#6b7280">7/31 '+esc(근거.join('·'))+'</td></tr>';
+  }).join('');
+  root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:460px;max-width:96vw">'+
+    '<h3 style="color:#1d4ed8">📋 8/1 재무데이터 초기화 — 7/31 등록·수정 업체 확인</h3>'+
+    '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">아래 '+특이목록.length+'개 업체는 초기화 기준일(8/1) 바로 전날인 7/31에 등록 또는 수정되었습니다.<br>'+
+    '경영상태확인서 등 최신 자료를 이미 반영했을 수 있으므로 <b>기본값은 "보존"(초기화 제외)</b>입니다.<br>'+
+    '이 업체도 초기화해야 한다면 체크하세요.</p>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'+
+    '<th style="padding:5px 8px;width:60px">포함<br><span style="font-size:10px;font-weight:400;color:#9ca3af">(초기화)</span></th>'+
+    '<th class="l" style="padding:5px 8px">업체명</th><th class="l" style="padding:5px 8px">근거</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<p style="font-size:11px;color:var(--muted);margin-top:8px">체크하지 않은 업체는 값이 그대로 보존되며, 이번 8/1 초기화 대상에서는 처리 완료로 표시됩니다.'+
+    (일반목록.length>0?' (7/31에 등록·수정되지 않은 나머지 '+일반목록.length+'개 업체는 다음 확인 단계에서 함께 초기화됩니다.)':'')+'</p>'+
+    '<div class="row" style="justify-content:flex-end;margin-top:12px;gap:8px">'+
+    '<button class="btn btn-ghost" id="m-fin-cancel">취소</button>'+
+    '<button class="btn" id="m-fin-next">다음</button>'+
+    '</div></div></div>';
+  $('#m-fin-cancel').onclick=function(){root.innerHTML='';};
+  $('#m-fin-next').onclick=function(){
+    var checked=[],unchecked=[];
+    root.querySelectorAll('.fin-include-cb').forEach(function(cb){
+      var idx=parseInt(cb.dataset.idx,10);
+      (cb.checked?checked:unchecked).push(특이목록[idx]);
+    });
+    root.innerHTML='';
+    var resetList=일반목록.concat(checked);
+    doFinResetConfirm(resetList,unchecked,finY);
+  };
 }
 // ── 만료 임박 경고 (신용평가 D-7 / 안전보건 D-30 / 일자리B조건 연1회 재확인) ──────
 function getExpiryAlerts(c){
