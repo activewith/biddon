@@ -12,15 +12,25 @@
 :root{--bg:#f5f6f8;--panel:#fff;--border:#e3e6ec;--text:#1f2937;--muted:#6b7280;--primary:#2563eb;--primary-d:#1d4ed8;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
 *{box-sizing:border-box}
 body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);font-size:13px;overflow-x:hidden}
-header{background:#1e293b;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:10}
+#top-sticky{position:sticky;top:0;z-index:10}
+header{background:#1e293b;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:16px;flex-wrap:nowrap;overflow:hidden}
 header h1{margin:0;font-size:16px;font-weight:700}
-header nav{display:flex;gap:4px;margin-left:auto}
-header nav button{background:#334155;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px}
+header nav{display:flex;gap:4px;margin-left:auto;flex:0 0 auto}
+header nav button{background:#334155;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}
 header nav button.active{background:var(--primary)}
-.bid-screen-tab-wrap{display:inline-flex;align-items:center;gap:2px}
-.bid-del-btn{background:transparent;color:#94a3b8;border:none;font-size:14px;line-height:1;cursor:pointer;padding:2px 4px;border-radius:4px}
+/* ── 입찰적격판정 화면 탭바(브라우저 탭 스타일) — 2026-07-31: 헤더에서 분리, 항상 한 줄로 표시되어
+   화면 수가 늘어나도 상단 헤더 높이가 변하지 않고, 우측(업체DB관리 등) 버튼이 잘리지 않도록 함.
+   가로 스크롤 대신 flex-shrink로 탭 너비를 줄여 창 너비에 맞춤(크롬/엣지 탭과 동일한 축소 방식) ── */
+#bid-screen-tabs{display:flex;align-items:flex-end;gap:2px;background:#0f172a;padding:5px 8px 0;overflow-x:hidden;white-space:nowrap}
+#bid-screen-tabs:empty{display:none}
+.bid-screen-tab-wrap{display:inline-flex;align-items:center;flex:0 1 150px;min-width:50px;gap:2px;background:#334155;border-radius:7px 7px 0 0;padding:0 3px 0 10px;height:32px;cursor:pointer;overflow:hidden}
+.bid-screen-tab-wrap.active-wrap{background:var(--bg)}
+.bid-screen-tab-wrap button[data-bid-screen]{background:transparent;color:#cbd5e1;border:none;padding:0;font-size:12.5px;cursor:pointer;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bid-screen-tab-wrap.active-wrap button[data-bid-screen]{color:#0f172a;font-weight:700}
+.bid-del-btn{background:transparent;color:#94a3b8;border:none;font-size:14px;line-height:1;cursor:pointer;padding:2px 4px;border-radius:4px;flex:0 0 auto}
 .bid-del-btn:hover{background:#dc2626;color:#fff}
-#btn-add-bid-screen{background:#475569;font-weight:700}
+.bid-screen-tab-wrap.active-wrap .bid-del-btn{color:#64748b}
+#btn-add-bid-screen{flex:0 0 auto;align-self:flex-end;background:#475569;font-weight:700;border-radius:7px 7px 0 0;height:32px;padding:0 12px;border:none;color:#fff;cursor:pointer}
 main{padding:12px;max-width:1700px;margin:0 auto}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px}
 .panel h2{margin:0 0 10px 0;font-size:14px;font-weight:700;color:#0f172a;border-bottom:2px solid var(--border);padding-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -195,6 +205,10 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
   #session-info{margin-left:0}
   header nav{margin-left:0;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
   header nav button{flex:0 0 auto;padding:7px 10px;font-size:12px}
+  #bid-screen-tabs{padding:4px 6px 0}
+  .bid-screen-tab-wrap{height:30px;flex-basis:110px;min-width:40px;padding:0 2px 0 8px}
+  .bid-screen-tab-wrap button[data-bid-screen]{font-size:12px}
+  #btn-add-bid-screen{height:30px;padding:0 9px}
   main{padding:6px}
   .panel{padding:8px;margin-bottom:8px}
   .panel h2{font-size:13px}
@@ -230,6 +244,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
   </div>
 </div>
 <div id="app-shell">
+<div id="top-sticky">
 <header>
   <div style="display:flex;flex-direction:column;line-height:1.25">
     <h1 style="margin:0">입찰 적격심사 도구</h1>
@@ -244,12 +259,13 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
   </span>
   <span id="session-info"><span id="session-user-label"></span><button id="btn-mypw" class="btn btn-ghost btn-sm" title="내 비밀번호 변경" style="padding:2px 6px">🔑</button><button id="btn-logout" class="btn btn-sm" style="background:#475569" title="로그아웃">로그아웃</button></span>
   <nav>
-    <span id="bid-screen-tabs" style="display:contents"></span>
     <button data-tab="db">업체 DB 관리</button>
     <button data-tab="railtech">🚄 철도기술점수</button>
     <button data-tab="analyzer">📊 투찰금액산출</button>
   </nav>
 </header>
+<div id="bid-screen-tabs"></div>
+</div>
 
 <main>
   <section id="tab-bid">
@@ -4812,11 +4828,12 @@ function showPdfResultModal(found,preview){
     _syncManualIntoFound();
     if(found.공사명){
       state.bid.공고명=found.공사명;
-      // 화면 탭 이름을 '공고명 앞4글자_적격판정'으로 자동 개명(탭 hover 시 풀네임 title은 renderBidScreenTabs가 별도로 계속 붙여줌)
+      // 화면 탭 이름을 '공고명 앞6글자'로 자동 개명(탭 hover 시 풀네임 title은 renderBidScreenTabs가 별도로 계속 붙여줌)
+      // ── 2026-07-31: 명명 규칙을 '앞4글자_적격판정' → '앞8글자' → '앞6글자'로 변경
       var _actScr=state.bidScreens&&state.bidScreens[state.activeBidScreenIndex];
       if(_actScr){
-        var _nm4=found.공사명.trim().slice(0,4);
-        if(_nm4)_actScr.name=_nm4+'_적격판정';
+        var _nm6=found.공사명.trim().slice(0,6);
+        if(_nm6)_actScr.name=_nm6;
       }
     }
     // 확정메세지/조합결과TXT 상단 헤더(공고명·공고번호·추정가격·마감일)에 쓰일 값 — 협정메세지 텍스트와 별개로 항상 보존
@@ -7622,10 +7639,15 @@ function addBidScreen(){
   syncActiveBidScreen();
   var nb=defaultBidObj();
   var newScreen={name:nextBidScreenName(),bid:nb,combos:defaultCombos()};
-  state.bidScreens.push(newScreen);
+  // ── 2026-07-31: '+' 버튼이 가장 왼쪽에 고정되므로, 새 탭도 배열 맨 앞(unshift)에 추가해
+  //    '+' 버튼 바로 오른쪽(=최신 탭이 가장 왼쪽)에 오도록 함. 기존 탭들은 자동으로 오른쪽으로 밀림.
+  state.bidScreens.unshift(newScreen);
+  // unshift로 기존 활성 화면의 배열 위치가 1칸 밀렸으므로 인덱스 보정(안 하면 switchBidScreen 내부의
+  // syncActiveBidScreen()이 엉뚱한 화면에 현재 데이터를 덮어씀)
+  state.activeBidScreenIndex=(state.activeBidScreenIndex||0)+1;
   document.querySelectorAll('header nav button[data-tab="db"], header nav button[data-tab="analyzer"]').forEach(function(b){b.classList.remove('active');});
   document.querySelectorAll('section[id^="tab-"]').forEach(function(s){s.classList.toggle('hidden',s.id!=='tab-bid');});
-  switchBidScreen(state.bidScreens.length-1);
+  switchBidScreen(0);
   toast('새 화면 추가: '+newScreen.name,'ok');
 }
 function deleteBidScreen(idx){
@@ -7647,15 +7669,25 @@ function deleteBidScreen(idx){
 function renderBidScreenTabs(){
   var root=document.getElementById('bid-screen-tabs');
   if(!root)return;
-  var html=state.bidScreens.map(function(scr,i){
+  // ── 2026-07-31: '+' 버튼을 가장 왼쪽에 고정. 새 탭은 addBidScreen()에서 배열 맨 앞(unshift)에 추가되므로
+  //    렌더링 순서(state.bidScreens 배열 순서)를 그대로 따라가면 최신 탭이 자동으로 '+' 바로 오른쪽(맨 왼쪽)에 옴.
+  var html='<button type="button" id="btn-add-bid-screen" title="입찰적격판정 화면 추가">＋</button>'+state.bidScreens.map(function(scr,i){
     var isActive=(i===state.activeBidScreenIndex);
     var delBtn=state.bidScreens.length>1?('<button type="button" class="bid-del-btn" data-bid-del="'+i+'" title="화면 삭제">×</button>'):'';
     var _nm=(scr.bid&&scr.bid.공고명)?esc(scr.bid.공고명):'';
-    return '<span class="bid-screen-tab-wrap"><button data-tab="bid" data-bid-screen="'+i+'"'+(isActive?' class="active"':'')+(_nm?' title="'+_nm+'"':'')+'>'+esc(scr.name)+'</button>'+delBtn+'</span>';
-  }).join('')+'<button type="button" id="btn-add-bid-screen" title="입찰적격판정 화면 추가">＋</button>';
+    return '<span class="bid-screen-tab-wrap'+(isActive?' active-wrap':'')+'"><button data-tab="bid" data-bid-screen="'+i+'"'+(isActive?' class="active"':'')+(_nm?' title="'+_nm+'"':'')+'>'+esc(scr.name)+'</button>'+delBtn+'</span>';
+  }).join('');
   root.innerHTML=html;
   root.querySelectorAll('button[data-bid-screen]').forEach(function(btn){
     btn.addEventListener('click',function(){selectBidScreenTab(Number(btn.dataset.bidScreen));});
+  });
+  // 탭 전체(여백 포함) 클릭으로도 전환되도록 — 브라우저 탭처럼 텍스트 바깥을 눌러도 선택되게 함
+  root.querySelectorAll('.bid-screen-tab-wrap').forEach(function(wrap){
+    wrap.addEventListener('click',function(e){
+      if(e.target.closest('.bid-del-btn'))return;
+      var innerBtn=wrap.querySelector('button[data-bid-screen]');
+      if(innerBtn&&e.target!==innerBtn)selectBidScreenTab(Number(innerBtn.dataset.bidScreen));
+    });
   });
   root.querySelectorAll('button[data-bid-del]').forEach(function(btn){
     btn.addEventListener('click',function(e){e.stopPropagation();deleteBidScreen(Number(btn.dataset.bidDel));});
