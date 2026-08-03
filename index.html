@@ -340,9 +340,9 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
           </select></div>
         <div class="field" id="field-db기준" style="display:none">
           <label>업체DB 적용기준 <span style="font-size:10px;color:#dc2626" title="8/1 재무데이터 초기화 전환기간(~8/31) 한정 표시. 조합 계산에만 적용되며 업체DB 목록화면은 항상 현재 값을 표시">★ 전환기간</span></label>
-          <select id="in-db기준" style="width:110px;background:#fef2f2;color:#991b1b;font-weight:700;border-color:#fca5a5">
-            <option value="갱신전">갱신 전 (7/30)</option>
-            <option value="갱신후" selected>갱신 후 (현재)</option>
+          <select id="in-db기준" style="width:130px;background:#fef2f2;color:#991b1b;font-weight:700;border-color:#fca5a5">
+            <option value="갱신전" id="in-db기준-opt-legacy">이전 자료</option>
+            <option value="갱신후" selected id="in-db기준-opt-live">현재 자료</option>
           </select>
         </div>
         <button class="btn" id="btn-paste-text" title="스캔 PDF 등 직접 추출이 안 될 때 텍스트를 붙여넣어 분석" style="background:#2563eb;color:#fff;border-color:#1d4ed8">📋 공고문분석(텍스트)</button>
@@ -645,17 +645,18 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null}},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null}},
   combos:_initCombos,
   bidScreens:[{name:'입찰적격판정A',bid:_initBid,combos:_initCombos}],
   activeBidScreenIndex:0,
   bidScreensByUser:{}, // 계정별 화면 파티션: {accountId:{screens:[...], activeIndex:0}} — state.bidScreens/activeBidScreenIndex는 현재 로그인 계정의 파티션을 가리키는 런타임 뷰
   accounts:[],
   railTechDB:[],
-  dbLegacySnapshot:null,        // 2026-08-03: 8/1 재무초기화 직전(7/30) 자료 스냅샷(재무필드만) — 전환기간 병행 보관용
-  dbLegacySnapshotMeta:null,    // {createdAt, expireAt, rev, note} — dbLegacySnapshot/avgLegacySnapshot 공통 메타(둘 다 같은 8/1 사이클 기준)
-  avgLegacySnapshot:null,       // 2026-08-04: 업계평균 부채·유동비율의 갱신 전(7/30) 스냅샷 — dbLegacySnapshot과 동일 주기로 병행 보관
-  _legacySnapshotInit:false,    // 스냅샷을 한 번이라도 심은 적 있는지(rev 비교로 재시딩 여부 판단)
+  dbLegacySnapshot:null,        // 매년 8/1 재무초기화 직전 자료 스냅샷(재무필드만) — 전환기간(~다음 9/1) 병행 보관용. doFinResetConfirm()이 매년 자동 생성(2026-08-08 일반화: 연도별 하드코딩 제거).
+  dbLegacySnapshotMeta:null,    // {createdAt, expireAt, finY, note} — finY=해당 스냅샷을 만든 8/1 초기화의 연도
+  avgLegacySnapshot:null,       // 업계평균 부채·유동비율의 직전 연도 스냅샷 — archiveCompanyAvgIfNeeded()가 매년 자동 생성
+  avgLegacySnapshotMeta:null,   // {createdAt, expireAt, finY} — dbLegacySnapshotMeta와 동일 구조(별도 트리거이므로 별도 보관)
+  _legacySnapshotInit:false,    // 스냅샷을 한 번이라도 심은 적 있는지(rev 비교로 재시딩 여부 판단) — 2026 한정 마이그레이션용, 2026-09-01 이후 미사용
   _legacySnapshotDeleted:false  // 사용자가 9/1 이후 명시적으로 완전삭제했는지(true면 다시 심지 않음)
 };
 
@@ -695,6 +696,7 @@ function gistApplyData(obj){
   if(obj._legacySnapshotInit!==undefined)state._legacySnapshotInit=obj._legacySnapshotInit;
   if(obj._legacySnapshotDeleted!==undefined)state._legacySnapshotDeleted=obj._legacySnapshotDeleted;
   if(obj.avgLegacySnapshot!==undefined)state.avgLegacySnapshot=obj.avgLegacySnapshot;
+  if(obj.avgLegacySnapshotMeta!==undefined)state.avgLegacySnapshotMeta=obj.avgLegacySnapshotMeta;
   if(obj.combos&&obj.combos.length>0){
     obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
     state.combos=obj.combos;
@@ -984,6 +986,7 @@ function restoreStateFromBackupObj(obj){
   if(obj._legacySnapshotInit!==undefined)state._legacySnapshotInit=obj._legacySnapshotInit;
   if(obj._legacySnapshotDeleted!==undefined)state._legacySnapshotDeleted=obj._legacySnapshotDeleted;
   if(obj.avgLegacySnapshot!==undefined)state.avgLegacySnapshot=obj.avgLegacySnapshot;
+  if(obj.avgLegacySnapshotMeta!==undefined)state.avgLegacySnapshotMeta=obj.avgLegacySnapshotMeta;
   if(obj.combos&&obj.combos.length>0){
     obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
     state.combos=obj.combos;
@@ -1058,6 +1061,8 @@ function load(){
     if(obj.dbLegacySnapshotMeta!==undefined)state.dbLegacySnapshotMeta=obj.dbLegacySnapshotMeta;
     if(obj._legacySnapshotInit!==undefined)state._legacySnapshotInit=obj._legacySnapshotInit;
     if(obj._legacySnapshotDeleted!==undefined)state._legacySnapshotDeleted=obj._legacySnapshotDeleted;
+    if(obj.avgLegacySnapshot!==undefined)state.avgLegacySnapshot=obj.avgLegacySnapshot;
+    if(obj.avgLegacySnapshotMeta!==undefined)state.avgLegacySnapshotMeta=obj.avgLegacySnapshotMeta;
     // 업체 데이터에 있는 그룹명이 state.groups에서 누락된 경우 자동 복구
     (function(){
       var gSet=new Set(state.groups);
@@ -1252,6 +1257,7 @@ function migrateV11(obj){
   }
   if(!('기준연도' in ca))ca.기준연도=null;
   if(!('수정일시' in ca))ca.수정일시=null;
+  if(!('_archivedFor' in ca))ca._archivedFor=null;
   obj.schemaVersion=12;
 }
 // v13(2026-07-28): 업체 등록일시 자동기록 + 재무데이터(시평액/실적/부채·유동비율) 연1회(8/1) 초기화 +
@@ -1814,6 +1820,35 @@ function isCompanyAvgStale(){
   var ca=state.settings.companyAvg||{};
   return (Number(ca.기준연도)||0)!==companyAvgFiscalYear();
 }
+// 2026-08-08: "갱신전/갱신후"라는 상대적 이름 대신, 매년 자동으로 반복되는 연도 기준 이월 구조로 일반화.
+// 매년 7/31 경계를 넘으면(=isCompanyAvgStale()) 그때까지의 "현재" 값을 avgLegacySnapshot(직전 연도 참고자료)
+// 으로 자동 이월하고, 입력칸(부채/유동 값)은 비워서 관리자가 새 통계로 다시 입력하게 만든다. ca.기준연도 자체는
+// 건드리지 않으므로(마지막으로 실제 입력된 연도를 계속 기억) isCompanyAvgStale()은 새로 입력할 때까지 계속 true.
+// ca._archivedFor로 "이번 사이클은 이미 이월 처리했음"을 표시해 매 접속마다 반복 이월되는 것을 막는다.
+// runExpiryMaintenance()에서 매 부팅/동기화 시 1회 호출 — 코드 수정 없이 매년 반복 가능.
+function archiveCompanyAvgIfNeeded(d){
+  var ca=state.settings&&state.settings.companyAvg;
+  if(!ca)return false;
+  var fy=companyAvgFiscalYear(d);
+  if(ca._archivedFor===fy)return false; // 이번 사이클은 이미 처리함
+  if(ca.기준연도==null)return false; // 신규 설치 등, 아직 한 번도 입력한 적 없으면 이월할 것 없음
+  if(Number(ca.기준연도)>=fy)return false; // 이미 최신(또는 미리 등록됨) — 손댈 필요 없음
+  state.avgLegacySnapshot={
+    전기_평균부채:ca.전기_평균부채,전기_평균유동:ca.전기_평균유동,
+    통신_평균부채:ca.통신_평균부채,통신_평균유동:ca.통신_평균유동,
+    소방_평균부채:ca.소방_평균부채,소방_평균유동:ca.소방_평균유동,
+    기준연도:ca.기준연도
+  };
+  state.avgLegacySnapshotMeta={createdAt:new Date().toISOString(),expireAt:new Date(fy,8,1).toISOString(),finY:fy};
+  ['전기','통신','소방'].forEach(function(k){ca[k+'_평균부채']=null;ca[k+'_평균유동']=null;});
+  ca._archivedFor=fy;
+  return true;
+}
+// avgLegacySnapshot이 "참고" 열로 화면에 표시될 유효기간(전환기간, ~9/1) 내인지.
+function isAvgLegacySnapshotValid(d){
+  d=d||new Date();
+  return !!(state.avgLegacySnapshot&&state.avgLegacySnapshotMeta&&state.avgLegacySnapshotMeta.expireAt&&d<new Date(state.avgLegacySnapshotMeta.expireAt));
+}
 // 2026-08-04: "기준연도" 표시 방식 변경(사용자 요청) — 내부 저장값(ca.기준연도)은 기존과 동일하게
 // "적용 사이클 시작연도"(예: 2026, companyAvgFiscalYear()와 직접 비교)를 그대로 쓰지만, 화면에는
 // 실제 통계 데이터 연도(사이클연도-1, 예: 2025)를 보여주고 우측에 적용 구간을 "(적용 26-27년)"으로 함께 표시.
@@ -2054,7 +2089,9 @@ function seedLegacyDBSnapshotIfNeeded(){
   if(now>=new Date(LEGACY_SNAPSHOT_EXPIRE_ISO))return false; // 이미 보관기한(8/31)이 지났으면 심을 필요 없음
   state.dbLegacySnapshot=DEFAULT_LEGACY_SNAPSHOT_2026;
   state.avgLegacySnapshot=DEFAULT_LEGACY_AVG_2026;
-  state.dbLegacySnapshotMeta={createdAt:now.toISOString(),expireAt:LEGACY_SNAPSHOT_EXPIRE_ISO,rev:LEGACY_SNAPSHOT_REV,note:'8/1 재무데이터 초기화 직전(7/30 14:29 자동백업 기준) 자료'};
+  state.dbLegacySnapshotMeta={createdAt:now.toISOString(),expireAt:LEGACY_SNAPSHOT_EXPIRE_ISO,rev:LEGACY_SNAPSHOT_REV,finY:2026,note:'8/1 재무데이터 초기화 직전(7/30 14:29 자동백업 기준) 자료'};
+  state.avgLegacySnapshotMeta={createdAt:now.toISOString(),expireAt:LEGACY_SNAPSHOT_EXPIRE_ISO,finY:2026};
+  if(state.settings&&state.settings.companyAvg)state.settings.companyAvg._archivedFor=2026; // 2026년 이월은 이미 이 하드코딩 시딩으로 처리된 것으로 표시(archiveCompanyAvgIfNeeded 중복 실행 방지)
   state._legacySnapshotInit=true;
   return true;
 }
@@ -2100,16 +2137,18 @@ function checkLegacySnapshotExpiry(){
   if(!state.dbLegacySnapshot||!state.dbLegacySnapshotMeta)return false;
   var now=new Date();
   if(now<new Date(state.dbLegacySnapshotMeta.expireAt))return false;
+  var _oldY=(state.dbLegacySnapshotMeta.finY!=null)?(state.dbLegacySnapshotMeta.finY-1)+'년도 ':'이전(참고) ';
   var ok=confirm(
-    '8/1 재무데이터 초기화 이전(7/30 기준) 업체DB 자료의 보관 기간(~8/31)이 끝났습니다.\n'+
-    '이제 완전히 삭제할까요? (삭제하면 되돌릴 수 없고, "DB기준" 선택 메뉴도 사라집니다)'
+    _oldY+'업체DB·업계평균 자료의 보관 기간이 끝났습니다.\n'+
+    '이제 완전히 삭제할까요? (삭제하면 되돌릴 수 없고, "업체DB 적용기준" 선택 메뉴도 사라집니다)'
   );
   if(!ok)return false;
   state.dbLegacySnapshot=null;
   state.avgLegacySnapshot=null;
   state.dbLegacySnapshotMeta=null;
+  state.avgLegacySnapshotMeta=null;
   state._legacySnapshotDeleted=true; // 이후 재시딩 방지
-  toast('갱신 전(7/30) 업체DB·업계평균 자료를 완전히 삭제했습니다','ok');
+  toast(_oldY+'업체DB·업계평균 자료를 완전히 삭제했습니다','ok');
   return true;
 }
 // 만료 시 자동으로 값을 초기화/삭제하고, 아직 유예기간 내인 경우는 알림만 표시하는 전체 유지보수 루틴.
@@ -2175,6 +2214,9 @@ function runExpiryMaintenance(){
   });
   // (f) 9/1 0시 이후: 갱신전(7/30) 스냅샷 보관기한 종료 — 확인 후 완전 삭제(거부 시 다음 접속 때 재확인)
   if(checkLegacySnapshotExpiry())changed=true;
+  // (g) 매년 7/31 경계: 업체DB 평균비율 "현재" 값을 직전 연도 참고자료로 자동 이월 + 입력칸 초기화.
+  //    코드 수정 없이 매년 자동 반복(archiveCompanyAvgIfNeeded의 _archivedFor 가드로 1회만 실행).
+  if(archiveCompanyAvgIfNeeded(today))changed=true;
   return changed;
 }
 // ── 8/1 재무데이터 초기화: 2단계 confirm 실행 + 값 초기화(resetList) / 값 보존·연도만 표시(preserveList) ──
@@ -2207,6 +2249,21 @@ function doFinResetConfirm(resetList,preserveList,finY){
     '정말로 '+resetList.length+'개 업체의 재무데이터를 0으로 초기화할까요?'
   );
   if(!ok2)return;
+  // ── 초기화 직전 값을 자동으로 "직전 연도" 참고 스냅샷으로 보관 (매년 자동 반복, 하드코딩 불필요) ──
+  // 2026년은 이 시점 이전에 이미 하드코딩된 DEFAULT_LEGACY_SNAPSHOT_2026으로 심어져 있었으나(seedLegacyDBSnapshotIfNeeded,
+  // 2026-09-01 이후 영구 비활성), 2027년부터는 실제 초기화 실행 시점에 여기서 자동으로 생성됨.
+  (function(){
+    var snap={};
+    state.db.forEach(function(c){
+      var key=legacyKeyOf(c);
+      var o={};
+      LEGACY_FIN_FIELDS.forEach(function(f){o[f]=c[f];});
+      snap[key]=o;
+    });
+    state.dbLegacySnapshot=snap;
+    state.dbLegacySnapshotMeta={createdAt:new Date().toISOString(),expireAt:new Date(finY,8,1).toISOString(),finY:finY,note:finY+'년 8/1 재무데이터 초기화 직전 자료'};
+    state._legacySnapshotDeleted=false; // 새 사이클 스냅샷이므로 이전 삭제 플래그 해제
+  })();
   resetList.forEach(function(c){
     c.시평액=0;c.실적3=0;c.실적5=0;
     c.통신_시평액=0;c.통신_실적3=0;c.통신_실적5=0;
@@ -6450,13 +6507,13 @@ function bind(){
             '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:6px">🏢 업체DB 평균비율 설정</div>'+
             '<div style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6">'+
               '경영상태 등급 산정에 쓰이는 업계평균 부채비율·유동비율입니다. <b>전체 계정에 공통 적용</b>되며, 여기서 저장하면 모든 계정이 즉시 동일한 값을 사용합니다.<br>'+
-              '<b style="color:#dc2626">매년 7/31 기준으로 값이 개정</b>되므로(8/1부터 신규 값 적용), 매년 8월 초 최신 통계로 갱신해야 합니다.<br>'+
-              '<span id="cdb-avg-old-note" style="display:none">좌측 <b>갱신 전</b> 열은 8/1 초기화 직전 자료(참고, 수정 불가) — 공고입력의 "DB기준"에서 갱신전을 선택한 공고에 자동 적용됩니다.</span>'+
+              '<b style="color:#dc2626">매년 7/31 기준으로 값이 개정</b>되므로(8/1부터 신규 값 적용), 매년 8월 초 최신 통계로 입력해야 합니다. 연도가 바뀌면 이전 값은 자동으로 왼쪽 참고 열로 이월되고 입력칸은 비워집니다.<br>'+
+              '<span id="cdb-avg-old-note" style="display:none">왼쪽 참고 열은 직전 연도 자료(수정 불가) — 공고입력의 "업체DB 적용기준"에서 이전 연도를 선택한 공고에 자동 적용됩니다.</span>'+
             '</div>'+
             '<div id="companydb-stale-banner" style="display:none;margin-bottom:10px;padding:8px 10px;border:1px solid #fde68a;background:#fffbeb;border-radius:6px;font-size:11.5px;color:#92400e"></div>'+
             '<table class="settings-table" style="max-width:560px">'+
               '<thead>'+
-                '<tr><th></th><th colspan="2" id="cdb-avg-old-hd" style="display:none;text-align:center;color:#9ca3af;font-weight:600">갱신 전(참고)</th><th colspan="2" style="text-align:center;color:#7c3aed;font-weight:600">갱신 후(현재)</th></tr>'+
+                '<tr><th></th><th colspan="2" id="cdb-avg-old-hd" style="display:none;text-align:center;color:#9ca3af;font-weight:600"><span id="cdb-avg-old-hdtxt">참고</span></th><th colspan="2" style="text-align:center;color:#7c3aed;font-weight:600"><span id="cdb-avg-cur-hdtxt">현재</span></th></tr>'+
                 '<tr><th></th>'+
                   '<th id="cdb-avg-old-hd2a" style="display:none;text-align:right;font-weight:400;color:#9ca3af">부채(%)</th><th id="cdb-avg-old-hd2b" style="display:none;text-align:right;font-weight:400;color:#9ca3af">유동(%)</th>'+
                   '<th style="text-align:right">부채(%)</th><th style="text-align:right">유동(%)</th>'+
@@ -6477,9 +6534,9 @@ function bind(){
                   '<td><input type="number" step="0.01" min="0" id="cdb-avg-소방유동" style="text-align:right"></td></tr>'+
               '</tbody>'+
             '</table>'+
-            '<div id="cdb-avgold-year-row" style="display:none;font-size:11px;color:#9ca3af;margin-top:8px">갱신 전 기준연도: <span id="cdb-avgold-year">-</span> <span id="cdb-avgold-year-hint"></span></div>'+
+            '<div id="cdb-avgold-year-row" style="display:none;font-size:11px;color:#9ca3af;margin-top:8px">참고 연도: <span id="cdb-avgold-year">-</span> <span id="cdb-avgold-year-hint"></span></div>'+
             '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">'+
-              '<label style="font-size:11px;color:#374151;font-weight:600;display:flex;align-items:center;gap:4px">갱신 후 기준연도'+
+              '<label style="font-size:11px;color:#374151;font-weight:600;display:flex;align-items:center;gap:4px">입력 기준연도'+
                 '<input type="number" id="cdb-avg-year" style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:right">'+
                 '<span id="cdb-avg-year-hint" style="font-weight:400;color:#7c3aed"></span>'+
               '</label>'+
@@ -6682,8 +6739,14 @@ function bind(){
           var yEl=document.getElementById('cdb-avg-year');if(yEl)yEl.value=(ca.기준연도!=null)?yp.dataYear:'';
           var yhEl=document.getElementById('cdb-avg-year-hint');if(yhEl)yhEl.textContent=(ca.기준연도!=null)?yp.hint:'';
           var uEl=document.getElementById('cdb-avg-updated');if(uEl)uEl.textContent='최종수정: '+(ca.수정일시?new Date(ca.수정일시).toLocaleString('ko-KR'):'-');
-          // 갱신 전(참고, 읽기전용) — avgLegacySnapshot 유효기간(전환기간) 중에만 노출
-          var oldValid=isLegacySnapshotValid();
+          // 현재 열 헤더 — "갱신 후" 대신 실제 연도로 표시(입력된 값이 있으면 그 데이터연도, 없으면 이번 사이클의 기대 데이터연도)
+          var curHdEl=document.getElementById('cdb-avg-cur-hdtxt');
+          if(curHdEl){
+            var curDataYear=(ca.기준연도!=null&&!isCompanyAvgStale())?yp.dataYear:avgYearDisplayParts(companyAvgFiscalYear()).dataYear;
+            curHdEl.textContent=curDataYear+'년';
+          }
+          // 참고(직전 연도, 읽기전용) — avgLegacySnapshot 유효기간(전환기간) 중에만 노출. "갱신 전" 대신 실제 연도로 표시.
+          var oldValid=isAvgLegacySnapshotValid();
           var oldCa=state.avgLegacySnapshot||{};
           ['cdb-avg-old-hd','cdb-avg-old-hd2a','cdb-avg-old-hd2b','cdb-avg-old-note'].forEach(function(id){
             var el=document.getElementById(id);if(el)el.style.display=oldValid?'':'none';
@@ -6696,11 +6759,13 @@ function bind(){
             });
           });
           var yrRow=document.getElementById('cdb-avgold-year-row');if(yrRow)yrRow.style.display=oldValid?'':'none';
+          var oyp=avgYearDisplayParts(oldCa.기준연도);
           if(oldValid){
-            var oyp=avgYearDisplayParts(oldCa.기준연도);
             var oyEl=document.getElementById('cdb-avgold-year');if(oyEl)oyEl.textContent=(oldCa.기준연도!=null)?oyp.dataYear:'-';
             var oyhEl=document.getElementById('cdb-avgold-year-hint');if(oyhEl)oyhEl.textContent=(oldCa.기준연도!=null)?oyp.hint:'';
           }
+          var oldHdEl=document.getElementById('cdb-avg-old-hdtxt');
+          if(oldHdEl)oldHdEl.textContent=(oldValid&&oldCa.기준연도!=null)?(oyp.dataYear+'년'):'참고';
           renderCompanyAvgStaleBanner();
         }
         function renderCompanyAvgStaleBanner(){
@@ -6719,6 +6784,7 @@ function bind(){
         if(_cdbSave)_cdbSave.onclick=function(){
           function getV(id){var el=document.getElementById(id);var v=el?el.value.trim():'';return v===''?null:Number(v);}
           var ca=state.settings.companyAvg;
+          archiveCompanyAvgIfNeeded(); // 아직 이번 사이클 이월이 안 됐으면 새 값을 덮어쓰기 전에 먼저 직전 값을 참고 열로 보관
           ['전기','통신','소방'].forEach(function(k){
             ca[k+'_평균부채']=getV('cdb-avg-'+k+'부채');
             ca[k+'_평균유동']=getV('cdb-avg-'+k+'유동');
@@ -7884,7 +7950,19 @@ function refreshDbFixedSelect(){
   if(!wrap||!sel)return;
   var valid=isLegacySnapshotValid();
   wrap.style.display=valid?'':'none';
-  if(valid)sel.value=(state.bid.dbFixed==='갱신전')?'갱신전':'갱신후'; // 기본값: 갱신후
+  if(!valid)return;
+  sel.value=(state.bid.dbFixed==='갱신전')?'갱신전':'갱신후'; // 기본값: 갱신후
+  // "갱신전/갱신후" 대신 실제 연도로 표시 — dbLegacySnapshotMeta.finY(해당 스냅샷을 만든 8/1 초기화 연도) 기준.
+  var meta=state.dbLegacySnapshotMeta||{};
+  var oOld=document.getElementById('in-db기준-opt-legacy');
+  var oCur=document.getElementById('in-db기준-opt-live');
+  if(meta.finY!=null){
+    if(oOld)oOld.textContent=(meta.finY-1)+'년도 자료';
+    if(oCur)oCur.textContent=meta.finY+'년도 자료(현재)';
+  }else{
+    if(oOld)oOld.textContent='이전 자료';
+    if(oCur)oCur.textContent='현재 자료';
+  }
 }
 function updateBidNameLabel(){
   var el=document.getElementById('o-공고명-label');
