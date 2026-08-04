@@ -3183,9 +3183,9 @@ function refreshDB(){
     var yrStr=yr!=null?(yr>=3?'<span style="color:#16a34a">'+yr.toFixed(1)+'년</span>':'<span style="color:#d97706">'+yr.toFixed(1)+'년</span>'):'';
     // 참여종목 배지(체크된 것만, 세로 나열, 종목별 색상). 칸 높이를 늘리지 않도록 개수에 따라 폰트 크기를 줄임(1개:10px/2개:9px/3개:8px).
     var _trades=[];
-    if(_ti.hasE)_trades.push({t:'전기',col:'#2563eb'});
-    if(_ti.hasT)_trades.push({t:'통신',col:'#059669'});
-    if(_ti.hasS)_trades.push({t:'소방',col:'#dc2626'});
+    if(_ti.hasE)_trades.push({t:'전기',col:(Number(c.시평액)>0?'#2563eb':'#9ca3af')});
+    if(_ti.hasT)_trades.push({t:'통신',col:(Number(c.통신_시평액)>0?'#059669':'#9ca3af')});
+    if(_ti.hasS)_trades.push({t:'소방',col:(Number(c.소방_시평액)>0?'#dc2626':'#9ca3af')});
     var _tfs=_trades.length<=1?'10px':_trades.length===2?'9px':'8px';
     var tradeColHTML=_trades.length?('<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15">'+
       _trades.map(function(x){return '<span style="font-size:'+_tfs+';font-weight:700;color:'+x.col+'">'+x.t+'</span>';}).join('')+
@@ -3309,7 +3309,10 @@ function renderGroupPickerHTML(prefix,curGroups){
       '<input id="'+prefix+'-grp-new-inp" type="text" placeholder="새 그룹명..." style="flex:1;font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;min-width:0" onclick="event.stopPropagation()">'+
       '<button type="button" id="'+prefix+'-grp-new-btn" style="font-size:11px;padding:3px 8px;background:#0369a1;color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">＋추가</button>'+
     '</div>'+
-    '<div id="'+prefix+'-grp-list">'+groupRowsHTML(prefix,cg)+
+    '<div style="padding:5px 8px;border-bottom:1px solid #e5e7eb;position:relative">'+
+      '<input id="'+prefix+'-grp-search-inp" type="text" placeholder="🔍 그룹 검색..." style="width:100%;font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;box-sizing:border-box" onclick="event.stopPropagation()">'+
+    '</div>'+
+    '<div id="'+prefix+'-grp-list" style="max-height:220px;overflow-y:auto">'+groupRowsHTML(prefix,cg)+
     '</div></div>';
   return html2;
 }
@@ -3344,17 +3347,49 @@ function bindGroupPicker(prefix){
   });
   var newInp=document.getElementById(prefix+'-grp-new-inp');
   var newBtn=document.getElementById(prefix+'-grp-new-btn');
+  var searchInp=document.getElementById(prefix+'-grp-search-inp');
   function currentChecked(){
     var gs=[];panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(c){if(c.checked)gs.push(c.dataset.grp);});
     return gs;
   }
-  // 그룹 추가/이름변경/삭제 후 목록 UI를 통째로 재생성(체크 상태는 유지).
+  // 그룹 검색: 입력한 키워드가 그룹명에 포함되지 않으면 해당 행을 숨김.
+  function applyGroupSearch(){
+    if(!searchInp)return;
+    var kw=searchInp.value.trim().toLowerCase();
+    var any=false;
+    panel.querySelectorAll('.'+prefix+'-grp-row').forEach(function(row){
+      var g=(row.dataset.grp||'').toLowerCase();
+      var match=!kw||g.indexOf(kw)>=0;
+      row.style.display=match?'flex':'none';
+      if(match)any=true;
+    });
+    var list=document.getElementById(prefix+'-grp-list');
+    var emptyEl=list?list.querySelector('.'+prefix+'-grp-search-empty'):null;
+    if(list&&kw&&!any){
+      if(!emptyEl){
+        emptyEl=document.createElement('div');
+        emptyEl.className=prefix+'-grp-search-empty';
+        emptyEl.style.cssText='padding:8px 14px;font-size:12px;color:#9ca3af';
+        emptyEl.textContent='일치하는 그룹이 없습니다';
+        list.appendChild(emptyEl);
+      }
+    }else if(emptyEl){
+      emptyEl.remove();
+    }
+  }
+  if(searchInp){
+    searchInp.addEventListener('input',applyGroupSearch);
+    searchInp.addEventListener('keydown',function(e){e.stopPropagation();});
+    searchInp.addEventListener('click',function(e){e.stopPropagation();});
+  }
+  // 그룹 추가/이름변경/삭제 후 목록 UI를 통째로 재생성(체크 상태는 유지, 검색어도 유지).
   function rebuildList(){
     var checkedNow=currentChecked();
     var list=document.getElementById(prefix+'-grp-list');
     if(!list)return;
     list.innerHTML=groupRowsHTML(prefix,checkedNow);
     bindRowEvents();
+    applyGroupSearch();
   }
   function addNewGroup(){
     if(!newInp)return;
@@ -3363,6 +3398,7 @@ function bindGroupPicker(prefix){
     if(state.groups.indexOf(name)>=0){toast('이미 같은 이름의 그룹이 있습니다','bad');newInp.select();return;}
     state.groups.push(name);
     save();
+    if(searchInp)searchInp.value='';
     rebuildList();
     // 방금 추가한 그룹은 바로 체크된 상태로
     var chk=panel.querySelector('.'+prefix+'-grp-chk[data-grp="'+CSS.escape(name)+'"]');
@@ -3454,6 +3490,7 @@ function bindGroupPicker(prefix){
     });
   }
   bindRowEvents();
+  applyGroupSearch();
   function closePanel(e){if(panel)panel.style.display='none';}
   setTimeout(function(){document.addEventListener('click',closePanel,{once:true});},0);
 }
