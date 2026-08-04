@@ -3746,6 +3746,21 @@ function openCompanyModal(idx){
       groups:readGroupPickerValues('m'),
       전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||''
     };
+    // ── 중복 등록 방지: "직접 추가"로 열었더라도(isNew=true) 자동완성에서 기존 업체를 선택해
+    // 사업자번호가 이미 DB에 있는 값과 같아지면 새 레코드로 밀어넣지 않고 기존 레코드를 수정한다.
+    // (자동완성 fillFn은 입력칸만 채울 뿐 isNew/idx를 바꾸지 않았던 것이 중복 저장의 원인 — 2026-08-04)
+    if(isNew&&obj.사업자번호){
+      var _dupIdx=state.db.findIndex(function(cc){return cc.사업자번호&&cc.사업자번호===obj.사업자번호;});
+      if(_dupIdx>=0){idx=_dupIdx;isNew=false;}
+    }
+    if(isNew&&obj.업체명){
+      var _dupIdx2=state.db.findIndex(function(cc){return cc.업체명===obj.업체명;});
+      if(_dupIdx2>=0){
+        if(confirm('"'+obj.업체명+'" 업체가 이미 등록되어 있습니다.\n기존 업체 정보를 수정하시겠습니까?\n(취소를 누르면 새 업체로 별도 등록합니다)')){
+          idx=_dupIdx2;isNew=false;
+        }
+      }
+    }
     // ── 수정일시: "저장 버튼을 눌렀다"가 아니라 "재무/자격 관련 정보가 실제로 바뀌었다"를 기준으로 갱신.
     // 2026-07-29 절충안: 메모/그룹/대표자 같은 행정성 필드만 고쳐서 재저장해도 최종수정일이 갱신되면
     // 만료임박 알림의 "최종수정" 참고값이 왜곡되므로(실제로는 안 바뀐 재무데이터가 방금 확인된 것처럼 보임),
