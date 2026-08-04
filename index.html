@@ -728,7 +728,6 @@ async function gistPull(){
   }catch(e){gistStatus('err','Pull 오류');console.warn('gistPull',e);}
 }
 
-var _gistTimer=null;
 // Push 직전에 remote를 다시 pull하여 bidScreensByUser 중 "내 계정 파티션만" 로컬 값으로 덮어쓰고
 // 나머지 계정 파티션은 remote의 최신 값을 그대로 유지한 뒤 push함. 이렇게 하지 않으면 두 계정이
 // 서로 다른 기기에서 동시에 저장할 때 나중에 push하는 쪽이 상대방 화면 파티션까지 통째로 덮어써 버림.
@@ -763,9 +762,21 @@ async function gistPushNow(){
     setTimeout(function(){gistStatus('');},2500);
   }catch(e){gistStatus('err','Push 오류');console.warn('gistPush',e);}
 }
-function gistPush(){
-  if(_gistTimer)clearTimeout(_gistTimer);
-  _gistTimer=setTimeout(gistPushNow,1500);
+var _gistDirty=false;
+var _gistAutoPushTimer=null;
+// 2026-08-04: 저장할 때마다 1.5초 디바운스로 즉시 push하던 방식은 push 1회당
+// (mergeRemoteBidScreensBeforePush의 pull 1회 + push 1회) = GitHub API 호출 2회를 유발했고,
+// 여러 계정/기기가 같은 PAT를 공유하다 보니 GitHub 시간당 요청 한도(5000회)를 넘겨 403(rate limit)이
+// 발생하는 사례가 있었음. 이후로는 save() 시 dirty 플래그만 세우고, 실제 push는 15분 간격
+// 타이머가 변경사항이 있을 때만 수행함 — 즉시 반영이 필요하면 ☁ 버튼의 "수동 Push"를 사용할 것.
+function startGistAutoPush(){
+  if(_gistAutoPushTimer)clearInterval(_gistAutoPushTimer);
+  _gistAutoPushTimer=setInterval(function(){
+    if(_gistDirty){
+      _gistDirty=false;
+      gistPushNow();
+    }
+  },15*60*1000);
 }
 
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -776,7 +787,7 @@ function openGistModal(){
   var bk=document.createElement('div');bk.className='modal-back';bk.id='gist-modal-back';
   bk.innerHTML='<div class="modal gist-modal" style="width:min(420px,94vw);min-width:0">'
     +'<h3>☁ 클라우드 동기화</h3>'
-    +'<div style="font-size:12px;color:#374151;margin-bottom:12px">저장할 때마다 자동 Push, 앱 열릴 때 자동 Pull됩니다. 이 기기에서 별도로 연결 설정할 항목은 없습니다.</div>'
+    +'<div style="font-size:12px;color:#374151;margin-bottom:12px">변경사항이 있으면 15분마다 자동 Push, 앱 열릴 때 자동 Pull됩니다. 즉시 반영하려면 아래 "수동 Push"를 누르세요.</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
     +'<button class="btn btn-ghost" id="gist-btn-pull">수동 Pull</button>'
     +'<button class="btn btn-ghost" id="gist-btn-push">수동 Push</button>'
@@ -1109,7 +1120,7 @@ function save(){
     persistCurrentUserBidScreens();
     localStorage.setItem(STORE_KEY,JSON.stringify(state));
   }catch(e){console.warn(e);}
-  gistPush();
+  _gistDirty=true;
 }
 function load(){
   try{
@@ -8473,6 +8484,7 @@ function boot(){
   var _gb=document.getElementById('btn-gist-sync');
   if(_gb)_gb.addEventListener('click',openGistModal);
   gistPull();
+  startGistAutoPush();
   checkExpiryAlertsOnBoot();
   initBackupOnBoot();
   enableModalDrag();
