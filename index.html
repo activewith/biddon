@@ -478,6 +478,8 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <label class="small"><input type="checkbox" id="db-filter-전기"> 전기</label>
         <label class="small"><input type="checkbox" id="db-filter-통신"> 통신</label>
         <label class="small"><input type="checkbox" id="db-filter-소방"> 소방</label>
+        &nbsp;&nbsp;
+        <label class="small" title="시평액이 0이거나 비어 있는 업체만 표시"><input type="checkbox" id="db-filter-시평없음"> 시평 미등록</label>
       </div>
       <div class="toolbar" id="db-group-toolbar" style="flex-wrap:wrap;gap:6px;align-items:center;min-height:30px">
         <span style="font-size:12px;color:#6b7280">그룹 보기:</span>
@@ -3227,6 +3229,7 @@ function refreshDB(){
   var only미참여=$('#db-filter-미참여').checked;
   var onlyExpiring=$('#btn-exp-alert').classList.contains('active');
   var fE=$('#db-filter-전기').checked,fT=$('#db-filter-통신').checked,fS=$('#db-filter-소방').checked;
+  var only시평없음=$('#db-filter-시평없음').checked;
   var grpFilterEl=document.getElementById('db-group-filter');var activeGrp=grpFilterEl?grpFilterEl.value:''; // ''=전체
   var entries=state.db.map(function(c,i){return{c:c,i:i};});
   if(dbSort.key){
@@ -3247,6 +3250,7 @@ function refreshDB(){
     if(region&&c.지역!==region)return;
     if(onlyPerf&&!c.is실적)return;
     if(only자사&&!c.is자사)return;
+    if(only시평없음&&!(c.시평액==null||c.시평액===''||Number(c.시평액)===0))return;
     if(onlyExpiring&&getExpiryAlerts(c).length===0)return;
     var _ti=companyTradeInfo(c);
     if(only미참여||fE||fT||fS){
@@ -7108,6 +7112,7 @@ function bind(){
   $('#db-filter-전기').addEventListener('change',refreshDB);
   $('#db-filter-통신').addEventListener('change',refreshDB);
   $('#db-filter-소방').addEventListener('change',refreshDB);
+  $('#db-filter-시평없음').addEventListener('change',refreshDB);
   $('#db-table').addEventListener('click',function(e){
     var sh=e.target.closest('.sort-hd[data-sort]');
     if(sh){
