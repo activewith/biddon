@@ -276,13 +276,13 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
     <div class="panel">
       <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span></h2>
       <div class="row" style="gap:12px">
-        <div class="field"><label>시평제한 (E3, 비우면 미적용)</label><input type="text" inputmode="numeric" class="money" id="in-시평제한" placeholder="예: 30,000,000,000"></div>
+        <div class="field"><label>시평제한 (비우면 미적용)</label><input type="text" inputmode="numeric" class="money" id="in-시평제한" placeholder="예: 30,000,000,000"></div>
         <div class="field"><label>분담 시평제한 <span style="font-size:10px;color:#6b7280">(복합공종, 비우면 미적용)</span></label><input type="text" inputmode="numeric" class="money" id="in-분담시평" placeholder="예: 100,000,000" style="background:#f1f5f9;border-color:#94a3b8"></div>
-        <div class="field"><label>기초금액 E4 (없으면 비움)</label><input type="text" inputmode="numeric" class="money" id="in-기초금액" placeholder="자동: 추정×1.1"></div>
-        <div class="field"><label>추정가격 E5</label><input type="text" inputmode="numeric" class="money" id="in-추정가격" placeholder="예: 5,000,000,000"></div>
-        <div class="field"><label>배수 H6</label><input type="number" id="in-배수" step="0.01" placeholder="자동(50억↑=2)"></div>
-        <div class="field"><label>투찰률 H7 (%)</label><input type="number" id="in-투찰률" step="0.001" placeholder="자동(50억↑=87.495)"></div>
-        <div class="field"><label>사정률 <span style="font-size:10px;color:#6b7280">D7</span></label><div style="display:flex;align-items:center;gap:4px"><input type="number" id="in-투찰배수" step="0.001" style="width:72px;text-align:right;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:inherit"><span style="font-size:13px;color:#374151">%</span><select id="sel-사정률기준" style="padding:5px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff;cursor:pointer"><option value="0">0% 기준</option><option value="100">100% 기준</option></select></div></div>
+        <div class="field"><label>기초금액 (없으면 비움)</label><input type="text" inputmode="numeric" class="money" id="in-기초금액" placeholder="자동: 추정×1.1"></div>
+        <div class="field"><label>추정가격</label><input type="text" inputmode="numeric" class="money" id="in-추정가격" placeholder="예: 5,000,000,000"></div>
+        <div class="field"><label>배수</label><input type="number" id="in-배수" step="0.01" placeholder="자동(50억↑=2)"></div>
+        <div class="field"><label>투찰률 (%)</label><input type="number" id="in-투찰률" step="0.001" placeholder="자동(50억↑=87.495)"></div>
+        <div class="field"><label>사정률</label><div style="display:flex;align-items:center;gap:4px"><input type="number" id="in-투찰배수" step="0.001" style="width:72px;text-align:right;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:inherit"><span style="font-size:13px;color:#374151">%</span><select id="sel-사정률기준" style="padding:5px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff;cursor:pointer"><option value="0">0% 기준</option><option value="100">100% 기준</option></select></div></div>
         <div class="field"><label>A값 <span class="star-tip" style="color:#059669" data-tip="복수예비가격 산술평균. 입력 시 예상투찰금액 계산에 반영">★</span></label><input type="text" inputmode="numeric" class="money" id="in-A값" placeholder="없으면 기초금액 자동 적용" style="background:#f0fdf4;border-color:#86efac"></div>
         <div class="field"><label>지역의무지분 (%)</label><input type="number" id="in-지역의무지분" step="1" min="0" max="100" placeholder="예: 40" style="width:100px"></div>
         <div class="field"><label>최소지분율 (%) <span class="star-tip" style="color:#d97706" data-tip="이 비율 미만이면 업체 목록에 미표시">★</span></label><input type="number" id="in-최소지분율" step="0.1" min="0" max="100" placeholder="예: 10" style="width:100px"></div>
@@ -352,12 +352,12 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       </div>
       <!-- 업계평균 입력은 DB탭에서 관리 -->
       <div class="summary" style="margin-top:10px">
-        <div class="stat"><div class="k">기초가격(자동) H4</div><div class="v" id="o-기초자동">-</div><div id="o-기초자동-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
+        <div class="stat"><div class="k">기초가격(자동)</div><div class="v" id="o-기초자동">-</div><div id="o-기초자동-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat"><div class="k">시평제한</div><div class="v" id="o-시평제한">미적용</div><div id="o-시평제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-분담시평" style="display:none;background:#f1f5f9;border-color:#94a3b8"><div class="k" style="color:#334155">분담시평제한</div><div class="v" style="color:#334155" id="o-분담시평">미적용</div><div id="o-분담시평-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
-        <div class="stat"><div class="k">실적제한 E6</div><div class="v" id="o-실적제한">-</div><div id="o-실적제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
+        <div class="stat"><div class="k">실적제한</div><div class="v" id="o-실적제한">-</div><div id="o-실적제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-lh지분율기준" style="display:none;background:#fef3c7;border-color:#fde68a"><div class="k" style="color:#92400e">지분율기준</div><div class="v" style="color:#92400e" id="o-lh지분율기준">-</div><div id="o-lh지분율기준-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
-        <div class="stat" title="A값 미입력: 기초금액×사정률×낙찰하한율 | A값 입력 시: (기초금액×사정률 - A값)×낙찰하한율 + A값"><div class="k">예상투찰금액 E7</div><div class="v" id="o-투찰금액">-</div></div>
+        <div class="stat" title="A값 미입력: 기초금액×사정률×낙찰하한율 | A값 입력 시: (기초금액×사정률 - A값)×낙찰하한율 + A값"><div class="k">예상투찰금액</div><div class="v" id="o-투찰금액">-</div></div>
         <div class="stat"><div class="k" id="o-50억-label">기준 구분</div><div class="v" id="o-50억">-</div></div>
         <div class="stat" style="background:#dbeafe;border-color:#93c5fd"><div class="k" style="color:#1d4ed8">선택 지역</div><div class="v" style="color:#1d4ed8" id="o-지역선택">미선택</div></div>
         <div class="stat" style="background:#d1fae5;border-color:#6ee7b7"><div class="k" style="color:#065f46">적격기준</div><div class="v" style="color:#065f46" id="o-적격기준">미선택</div></div>
@@ -483,15 +483,26 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       </div>
       <div class="toolbar" id="db-group-toolbar" style="flex-wrap:wrap;gap:6px;align-items:center;min-height:30px">
         <span style="font-size:12px;color:#6b7280">그룹 보기:</span>
-        <select id="db-group-filter" style="padding:3px 6px;border:1px solid #e3e6ec;border-radius:4px;font-size:12px;font-family:inherit">
+        <select id="db-group-filter" style="display:none">
           <option value="">전체</option>
         </select>
+        <div id="db-group-filter-wrap" style="position:relative;display:inline-block">
+          <button type="button" id="db-group-filter-btn" style="padding:3px 10px;border:1px solid #e3e6ec;border-radius:4px;font-size:12px;font-family:inherit;background:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;min-width:150px;justify-content:space-between">
+            <span id="db-group-filter-label">전체 (0개 그룹)</span><span style="color:#9ca3af;font-size:10px">▼</span>
+          </button>
+          <div id="db-group-filter-panel" style="display:none;position:absolute;z-index:200;background:#fff;border:1px solid #d1d5db;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:6px 0;min-width:220px;left:0;top:calc(100% + 2px)">
+            <div style="padding:5px 8px;border-bottom:1px solid #e5e7eb">
+              <input id="db-group-filter-search" type="text" placeholder="🔍 그룹 검색..." autocomplete="off" style="width:100%;font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;box-sizing:border-box">
+            </div>
+            <div id="db-group-filter-list" style="max-height:260px;overflow-y:auto"></div>
+          </div>
+        </div>
         <span style="font-size:11px;color:#9ca3af">그룹 등록/이름변경/삭제는 업체등록화면의 "그룹" 메뉴에서 합니다</span>
       </div>
       <div style="max-height:600px;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch">
         <table id="db-table" style="width:auto;min-width:1150px">
           <thead><tr>
-            <th class="l">지역</th><th title="일자리창출가점+안전보건시스템 (별표7A기준 / 괄호:별표6)&#10;일자리창출: 최대+3.0(7A)/+1.0(6)&#10;K(YYMM)=KOSHA-MS: +2.0(7A)/+1.0(6)&#10;S(YYMM)=ISO45001: +1.6(7A)/+0.8(6)&#10;수자원공사: KOSHA·ISO 공통 +1.0(10~50억)/+0.5(50억+)" style="cursor:help">가점 ℹ</th><th title="경영상태 배점 대비 감점 (별표7A기준 / 괄호:별표6)">감점</th><th class="l">업체명</th>
+            <th class="l" id="db-th-지역" title="현재 화면에 표시된 업체 수">0</th><th title="일자리창출가점+안전보건시스템 (별표7A기준 / 괄호:별표6)&#10;일자리창출: 최대+3.0(7A)/+1.0(6)&#10;K(YYMM)=KOSHA-MS: +2.0(7A)/+1.0(6)&#10;S(YYMM)=ISO45001: +1.6(7A)/+0.8(6)&#10;수자원공사: KOSHA·ISO 공통 +1.0(10~50억)/+0.5(50억+)" style="cursor:help">가점 ℹ</th><th title="경영상태 배점 대비 감점 (별표7A기준 / 괄호:별표6)">감점</th><th class="l">업체명</th>
             <th class="c" style="width:36px" title="참여 공종(전기/통신/소방)">종목</th>
             <th class="sort-hd" data-sort="실적5">5년실적 <span class="sicon">⇅</span></th>
             <th class="sort-hd" data-sort="시평액">시평액 <span class="sicon">⇅</span></th>
@@ -687,10 +698,24 @@ function gistStatus(st,label){
   else{if(lbl)lbl.textContent='Gist';}
 }
 
+// 그룹은 업체당 1개만 허용(2026-08-05, 사용자 확정: 중복 금지). 업체등록 화면은 이제 단일선택 UI로만
+// 저장하지만, Gist 동기화·백업복원·구버전 로컬데이터 등 외부에서 들어오는 데이터에 여전히 2개 이상 남아
+// 있을 수 있어 db가 갱신되는 시점마다 첫 번째 값만 남기고 잘라낸다.
+function normalizeCompanyGroups(dbArr){
+  var changed=false;
+  (dbArr||[]).forEach(function(c){
+    if(Array.isArray(c.groups)&&c.groups.length>1){
+      c.groups=c.groups.slice(0,1);
+      changed=true;
+    }
+  });
+  return changed;
+}
 function gistApplyData(obj){
   migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
   migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);migrateV13(obj);
   if(obj.db)state.db=obj.db;
+  normalizeCompanyGroups(state.db);
   if(obj.groups)state.groups=obj.groups;
   if(obj.bid)Object.assign(state.bid,obj.bid);
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
@@ -1056,6 +1081,7 @@ function restoreStateFromBackupObj(obj){
   migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
   migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);migrateV13(obj);
   if(obj.db)state.db=obj.db;
+  normalizeCompanyGroups(state.db);
   if(obj.groups)state.groups=obj.groups;
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
@@ -1130,6 +1156,7 @@ function load(){
     var obj=JSON.parse(raw);
     migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);migrateV13(obj);
     if(obj.db)state.db=obj.db;
+    normalizeCompanyGroups(state.db);
     if(obj.groups)state.groups=obj.groups;
     if(obj.bid)Object.assign(state.bid,obj.bid);
     if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
@@ -3187,7 +3214,7 @@ function dbGamHTML(c,공종override){
 window._dbActiveGroup = null; // 현재 활성 그룹 필터 (null=전체)
 
 function refreshGroupToolbar(){
-  // 그룹 보기 select 동기화
+  // 그룹 보기 select 동기화 (실제 값 저장용 — 화면에는 숨기고 검색 가능한 커스텀 드롭다운을 대신 노출)
   var gfSel = document.getElementById('db-group-filter');
   if(gfSel){
     var curVal = gfSel.value;
@@ -3200,6 +3227,24 @@ function refreshGroupToolbar(){
       gfSel.appendChild(opt);
     });
   }
+  refreshGroupFilterSearchUI();
+}
+// 그룹 보기: 검색 가능한 커스텀 드롭다운(리스트/라벨) 렌더링. #db-group-filter(hidden select)가 실제 선택값을 보관.
+function refreshGroupFilterSearchUI(){
+  var gfSel=document.getElementById('db-group-filter');
+  var listEl=document.getElementById('db-group-filter-list');
+  var lblEl=document.getElementById('db-group-filter-label');
+  if(!gfSel||!listEl)return;
+  var curVal=gfSel.value||'';
+  var rows=[{v:'',label:'전체 ('+state.groups.length+'개 그룹)'}].concat(state.groups.map(function(g){
+    var cnt=state.db.filter(function(x){return x.groups&&x.groups.indexOf(g)>=0;}).length;
+    return{v:g,label:g+' ('+cnt+'개)'};
+  }));
+  listEl.innerHTML=rows.map(function(r){
+    var sel=r.v===curVal;
+    return '<div class="db-grpflt-row" data-v="'+esc(r.v)+'" data-label="'+esc(r.label)+'" style="padding:5px 14px;cursor:pointer;font-size:13px;background:'+(sel?'#eff6ff':'#fff')+';color:'+(sel?'#1d4ed8':'#374151')+';font-weight:'+(sel?'700':'400')+'">'+esc(r.label)+'</div>';
+  }).join('');
+  if(lblEl){var curRow=rows.find(function(r){return r.v===curVal;});lblEl.textContent=curRow?curRow.label:'전체';}
 }
 
 // 업체가 실제 참여하는 공종(전기/통신/소방) 판정 + 대표종목(우선순위 전기>통신>소방) 산출.
@@ -3318,6 +3363,8 @@ function refreshDB(){
       '<button class="btn btn-sm btn-bad db-del-btn" data-del="'+idx+'">삭제</button></td>';
     tbody.appendChild(tr);
   });
+  // "지역" 헤더 자리에 현재 화면(필터 적용)에 표시된 업체 수를 카운트 표시 (각 행의 지역값 자체는 그대로 유지)
+  var thRegion=document.getElementById('db-th-지역');if(thRegion)thRegion.textContent=shown;
   var dbRegs=Array.from(new Set(state.db.map(function(c){return c.지역;}).filter(Boolean))).sort();
   syncRegionOptions($('#db-region-filter'),dbRegs,false);
   syncAllRegionOptions(getRegionMasterList());
@@ -3394,7 +3441,7 @@ function renderGroupPickerHTML(prefix,curGroups){
   var html2='<button type="button" id="'+prefix+'-grp-btn" style="width:100%;text-align:left;padding:5px 10px;font-size:13px;border:1px solid #d1d5db;border-radius:5px;background:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'+
     '<span id="'+prefix+'-grp-label" style="color:'+(sel.length>0?'#1d4ed8':'#9ca3af')+'">'+btnLabel+'</span>'+
     '<span style="color:#6b7280;font-size:11px">▼</span></button>'+
-    '<div id="'+prefix+'-grp-panel" style="display:none;position:absolute;z-index:200;background:#fff;border:1px solid #d1d5db;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:6px 0;min-width:100%;left:0;top:calc(100% + 2px)">'+
+    '<div id="'+prefix+'-grp-panel" style="display:none;position:absolute;z-index:200;background:#fff;border:1px solid #d1d5db;border-radius:5px;box-shadow:0 -4px 12px rgba(0,0,0,.12);padding:6px 0;min-width:100%;left:0;bottom:calc(100% + 2px)">'+
     '<div style="display:flex;gap:4px;padding:5px 8px;border-bottom:1px solid #e5e7eb">'+
       '<input id="'+prefix+'-grp-new-inp" type="text" placeholder="새 그룹명..." style="flex:1;font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;min-width:0" onclick="event.stopPropagation()">'+
       '<button type="button" id="'+prefix+'-grp-new-btn" style="font-size:11px;padding:3px 8px;background:#0369a1;color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">＋추가</button>'+
@@ -3414,10 +3461,9 @@ function groupRowsHTML(prefix,curGroups){
   }
   return state.groups.map(function(g){
     var checked=cg.indexOf(g)>=0;
-    return '<div class="'+prefix+'-grp-row" data-grp="'+esc(g)+'" style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 14px;cursor:pointer;font-size:13px;background:'+(checked?'#eff6ff':'#fff')+'">'+
+    return '<div class="'+prefix+'-grp-row" data-grp="'+esc(g)+'" data-selected="'+(checked?'1':'0')+'" style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 14px;cursor:pointer;font-size:13px;background:'+(checked?'#eff6ff':'#fff')+'">'+
       '<span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;overflow:hidden">'+
-        '<input type="checkbox" class="'+prefix+'-grp-chk" data-grp="'+esc(g)+'" '+(checked?'checked':'')+' style="cursor:pointer;pointer-events:none;flex-shrink:0">'+
-        '<span class="'+prefix+'-grp-name" style="color:'+(checked?'#1d4ed8':'#374151')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(g)+'</span>'+
+        '<span class="'+prefix+'-grp-name" style="color:'+(checked?'#1d4ed8':'#374151')+';font-weight:'+(checked?'700':'400')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(g)+'</span>'+
       '</span>'+
       '<span style="display:flex;gap:4px;flex-shrink:0">'+
         '<button type="button" class="'+prefix+'-grp-rename" data-grp="'+esc(g)+'" style="font-size:10px;padding:1px 6px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;cursor:pointer;color:#374151" title="그룹명 변경">수정</button>'+
@@ -3438,8 +3484,9 @@ function bindGroupPicker(prefix){
   var newInp=document.getElementById(prefix+'-grp-new-inp');
   var newBtn=document.getElementById(prefix+'-grp-new-btn');
   var searchInp=document.getElementById(prefix+'-grp-search-inp');
+  // 단일선택: 체크박스 대신 행(row)의 data-selected 속성으로 선택 상태를 추적 (중복 그룹 방지)
   function currentChecked(){
-    var gs=[];panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(c){if(c.checked)gs.push(c.dataset.grp);});
+    var gs=[];panel.querySelectorAll('.'+prefix+'-grp-row').forEach(function(r){if(r.dataset.selected==='1')gs.push(r.dataset.grp);});
     return gs;
   }
   // 그룹 검색: 입력한 키워드가 그룹명에 포함되지 않으면 해당 행을 숨김.
@@ -3490,9 +3537,8 @@ function bindGroupPicker(prefix){
     save();
     if(searchInp)searchInp.value='';
     rebuildList();
-    // 방금 추가한 그룹은 바로 체크된 상태로
-    var chk=panel.querySelector('.'+prefix+'-grp-chk[data-grp="'+CSS.escape(name)+'"]');
-    if(chk){chk.checked=true;var row=chk.closest('.'+prefix+'-grp-row');if(row)row.style.background='#eff6ff';}
+    // 방금 추가한 그룹을 단일선택 상태로(기존 선택은 해제)
+    panel.querySelectorAll('.'+prefix+'-grp-row').forEach(function(r){r.dataset.selected=(r.dataset.grp===name)?'1':'0';});
     newInp.value='';
     updateGrpLabel();
     try{refreshGroupToolbar();}catch(e){}
@@ -3504,10 +3550,10 @@ function bindGroupPicker(prefix){
   function updateGrpLabel(){
     var sel=currentChecked();
     panel.querySelectorAll('.'+prefix+'-grp-row').forEach(function(row){
-      var chk=row.querySelector('.'+prefix+'-grp-chk');
+      var isSel=row.dataset.selected==='1';
       var nameSpan=row.querySelector('.'+prefix+'-grp-name');
-      row.style.background=chk&&chk.checked?'#eff6ff':'#fff';
-      if(nameSpan)nameSpan.style.color=chk&&chk.checked?'#1d4ed8':'#374151';
+      row.style.background=isSel?'#eff6ff':'#fff';
+      if(nameSpan){nameSpan.style.color=isSel?'#1d4ed8':'#374151';nameSpan.style.fontWeight=isSel?'700':'400';}
     });
     var lbl2=document.getElementById(prefix+'-grp-label');
     if(lbl2){lbl2.textContent=sel.length>0?sel.join(', '):'그룹 선택...';lbl2.style.color=sel.length>0?'#1d4ed8':'#9ca3af';}
@@ -3548,14 +3594,15 @@ function bindGroupPicker(prefix){
     inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();doSave();}if(e.key==='Escape'){e.preventDefault();doCancel();}});
   }
   function bindRowEvents(){
-    panel.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(chk){
-      chk.addEventListener('change',function(){updateGrpLabel();});
-    });
+    // 단일선택: 클릭한 행만 선택하고 나머지는 모두 해제(중복 그룹 방지) — 선택과 동시에 패널을 닫는다.
     panel.querySelectorAll('.'+prefix+'-grp-row').forEach(function(row){
       row.addEventListener('click',function(e){
         if(e.target.closest('button')||e.target.classList.contains(prefix+'-grp-del')||e.target.classList.contains('grp-inline-input'))return;
-        var chk=row.querySelector('.'+prefix+'-grp-chk');
-        if(chk){chk.checked=!chk.checked;chk.dispatchEvent(new Event('change'));}
+        var wasSelected=row.dataset.selected==='1';
+        panel.querySelectorAll('.'+prefix+'-grp-row').forEach(function(r){r.dataset.selected='0';});
+        if(!wasSelected)row.dataset.selected='1'; // 이미 선택된 행을 다시 누르면 선택 해제
+        updateGrpLabel();
+        panel.style.display='none';
       });
     });
     panel.querySelectorAll('.'+prefix+'-grp-rename').forEach(function(btn){
@@ -3585,15 +3632,22 @@ function bindGroupPicker(prefix){
   setTimeout(function(){document.addEventListener('click',closePanel,{once:true});},0);
 }
 function readGroupPickerValues(prefix){
-  var gs=[];document.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(chk){if(chk.checked)gs.push(chk.dataset.grp);});
+  var gs=[];document.querySelectorAll('.'+prefix+'-grp-row').forEach(function(r){if(r.dataset.selected==='1')gs.push(r.dataset.grp);});
   return gs;
 }
+// 단일선택: groups 배열 중 첫 번째 값만 선택 상태로 반영(중복 그룹 방지)
 function setGroupPickerValues(prefix,groups){
   var gs=groups||[];
-  document.querySelectorAll('.'+prefix+'-grp-chk').forEach(function(chk){
-    chk.checked=gs.indexOf(chk.dataset.grp)>=0;
-    chk.dispatchEvent(new Event('change'));
+  var pick=gs.length>0?gs[0]:null;
+  document.querySelectorAll('.'+prefix+'-grp-row').forEach(function(r){
+    var isSel=pick!=null&&r.dataset.grp===pick;
+    r.dataset.selected=isSel?'1':'0';
+    r.style.background=isSel?'#eff6ff':'#fff';
+    var nameSpan=r.querySelector('.'+prefix+'-grp-name');
+    if(nameSpan){nameSpan.style.color=isSel?'#1d4ed8':'#374151';nameSpan.style.fontWeight=isSel?'700':'400';}
   });
+  var lbl2=document.getElementById(prefix+'-grp-label');
+  if(lbl2){lbl2.textContent=pick!=null?pick:'그룹 선택...';lbl2.style.color=pick!=null?'#1d4ed8':'#9ca3af';}
 }
 function openCompanyModal(idx){
   if(!canManageCompanyDB()){toast('업체 등록/수정 권한이 없습니다','bad');return;}
@@ -5524,7 +5578,7 @@ function exportResultXlsx(){ return withLegacyDBIfNeeded(function(){
   if(calc.분담시평!=null)aoa.push(['분담 시평제한',calc.분담시평]);
   aoa.push(['기초금액(유효)',calc.E4_eff]);aoa.push(['추정가격',calc.E5]);
   aoa.push(['배수',calc.H6]);aoa.push(['투찰률',calc.H7]);aoa.push(['사정률',+(calc.D7*100).toFixed(3)+'%','(기준값 '+(state.bid.사정률기준||'0')+'% 기준)']);
-  aoa.push(['실적제한 E6',calc.E6]);aoa.push(['예상투찰금액 E7',calc.E7,(calc.A값!=null?'(A값 적용)':'')]);
+  aoa.push(['실적제한',calc.E6]);aoa.push(['예상투찰금액',calc.E7,(calc.A값!=null?'(A값 적용)':'')]);
   aoa.push(['업계평균부채비율',state.bid.업계평균부채비율||'']);
   aoa.push(['업계평균유동비율',state.bid.업계평균유동비율||'']);
   aoa.push([]);
@@ -7090,8 +7144,42 @@ function bind(){
   })();
 
   // DB 탭 이벤트
-  // 그룹 보기 select (필터)
+  // 그룹 보기 select (필터, 값 저장용 — 실제 UI는 검색 가능한 커스텀 드롭다운)
   document.getElementById('db-group-filter').addEventListener('change',function(){refreshDB();});
+  (function(){
+    var btn=document.getElementById('db-group-filter-btn');
+    var panel=document.getElementById('db-group-filter-panel');
+    var search=document.getElementById('db-group-filter-search');
+    var list=document.getElementById('db-group-filter-list');
+    var hiddenSel=document.getElementById('db-group-filter');
+    if(!btn||!panel||!list||!hiddenSel)return;
+    btn.addEventListener('click',function(e){
+      e.stopPropagation();
+      var open=panel.style.display==='block';
+      panel.style.display=open?'none':'block';
+      if(!open){search.value='';applyGrpFltSearch();search.focus();}
+    });
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    function applyGrpFltSearch(){
+      var kw=(search.value||'').trim().toLowerCase();
+      list.querySelectorAll('.db-grpflt-row').forEach(function(row){
+        var lbl=(row.dataset.label||'').toLowerCase();
+        row.style.display=(!kw||lbl.indexOf(kw)>=0)?'block':'none';
+      });
+    }
+    search.addEventListener('input',applyGrpFltSearch);
+    search.addEventListener('click',function(e){e.stopPropagation();});
+    search.addEventListener('keydown',function(e){e.stopPropagation();});
+    list.addEventListener('click',function(e){
+      var row=e.target.closest('.db-grpflt-row');
+      if(!row)return;
+      hiddenSel.value=row.dataset.v;
+      hiddenSel.dispatchEvent(new Event('change'));
+      refreshGroupFilterSearchUI();
+      panel.style.display='none';
+    });
+    document.addEventListener('click',function(){panel.style.display='none';});
+  })();
   $('#btn-import-xlsx').addEventListener('click',function(){$('#file-import').click();});
   $('#file-import').addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;importXlsx(f,$('#import-mode').value);e.target.value='';});
   $('#btn-add-company').addEventListener('click',function(){openCompanyModal(null);});
