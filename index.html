@@ -2693,19 +2693,27 @@ function calcSlot(combo,calc){
     // 적용 우선순위: ① 경영상태비율(재무비율) 감점을 최우선 적용 → 적격이면 그대로 확정
     //             ② ①로 부적격일 때만, 감점업체 중 신용등급이 재무비율보다 유리한 경우에 한해 신용등급으로 대체(2차 패스, 아래 recomputeWithCredit)
     var _rowEconDed=null,_rowCreditInfo=null;
+    // 2026-08-05: 조달청/LH/철도 등(비지자체) 모드에서도 신인도·감점을 수기로 override할 수 있도록 확장.
+    // 기존에는 dbEntry가 있으면 이 두 값이 무조건 자동계산으로 덮어써져, 수기 입력이 즉시 무시되는 문제가 있었음(사용자 확인).
+    var _감점Override=!!s.감점Override;
+    var _신인도Override=!!s.신인도Override;
     if(!calc.isJija&&dbEntry){
-      var _srTypeS=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc.isKW?(calc.is50억?'KW6':'KW7A'):calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc.is50억?'6':'7A');
-      var _rawS=Number(dbEntry.일자리가점!=null?dbEntry.일자리가점:(dbEntry.신인도||0));
-      var _jaS=(_srTypeS==='6')?Math.round(_rawS/3*100)/100:(_srTypeS==='DoRo6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='KW6')?Math.round(_rawS*0.5*100)/100:(_srTypeS==='LH6'||_srTypeS==='LH7A')?((_rawS>=2.5?1.0:0)+(_rawS===0.5||_rawS===3.0?0.5:0)):(_srTypeS==='철도6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='철도7A')?Math.round(_rawS*(0.5/3)*100)/100:_rawS;
-      신인도=_jaS+calcSafetyBonus(dbEntry.안전보건시스템||'',_srTypeS);
-      if(_srTypeS==='LH6'||_srTypeS==='LH7A') 신인도=Math.min(신인도,1.5); // LH 신인도 배점한도 +1.5
-      // ① 경영상태 감점: econ 실시간 계산 우선 (별표6/7A 자동 분기), fallback: 저장값 — 신용등급은 아직 미적용
-      var _econDed=econ?Math.max(0,Math.round((15-econ.score)*1000)/1000):Math.abs(Number(dbEntry.감점)||0);
-      감점=_econDed;
-      _rowEconDed=_econDed;
-      var _credDed=getCreditDeduction(dbEntry);
-      if(_credDed!==null&&_econDed>0&&_credDed.deduction<_econDed){
-        _rowCreditInfo={deduction:_credDed.deduction,grade:_credDed.grade}; // ②에서 필요할 때만 대체 적용
+      if(!_신인도Override){
+        var _srTypeS=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc.isKW?(calc.is50억?'KW6':'KW7A'):calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc.is50억?'6':'7A');
+        var _rawS=Number(dbEntry.일자리가점!=null?dbEntry.일자리가점:(dbEntry.신인도||0));
+        var _jaS=(_srTypeS==='6')?Math.round(_rawS/3*100)/100:(_srTypeS==='DoRo6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='KW6')?Math.round(_rawS*0.5*100)/100:(_srTypeS==='LH6'||_srTypeS==='LH7A')?((_rawS>=2.5?1.0:0)+(_rawS===0.5||_rawS===3.0?0.5:0)):(_srTypeS==='철도6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='철도7A')?Math.round(_rawS*(0.5/3)*100)/100:_rawS;
+        신인도=_jaS+calcSafetyBonus(dbEntry.안전보건시스템||'',_srTypeS);
+        if(_srTypeS==='LH6'||_srTypeS==='LH7A') 신인도=Math.min(신인도,1.5); // LH 신인도 배점한도 +1.5
+      }
+      if(!_감점Override){
+        // ① 경영상태 감점: econ 실시간 계산 우선 (별표6/7A 자동 분기), fallback: 저장값 — 신용등급은 아직 미적용
+        var _econDed=econ?Math.max(0,Math.round((15-econ.score)*1000)/1000):Math.abs(Number(dbEntry.감점)||0);
+        감점=_econDed;
+        _rowEconDed=_econDed;
+        var _credDed=getCreditDeduction(dbEntry);
+        if(_credDed!==null&&_econDed>0&&_credDed.deduction<_econDed){
+          _rowCreditInfo={deduction:_credDed.deduction,grade:_credDed.grade}; // ②에서 필요할 때만 대체 적용
+        }
       }
     }
     // 지자체 모드: 경영상태 감점을 별표4/3/2/1 기준으로 재계산 (슬롯 저장값 대신) — 재무비율/신용평가 중 유리한 값 적용
@@ -2721,8 +2729,7 @@ function calcSlot(combo,calc){
         }
       }
     }
-    // 지자체 모드: 감점 수동 override 시 자동계산값 대신 사용자가 입력한 값 적용
-    var _감점Override=!!s.감점Override;
+    // 지자체 모드: 감점 수동 override 시 자동계산값 대신 사용자가 입력한 값 적용 (_감점Override는 위에서 이미 선언)
     var _신인도적용=calc.isJija?0:신인도;  // 지자체: 모든 구간(별표4/3/2/1) 신인도(가점) 항목 미적용
     var _감점적용=calc.isJija?(_감점Override?감점:실효감점):감점;
     return Object.assign({},s,{
@@ -5773,12 +5780,12 @@ function renderSlotRow(ci,si,r,calc){
     '<td><input type="number" class="rep" step="0.001" data-edit="'+ci+'-'+si+'-신인도"'+
       (isDam?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="분담: 적격계산 제외"'
         :(calc&&calc.isJija)?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="지자체: 신인도(가점) 항목 미적용(전 구간)"'
-        :' value="'+FMT_REP(r.신인도||0)+'"')+
+        :' value="'+FMT_REP(r.신인도||0)+'"'+(r.신인도Override?' title="수동 입력값 (자동계산 대신 사용)" style="color:#1d4ed8;background:#eff6ff"':''))+
     '>'+_expWarnSlot+'</td>'+
     '<td><input type="number" class="rep" step="0.001" min="0" data-edit="'+ci+'-'+si+'-감점"'+
       (isDam?' value="0" disabled style="color:#9ca3af;background:#f3f4f6" title="분담: 적격계산 제외"'
         :calc&&calc.isJija?' value="'+FMT_REP(r.감점||0)+'"'+(r.감점Override?' title="수동 입력값 (자동계산 대신 사용)"':' style="color:#1d4ed8;background:#eff6ff" title="지자체 경영상태 감점(별표4/3/2) 자동계산 — 직접 수정 가능"')
-        :' value="'+FMT_REP(Math.abs(r.감점||0))+'"')+
+        :' value="'+FMT_REP(Math.abs(r.감점||0))+'"'+(r.감점Override?' title="수동 입력값 (자동계산 대신 사용)" style="color:#1d4ed8;background:#eff6ff"':''))+
     '></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDamSiPyeongLock?' disabled style="color:#9ca3af;background:#f3f4f6"':(grp==='분담'?' title="분담 업체의 시공능력평가액 — 분담시평 제한 판정에 사용"':''))+' ></td>'+
@@ -6407,6 +6414,7 @@ function bind(){
     var val=(field==='실적'||field==='시평액')?(readMoney(t)||0):(Number(t.value)||0);
     state.combos[ci].slots[si][field]=val;
     if(field==='감점')state.combos[ci].slots[si].감점Override=true;  // 수동 입력 시 자동계산 대신 사용
+    if(field==='신인도')state.combos[ci].slots[si].신인도Override=true;  // 수동 입력 시 자동계산 대신 사용 (2026-08-05)
     save();updateSlotMath(ci);
   });
   $('#combos').addEventListener('change',function(e){
