@@ -252,7 +252,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
     <h1 style="margin:0">입찰 적격심사 도구</h1>
     <a href="https://bid.activewith.net" style="font-size:10px;color:#94a3b8;text-decoration:none">https://bid.activewith.net</a>
   </div>
-  <span class="small" style="color:#94a3b8">v6.24</span>
+  <span class="small" style="color:#94a3b8">v6.25</span>
 
   <button id="btn-gist-sync" title="GitHub Gist 클라우드 동기화"><span class="gist-icon">☁</span> <span id="gist-lbl">Gist</span></button>
   <span style="position:relative;display:inline-flex">
@@ -686,7 +686,18 @@ const state={
 // 새 기기는 이 URL/키만 있으면 별도 연결 작업 없이 자동으로 동기화됨.
 const GIST_WORKER_URL = 'https://bidgist.aw-82b.workers.dev';
 const GIST_APP_KEY    = 'ckdgmd9797!';
+const GIST_LAST_PUSH_KEY = 'jodal_gist_last_push'; // 마지막 push 성공 시각(yyMMddHHmmss) — Gist 버튼 idle 라벨에 표시
 
+// 2026-08-06: Gist 버튼의 idle 라벨을 "Gist"에서 "Gist 260806090832" 형태(마지막 push 성공 시각)로 표시.
+// pull 시각은 표시 대상이 아님(요청: push만).
+function formatGistPushTs(d){
+  function p2(n){return (n<10?'0':'')+n;}
+  return String(d.getFullYear()).slice(2)+p2(d.getMonth()+1)+p2(d.getDate())+p2(d.getHours())+p2(d.getMinutes())+p2(d.getSeconds());
+}
+function gistIdleLabel(){
+  var t;try{t=localStorage.getItem(GIST_LAST_PUSH_KEY);}catch(e){}
+  return t?('Gist '+t):'Gist';
+}
 function gistStatus(st,label){
   var btn=document.getElementById('btn-gist-sync');
   var lbl=document.getElementById('gist-lbl');
@@ -695,7 +706,7 @@ function gistStatus(st,label){
   if(st==='syncing'){btn.classList.add('syncing');if(lbl)lbl.textContent='동기화 중…';}
   else if(st==='ok'){btn.classList.add('ok');if(lbl)lbl.textContent=label||'동기화 완료';}
   else if(st==='err'){btn.classList.add('err');if(lbl)lbl.textContent=label||'오류';}
-  else{if(lbl)lbl.textContent='Gist';}
+  else{if(lbl)lbl.textContent=gistIdleLabel();}
 }
 
 // 그룹은 업체당 1개만 허용(2026-08-05, 사용자 확정: 중복 금지). 업체등록 화면은 이제 단일선택 UI로만
@@ -785,6 +796,7 @@ async function gistPushNow(){
       body:JSON.stringify(state)
     });
     if(!r.ok){gistStatus('err','Push '+r.status);return;}
+    try{localStorage.setItem(GIST_LAST_PUSH_KEY,formatGistPushTs(new Date()));}catch(e){}
     gistStatus('ok','☁ Push 완료');
     setTimeout(function(){gistStatus('');},2500);
   }catch(e){gistStatus('err','Push 오류');console.warn('gistPush',e);}
