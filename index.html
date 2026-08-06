@@ -587,11 +587,14 @@ function funcSuffixText(row){
   if(row.FuncNumeric)return '[기술_'+TRIMDEC(Number(row.Func))+']';
   return '['+row.Func+']';
 }
-// 일자리창출 A조건 유효월 수동선택 UI는 폐지(2026-07-28) — 매월 1일 자동해제 방식으로 대체되어
-// 더 이상 suffix에 유효월 태그를 병합할 필요가 없음. 기존 4곳의 호출부를 건드리지 않기 위해
-// 함수 자체는 남겨두되 항상 suffix를 그대로 반환하는 pass-through로 축소.
+// 일자리창출 A조건 유효월 수동선택 UI는 폐지(2026-07-28)되어 pass-through로 축소했었으나,
+// 2026-08-06 사용자 요청으로 "현재월" 표시를 다시 추가함 — 예: "창성 70(+1.5_8월)".
+// 신인도/감점 판정 로직(자동해제 등)과는 무관하게, 조합결과TXT·확정메세지에 표시되는 순간의
+// 월(오늘 날짜 기준)을 단순히 괄호 안 숫자 뒤에 붙이는 표시 전용 처리.
 const jobAMonthTag=function(dbEntry,appliedScore,suffix){
-  return suffix||'';
+  if(!suffix)return suffix||'';
+  var mm=new Date().getMonth()+1;
+  return suffix.replace(/\)/,'_'+mm+'월)');
 };
 const NFC=function(s){return String(s||'').trim().normalize('NFC');}; // 지역 등 한글 문자열 비교 시 NFC/NFD 정규화 차이로 인한 불일치 방지
 const $=function(sel){return document.querySelector(sel);};
@@ -2638,6 +2641,7 @@ function getOneLineSummary(b, c, hideLHNote) {
   var 구성str=n+'인'+(n<=2?'':(최소str||''));
   
   var parts=[];
+  parts.push((new Date().getMonth()+1)+'월'); // 2026-08-06: 메세지/요약 맨 앞에 표시 시점의 월 표기
   var 공종=b.공종||'전기';
   if(공종!=='전기')parts.push(공종);
   parts.push(기준,지역);
@@ -2847,20 +2851,35 @@ function calcSlot(combo,calc){
   // 현재 입력된 지분율 그대로 LH 점수(수행능력+가격)를 항상 계산해 별도로 노출한다.
   // 이 값은 아래 적격/적격사유 게이트 판정에는 전혀 영향을 주지 않음 — UI의 "점수계산" 버튼 색상,
   // "강제할당" 버튼 활성화 여부, 강제할당 적용 시 조합결과TXT·확정메세지 표기에만 사용한다.
+  // 2026-08-06 정정: 최초 버전은 "점수계산(LH 협정계산 팝업)"과 다른 산식(생산 게이트용 간이식 —
+  // 경영상태 항상 15점 고정, 품질은 입찰 단위 "품질평가점수" 필드 사용)을 그대로 복붙해서 총점이
+  // 팝업과 달랐음(예: 96.05 vs 95.25). 팝업은 각 업체 품질점수(기본 85, 세션 중에만 입력, 저장 안 됨)의
+  // 지분가중평균을 내고, 경영상태도 15×(지분율 합/100)로 지분율 미달분만큼 깎는다 — "강제할당" 기능은
+  // 바로 이 "지분율 합<100%" 상황을 다루므로 팝업과 동일한 산식이어야 의미가 있다. 품질점수는 팝업을
+  // 열어 개별 입력하지 않는 한 저장되지 않으므로, 여기서는 팝업의 기본값(85)을 모든 업체에 가정한다.
   var lh원점수=null;
   if(calc.isLH){
-    var _lh실적점수0=calc.E6>0?Math.min(Math.floor((합산실적/calc.E6)*13*1000)/1000,13):0;
-    var _lh품질0=Math.floor((calc.품질평가점수||0)*1000)/1000;
-    var _lh시공경험0=Math.min(Math.floor((_lh실적점수0+_lh품질0)*1000)/1000,15);
-    var _lh경영상태0=15;
+    var _lh실적점수0=calc.E6>0?Math.min(합산실적/calc.E6*13,13):0;
+    var _품질가중합0=85*(지분합_pct/100); // 팝업 기본 품질점수(85) 가정 × 지분율 합
+    var _lh품질득점0=_품질가중합0>=90?5:_품질가중합0>=88?3:_품질가중합0>=85?2:_품질가중합0>=83?1.5:_품질가중합0>=80?1:0;
+    var _lh시공경험0=Math.min(_lh실적점수0+_lh품질득점0,15);
+    var _lh경영상태0=15*(지분합_pct/100); // 지분율 합이 100%에 못 미치면 그 비율만큼만 인정(팝업과 동일)
     var _lh신인도0=Math.max(-3,Math.min(1.5,순신인도));
     var _lh하도급0=calc.E5>=5000000000?10:0;
     var _lh자재인력0=calc.E5>=5000000000?10:0;
     var _예정가격0=calc.예정가격,_A값0=calc.A값;
+    var _is50억0=calc.E5>=5000000000;
+    var _mBase0=_is50억0?50:70,_mFactor0=_is50억0?2:4,_기본가격0=_is50억0?45:65;
     var _투찰금액0=_A값0?(_예정가격0-_A값0)*calc.H7+_A값0:_예정가격0*calc.H7;
-    var _lh가격0=lhCalcPriceScore(_투찰금액0,_예정가격0,_A값0,calc.E5>=5000000000);
+    var _분모0=_A값0?(_예정가격0-_A값0):_예정가격0;
+    var _분자0=_A값0?(_투찰금액0-_A값0):_투찰금액0;
+    var _ratio0=_분모0>0?Math.round(_분자0/_분모0*10000)/10000:0;
+    var _C510=Math.abs((0.9-_ratio0)*100);
+    var _입찰가격득점0=_mBase0-_mFactor0*_C510;
+    var _가산점0=Math.max(0,Math.floor(_입찰가격득점0-_기본가격0));
+    var _lh가격0=_기본가격0+_가산점0;
     var _lh총점0=_lh시공경험0+_lh경영상태0+_lh신인도0+_lh하도급0+_lh자재인력0+_lh가격0;
-    lh원점수={총점:_lh총점0,적격:_lh총점0>=95,시공경험:_lh시공경험0,경영상태:_lh경영상태0,신인도:_lh신인도0,하도급:_lh하도급0,자재인력:_lh자재인력0,가격:_lh가격0,실적점수:_lh실적점수0,품질:_lh품질0};
+    lh원점수={총점:_lh총점0,적격:_lh총점0>=95,시공경험:_lh시공경험0,경영상태:_lh경영상태0,신인도:_lh신인도0,하도급:_lh하도급0,자재인력:_lh자재인력0,가격:_lh가격0,실적점수:_lh실적점수0,품질:_lh품질득점0};
   }
   var 적격=false,적격사유='';
   var lh데이터={};
@@ -5518,7 +5537,10 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       var _dbN=state.db.find(function(x){return x.업체명===row.업체명;});
       return (_dbN&&_dbN.약어)?_dbN.약어:(row.업체명||'').trim();
     });
-    var hasDed=active.some(function(row){return ROUND3((row.신인도||0)-(row.감점||0))<0;});
+    // 2026-08-06: LH는 신인도(가점/감점)가 점수계산의 필수 구성요소이므로, 감점업체가 없어도
+    // (즉 순감점이 전부 0 이상이어도) 항상 (+/-N) 표기를 보이도록 함(기존엔 감점업체가 하나라도 있을 때만 표시).
+    // 2026-08-06: "LH면 항상 표시"가 아니라, 기존 기준(감점업체 존재)에 "강제할당 ON"인 경우만 추가
+    var hasDed=active.some(function(row){return ROUND3((row.신인도||0)-(row.감점||0))<0;})||(c.isLH&&combo.강제할당);
     var line=active.map(function(row){
       var _dbE3=state.db.find(function(x){return x.업체명===row.업체명;});
       var nm=(_dbE3&&_dbE3.약어)?_dbE3.약어:(row.업체명||'').trim();
@@ -5552,7 +5574,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   var seen={};var maxLines=[];
   state.combos.forEach(function(combo){
     var r=calcSlot(combo,c);
-    var hasDed4=r.ROW.some(function(row){return (row.업체명||'').trim()!==''&&(Number(row.감점)||0)>0;});
+    var hasDed4=r.ROW.some(function(row){return (row.업체명||'').trim()!==''&&(Number(row.감점)||0)>0;})||(c.isLH&&combo.강제할당);
     r.ROW.forEach(function(row){
       var nm=(row.업체명||'').trim();
       if(!nm||seen[nm])return;
@@ -5988,11 +6010,13 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     var b=state.bid;var c=calc;
     var comboCalc=comboCalcFor(combo,calc);
     var result=calcSlot(combo,comboCalc);
-    // 2026-08-06: LH 강제할당 — 지분율 합계가 100%에 못 미쳐 게이트상 부적격이어도 점수계산(LH 총점)이
-    // 95점 이상이면 "강제할당" 버튼을 활성화. ON 상태에서 사용자가 Func칸에 직접 명목 지분율을
-    // 입력한 업체가 있으면(getForceAllocRows) 표시를 전환한다. 실제 게이트 판정(result.적격)은 그대로 둠.
+    // 2026-08-06: LH 강제할당 — 지분율 합계가 100% 미만일 때만 "점수계산"을 배경에서 계산해 버튼 색으로
+    // 알려준다: 95점 이상=초록(강제할당 버튼도 이때만 활성화), 미달=빨강. 지분율 합계가 100%면(정상)
+    // 게이트 판정(result.적격)을 그대로 신뢰하면 되므로 버튼은 원래 색(보라)을 유지한다.
     var lhScoreOK=!!(result.lh원점수&&result.lh원점수.적격);
-    var canForceAlloc=comboCalc.isLH&&!result.적격&&result.used>0&&lhScoreOK&&/^지분율 합/.test(result.적격사유||'');
+    var shareUnder100=comboCalc.isLH&&result.used>0&&result.지분합_pct<100-1e-6;
+    var lhBtnColor=shareUnder100?(lhScoreOK?'#16a34a':'#dc2626'):'#7c3aed';
+    var canForceAlloc=shareUnder100&&lhScoreOK;
     var forceRowsList=getForceAllocRows(combo,result);
     var forceActive=forceRowsList.length>0;
     var card=document.createElement('div');
@@ -6033,9 +6057,9 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         '<div class="actions">'+
           (calc.isLH?'<button class="btn btn-sm" data-forcealloc="'+ci+'"'+(canForceAlloc?'':' disabled')+
             ' style="background:'+(combo.강제할당?'#ea580c':'#e5e7eb')+';color:'+(combo.강제할당?'#fff':'#9ca3af')+';font-weight:600" title="'+
-            (canForceAlloc?'ON 상태에서 지분율을 올릴 업체의 Func칸에 명목 지분율(%)을 직접 입력하세요(실제 계산에는 영향 없음)':'점수계산이 95점 이상이고 지분율 합 부족 사유일 때만 사용 가능')+
+            (canForceAlloc?'ON 상태에서 지분율을 올릴 업체의 Func칸에 명목 지분율(%)을 직접 입력하세요(실제 계산에는 영향 없음)':'점수계산 버튼이 초록색(95점 이상)일 때만 사용 가능')+
             '">강제할당'+(combo.강제할당?' ON':'')+'</button>':'')+
-          (calc.isLH?'<button class="btn btn-sm" style="background:'+(lhScoreOK?'#16a34a':'#7c3aed')+';color:#fff;font-weight:600" data-lhcalc="'+ci+'">점수계산</button>':'')+
+          (calc.isLH?'<button class="btn btn-sm" style="background:'+lhBtnColor+';color:#fff;font-weight:600" data-lhcalc="'+ci+'">점수계산</button>':'')+
           (calc.isRail?'<button class="btn btn-sm" style="background:#0369a1;color:#fff;font-weight:600" data-railtech="'+ci+'" title="철도기술점수 DB에서 업체명이 일치하는 업체의 총합산점수를 각 슬롯 Func 칸에 자동 입력">🚄기술</button>':'')+
           '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-weight:600" data-confirm="'+ci+'">확정</button>'+
           '<button class="btn btn-sm btn-ghost" data-add-slot="'+ci+'"'+(slotFull?' disabled title="슬롯 최대 5개"':'')+'>＋ 슬롯</button>'+
@@ -6077,7 +6101,9 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
   var card=document.querySelector('.combo[data-ci="'+ci+'"]');if(!card)return;
   // 2026-08-06: LH 강제할당 관련 버튼/배지 상태도 입력값(지분율·Func) 변경 시 실시간 반영
   var lhScoreOK=!!(result.lh원점수&&result.lh원점수.적격);
-  var canForceAlloc=comboCalc.isLH&&!result.적격&&result.used>0&&lhScoreOK&&/^지분율 합/.test(result.적격사유||'');
+  var shareUnder100=comboCalc.isLH&&result.used>0&&result.지분합_pct<100-1e-6;
+  var lhBtnColor=shareUnder100?(lhScoreOK?'#16a34a':'#dc2626'):'#7c3aed';
+  var canForceAlloc=shareUnder100&&lhScoreOK;
   var forceActive=getForceAllocRows(combo,result).length>0;
   card.classList.toggle('ok',result.적격);
   card.classList.toggle('warn',!result.적격&&result.used>0&&!result.지분율OK);
@@ -6095,7 +6121,7 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
     se.dataset.stat='status';
   }
   var lhBtn=card.querySelector('[data-lhcalc="'+ci+'"]');
-  if(lhBtn)lhBtn.style.background=lhScoreOK?'#16a34a':'#7c3aed';
+  if(lhBtn)lhBtn.style.background=lhBtnColor;
   var faBtn=card.querySelector('[data-forcealloc="'+ci+'"]');
   if(faBtn){
     faBtn.disabled=!canForceAlloc;
@@ -7802,7 +7828,8 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
     return (_dbN&&_dbN.약어)?_dbN.약어:(s.업체명||'').trim();
   });
   if(!slots.length){toast('슬롯에 업체가 없습니다','bad');return;}
-  var hasDed=slots.some(function(s){return (Number(s.감점)||0)>0;});
+  // 2026-08-06: LH는 신인도(가점/감점)가 점수계산 필수 요소이므로 감점업체가 없어도 항상 (+/-N) 표기
+  var hasDed=slots.some(function(s){return (Number(s.감점)||0)>0;})||(_globalCalc.isLH&&combo.강제할당);
   // 2026-08-06: LH 강제할당 — Func칸에 명목 지분율을 입력한 업체의 표시를 "명목 지분율%[실제 지분율]"로 치환
   var _forceRows=getForceAllocRows(combo,_result);
   var _forceMap={};_forceRows.forEach(function(fr){_forceMap[fr.slotIdx]=fr;});
@@ -8101,12 +8128,11 @@ function showLHComboPop(ci) {
       sec('▸ 신인도 (+1.5~-3.0점)','#92400e')+
       row('합산순신인도',TRIM3(합산신인도))+
       row('신인도 득점',(신인도점수>=0?'+':'')+TRIM3(신인도점수)+' pt',undefined,true)+
-      (is50억?(sec('▸ 하도급·자재 (각 만점 10점)','#374151')+row('하도급+자재','20 pt','만점',true)):'')
+      (is50억?(sec('▸ 하도급·자재 (각 만점 10점)','#374151')+row('하도급+자재','20 pt','만점',true)):'')+
+      sec('▸ 수행능력 (상한 '+수행능력상한+'pt)','#374151')+
+      row('수행능력 합계',수행능력합.toFixed(3)+' pt',undefined,true)
     +'</table></div>'+
     '<div style="flex:1;min-width:250px"><table style="width:100%;border-collapse:collapse">'+
-      sec('▸ 수행능력 (상한 '+수행능력상한+'pt)','#374151')+
-      row('수행능력 합계',수행능력합.toFixed(3)+' pt')+
-      row('수행능력 득점',수행능력점수.toFixed(3)+' pt',undefined,true)+
       sec('▸ 입찰가격 (상한 '+(is50억?50:70)+'pt)','#374151')+
       row('투찰율',((투찰율*100).toFixed(3))+'%')+
       row('투찰금액',FN(투찰금액)+(하한가?' ★하한가':''))+
