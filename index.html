@@ -6093,7 +6093,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         '</span>'+
         '<div class="actions">'+
           (calc.isLH?'<button class="btn btn-sm" data-forcealloc="'+ci+'"'+(canForceAlloc?'':' disabled')+
-            ' style="background:'+(combo.강제할당?'#ea580c':'#e5e7eb')+';color:'+(combo.강제할당?'#fff':'#9ca3af')+';font-weight:600" title="'+
+            ' style="background:'+(combo.강제할당?'#ea580c':'#e5e7eb')+';color:'+(combo.강제할당?'#fff':(canForceAlloc?'#111827':'#9ca3af'))+';font-weight:'+(combo.강제할당||canForceAlloc?'700':'600')+'" title="'+
             (canForceAlloc?'ON 상태에서 지분율을 올릴 업체의 Func칸에 명목 지분율(%)을 직접 입력하세요(실제 계산에는 영향 없음)':'점수계산 버튼이 초록색(95점 이상)일 때만 사용 가능')+
             '">강제할당'+(combo.강제할당?' ON':'')+'</button>':'')+
           (calc.isLH?'<button class="btn btn-sm" style="background:'+lhBtnColor+';color:#fff;font-weight:600" data-lhcalc="'+ci+'">점수계산</button>':'')+
@@ -6163,7 +6163,8 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
   if(faBtn){
     faBtn.disabled=!canForceAlloc;
     faBtn.style.background=combo.강제할당?'#ea580c':'#e5e7eb';
-    faBtn.style.color=combo.강제할당?'#fff':'#9ca3af';
+    faBtn.style.color=combo.강제할당?'#fff':(canForceAlloc?'#111827':'#9ca3af');
+    faBtn.style.fontWeight=(combo.강제할당||canForceAlloc)?'700':'600';
     faBtn.textContent='강제할당'+(combo.강제할당?' ON':'');
   }
   var ae=card.querySelector('[data-stat="적격사유"]');
