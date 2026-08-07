@@ -1760,8 +1760,8 @@ function renderRailTechCard(entry){
   var collapsed=window._railtechCollapsed[id]!==false;
   var total=railTechCompanyTotal(entry);
   var rowsHtml=(entry.rows||[]).map(function(row,ri){return renderRailTechRow(id,ri,row);}).join('');
-  return '<div class="railtech-card" style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">'+
-    '<div class="railtech-head" style="background:#f1f5f9;padding:7px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+  return '<div class="railtech-card" style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px">'+
+    '<div class="railtech-head" style="background:#f1f5f9;padding:7px 10px;border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
       '<button type="button" class="btn btn-sm btn-ghost railtech-toggle" data-rtid="'+id+'" style="padding:2px 8px">'+(collapsed?'▶':'▼')+'</button>'+
       '<div style="position:relative;width:170px"><input type="text" class="railtech-name" autocomplete="off" data-rtid="'+id+'" value="'+esc(entry.업체명||'')+'" placeholder="업체명 검색…" style="font-weight:700;font-size:13px;width:100%;box-sizing:border-box;padding:4px 6px;border:1px solid var(--border);border-radius:4px">'+
         '<div class="search-drop" data-rtndrop="'+id+'"></div></div>'+
@@ -5569,6 +5569,11 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
         snSuffix=snSuffix?snSuffix+row._creditInfo.grade:'('+row._creditInfo.grade+')';
       }
       snSuffix=jobAMonthTag(_dbE3,row.신인도,snSuffix); // 일자리 A조건 적용 시 유효기간(월) 함께 표시(괄호 병합)
+      // 대체(구제) 적용 안 됐어도 BB0 이상 유효 신용등급이 있으면 참고용으로 등급 병기 (예: (-3.2_8월|BB0))
+      if(!row.creditApplied){
+        var _cg3=getCreditDeduction(_dbE3||{});
+        if(_cg3&&_cg3.deduction===0&&snSuffix)snSuffix=snSuffix.slice(0,-1)+'|'+_cg3.grade+')';
+      }
       return nm+' '+TRIMDEC(Number(row.지분율)||0)+snSuffix+funcSuffixText(row);
     }).join(' : ');
     comboLines.push(line);
@@ -5592,6 +5597,11 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
         snSfx2=snSfx2?snSfx2+row._creditInfo.grade:'('+row._creditInfo.grade+')';
       }
       snSfx2=jobAMonthTag(_dbE4,row.신인도,snSfx2); // 일자리 A조건 적용 시 유효기간(월) 함께 표시(괄호 병합)
+      // 대체(구제) 적용 안 됐어도 BB0 이상 유효 신용등급이 있으면 참고용으로 등급 병기
+      if(!row.creditApplied){
+        var _cg4=getCreditDeduction(_dbE4||{});
+        if(_cg4&&_cg4.deduction===0&&snSfx2)snSfx2=snSfx2.slice(0,-1)+'|'+_cg4.grade+')';
+      }
       seen[nm]=true;maxLines.push(nm4+' '+Math.floor(mx)+'%'+snSfx2);
     });
   });
@@ -7850,6 +7860,11 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
       netStr=netStr?netStr+s._creditInfo.grade:' ('+s._creditInfo.grade+')';
     }
     netStr=jobAMonthTag(dbEntry,s.신인도,netStr); // 일자리 A조건 적용 시 유효기간(월) 함께 표시(괄호 병합)
+    // 대체(구제) 적용 안 됐어도 BB0 이상 유효 신용등급이 있으면 참고용으로 등급 병기
+    if(!s.creditApplied){
+      var _cg7=getCreditDeduction(dbEntry||{});
+      if(_cg7&&_cg7.deduction===0&&netStr)netStr=netStr.slice(0,-1)+'|'+_cg7.grade+')';
+    }
     return s.업체명+' '+TRIMDEC(Number(s.지분율)||0)+'%'+netStr+funcSuffixText(s)+(bizno?'\n('+bizno+')':'');
   }).join('\n');
   var msg=state.bid.협정메세지||'';
