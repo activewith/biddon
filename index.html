@@ -2649,7 +2649,11 @@ function getOneLineSummary(b, c, hideLHNote) {
   parts.push(실적str);
   if(b.적격기준==='LH'&&b.lh지분율기준!=null&&Number(b.lh지분율기준)>0){var _지억=Math.ceil(Number(b.lh지분율기준)/10000000)/10;parts.push('지분기준'+_지억.toFixed(1)+'억');}
   parts.push(구성str);
-  
+  if(b.적격기준==='철도공단'){
+    var _rtSum=railTechGradeTable(c.E5);
+    if(_rtSum&&_rtSum.rows&&_rtSum.rows[0])parts.push('기술'+_rtSum.rows[0].min+'점');
+  }
+
   var summary=parts.join('/');
   // 시평 기반 최대지분율(=투찰금액 대비 시평) 계산 자체가 없는 기준은 문구 생략:
   // 지자체 30억 미만(jijaTier===1)·철도공단·도로공사(최대지분율 제한 자체가 없음), LH(지분율기준 방식이라 투찰금액 미사용)
@@ -2676,10 +2680,9 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo) {
   if(c.E3!=null&&c.E3>0)시평parts.push('시평 '+_eokTrim(c.E3)+'억');
   if(c.분담시평!=null&&c.분담시평>0)시평parts.push('분담시평'+_eokTrim(c.분담시평)+'억');
   var 시평str=시평parts.join(' / ');
-  var 실적억=c.E6>0?Math.ceil(c.E6/10000000)/10:0;
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
   var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정)':'');
-  var 실적str='실적 '+실적억.toFixed(1)+'억'+실적기준sfx;
+  var 실적str='실적 '+(c.E6>0?_eokTrim(c.E6):'0')+'억'+실적기준sfx;
   var lines=[];
   var item1=[];
   if(의무)item1.push(의무);
@@ -2687,6 +2690,10 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo) {
   lines.push(item1.join(', '));
   if(시평str)lines.push(시평str);
   lines.push(실적str);
+  if(b.적격기준==='철도공단'){
+    var _rtChk=railTechGradeTable(c.E5);
+    if(_rtChk&&_rtChk.rows&&_rtChk.rows[0])lines.push('기술 '+_rtChk.rows[0].min+'점');
+  }
   if(b.적격기준==='LH'&&b.lh지분율기준!=null&&Number(b.lh지분율기준)>0){var _지억=Math.ceil(Number(b.lh지분율기준)/10000000)/10;lines.push('지분기준 '+_지억.toFixed(1)+'억');}
   var _showSiPy2=!((b.적격기준==='지자체'&&c.jijaTier===1)||b.적격기준==='LH'||b.적격기준==='도로공사'||b.적격기준==='철도공단');
   if(_showSiPy2)lines.push('시평>투찰금액*지분율');
