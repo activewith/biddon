@@ -252,7 +252,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
     <h1 style="margin:0">입찰 적격심사 도구</h1>
     <a href="https://bid.activewith.net" style="font-size:10px;color:#94a3b8;text-decoration:none">https://bid.activewith.net</a>
   </div>
-  <span class="small" style="color:#94a3b8">v6.25</span>
+  <span class="small" style="color:#94a3b8">v6.26</span>
 
   <button id="btn-gist-sync" title="GitHub Gist 클라우드 동기화"><span class="gist-icon">☁</span> <span id="gist-lbl">Gist</span></button>
   <span style="position:relative;display:inline-flex">
@@ -635,7 +635,7 @@ function emptyCombo(){
 function defaultBidObj(){
   return {시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
        지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,
-       업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:'',공고번호:'',마감일:'',dbFixed:'갱신후'};
+       업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후'};
 }
 function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null,강제할당:false};});}
 
@@ -5066,7 +5066,11 @@ function extractBidFields(t){
     if(!m)m=t.match(/입찰참가자격등록[^\d]{0,20}마감일시[^\d]*(20\d{2})[.년-]\s*(\d{1,2})[.월-]\s*(\d{1,2})/);
     // 4순위: "마감일시" (단, 입찰마감 포함 가능성 있으므로 3순위 이하)
     if(!m)m=t.match(/마감일시[^\d]*(20\d{2})[.년-]\s*(\d{1,2})[.월-]\s*(\d{1,2})/);
-    if(m)r.등록마감일=('0'+m[2]).slice(-2)+'/'+(('0'+m[3]).slice(-2));
+    if(m){
+      r.등록마감일=('0'+m[2]).slice(-2)+'/'+(('0'+m[3]).slice(-2));
+      // 연도 포함 전체 날짜 — 협정마감일 경과 시 탭 자동삭제(autoRemoveExpiredBidScreens) 판정에 사용
+      r.협정마감일_YMD=m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2);
+    }
   })();
 
   // ── 기초금액 0원 여부 → label 결정 ──────────────────────────────
@@ -5146,7 +5150,7 @@ function showPdfResultModal(found,preview){
   // 그 외 미검출 항목은 버튼을 막지 않고, 대신 추출값 칸을 직접입력 가능한 입력란으로 대체한다.
   var commonKeys=['공종','지역선택','추정가격','기초금액','지역의무지분','최소지분율','구성업체수','적격기준','투찰률','A값'];
   var fallbackKeys={기초금액:1,A값:1}; // 미검출이어도 "미정"으로 표시하고 버튼을 막지 않음
-  var excludeKeys=['공사명','공고번호','발주처','마감일','등록마감일','기초금액_label'];
+  var excludeKeys=['공사명','공고번호','발주처','마감일','등록마감일','협정마감일_YMD','기초금액_label'];
   var _regionList=getRegionMasterList();
   // 2026-08-07: 지역선택 슬롯 개수 제한(기존 3개 고정) 제거 — 검출된 지역 수만큼 기본 슬롯을 그리고, "+"로 계속 추가 가능.
   var regionSlotN=Math.max(1,Array.isArray(found.지역선택)?found.지역선택.length:(found.지역선택?1:0));
@@ -5366,6 +5370,7 @@ function showPdfResultModal(found,preview){
     // 확정메세지/조합결과TXT 상단 헤더(공고명·공고번호·추정가격·마감일)에 쓰일 값 — 협정메세지 텍스트와 별개로 항상 보존
     if(found.공고번호)state.bid.공고번호=found.공고번호;
     if(found.등록마감일)state.bid.마감일=found.등록마감일;
+    if(found.협정마감일_YMD)state.bid.협정마감일_YMD=found.협정마감일_YMD; // 탭 자동삭제 기준일(연도 포함, autoRemoveExpiredBidScreens 참고)
     document.querySelectorAll('[data-pdf-key]').forEach(function(cb){
       if(!cb.checked)return;
       var k=cb.dataset.pdfKey;var v=found[k];
@@ -6599,7 +6604,7 @@ function bind(){
   $('#btn-reset-bid').addEventListener('click',function(){
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고번호:'',마감일:'',dbFixed:'갱신후'});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후'});
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
     if($('#in-기본지분율'))$('#in-기본지분율').value=65;
@@ -8413,6 +8418,39 @@ function ensureUserBidPartition(id){
   }
   return p;
 }
+// ── 협정마감일이 지난 입찰적격판정 탭 자동 삭제 ──────────────────────────────────
+// 공고문분석(공고문 텍스트 붙여넣기)에서 등록마감일/협정마감일 라벨로 추출한
+// scr.bid.협정마감일_YMD(YYYY-MM-DD, 연도 포함)를 기준으로, 오늘 날짜가 그 날짜를 "지났으면"
+// (=마감일 당일까지는 유지, 다음날부터 삭제) 해당 화면(탭)을 자동으로 닫는다.
+// 협정마감일_YMD가 없는 화면(공고문분석을 아직 안 했거나 해당 라벨을 못 찾은 경우)은 손대지 않는다.
+// 수동 삭제(deleteBidScreen)와 동일하게 최소 1개 화면은 항상 남겨둔다.
+// 반환값: {changed:bool, removedNames:[...]} — 호출부에서 렌더링/토스트 여부 판단용.
+function autoRemoveExpiredBidScreens(){
+  if(!state.bidScreens||state.bidScreens.length<=1)return{changed:false,removedNames:[]};
+  var today=new Date();today.setHours(0,0,0,0);
+  var removedNames=[];
+  for(var i=state.bidScreens.length-1;i>=0;i--){
+    if(state.bidScreens.length<=1)break; // 마지막 하나는 항상 보존
+    var scr=state.bidScreens[i];
+    var ymd=scr.bid&&scr.bid.협정마감일_YMD;
+    if(!ymd)continue;
+    var d=new Date(ymd+'T00:00:00');
+    if(isNaN(d.getTime())||d>=today)continue; // 파싱 실패했거나 아직 마감일 당일/이전이면 유지
+    removedNames.push(scr.name);
+    state.bidScreens.splice(i,1);
+    if(i===state.activeBidScreenIndex){
+      state.activeBidScreenIndex=Math.max(0,i-1);
+    }else if(i<state.activeBidScreenIndex){
+      state.activeBidScreenIndex--;
+    }
+  }
+  if(removedNames.length){
+    state.activeBidScreenIndex=Math.max(0,Math.min(state.bidScreens.length-1,state.activeBidScreenIndex));
+    var _act=state.bidScreens[state.activeBidScreenIndex];
+    if(_act){state.bid=_act.bid;state.combos=_act.combos;}
+  }
+  return{changed:removedNames.length>0,removedNames:removedNames};
+}
 // 로그인한 계정 id의 화면 파티션을 state.bidScreens/activeBidScreenIndex/bid/combos에 적재(=탭 전환·복원).
 function loadBidScreensForUser(id){
   if(!id)return;
@@ -8420,9 +8458,23 @@ function loadBidScreensForUser(id){
   normalizeBidScreens(p.screens);
   state.bidScreens=p.screens;
   state.activeBidScreenIndex=Math.max(0,Math.min(p.screens.length-1,Number(p.activeIndex)||0));
+  autoRemoveExpiredBidScreens(); // 협정마감일 지난 탭은 로드 시점에 자동 정리
   var _act=state.bidScreens[state.activeBidScreenIndex];
   state.bid=_act.bid;
   state.combos=_act.combos;
+}
+// 장시간 켜둔 세션(자정 경과) 대응 — 주기 타이머/탭 재활성화 시 호출.
+// 변경이 있으면 화면탭 다시 그리고 저장까지 처리.
+function checkBidScreenExpiryTick(){
+  var r=autoRemoveExpiredBidScreens();
+  if(!r.changed)return;
+  if(typeof persistCurrentUserBidScreens==='function')persistCurrentUserBidScreens();
+  if(typeof restoreBidInputsFromState==='function')restoreBidInputsFromState();
+  if(typeof refreshBidStats==='function')refreshBidStats();
+  if(typeof refreshCombos==='function')refreshCombos();
+  if(typeof renderBidScreenTabs==='function')renderBidScreenTabs();
+  if(typeof save==='function')save();
+  toast('협정마감일 경과로 탭 자동 삭제: '+r.removedNames.join(', '),'ok');
 }
 // 현재 로그인 계정의 활성 인덱스를 파티션에 동기화(screens 배열 자체는 이미 같은 참조라 자동 반영됨).
 function persistCurrentUserBidScreens(){
@@ -8815,6 +8867,10 @@ function boot(){
   checkExpiryAlertsOnBoot();
   initBackupOnBoot();
   enableModalDrag();
+  // 협정마감일 경과 탭 자동삭제: 부팅/로그인 시점은 loadBidScreensForUser()가 처리하므로,
+  // 여기서는 앱을 오래 켜둔 채 자정을 넘기는 경우 대응(30분 주기 + 탭 재활성화 시 즉시 확인).
+  setInterval(checkBidScreenExpiryTick,30*60*1000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)checkBidScreenExpiryTick();});
 }
 
 async function initAuthFlow(){
