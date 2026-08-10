@@ -8,7 +8,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- SECTION: CSS-스타일 -->
 <style>
 :root{--bg:#f5f6f8;--panel:#fff;--border:#e3e6ec;--text:#1f2937;--muted:#6b7280;--primary:#2563eb;--primary-d:#1d4ed8;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
@@ -425,7 +424,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
           <option value="append">단순 추가</option>
         </select>
         <button class="btn btn-ghost" id="btn-export-db">DB → xlsx 백업</button>
-        <button class="btn btn-ghost" id="btn-export-jobscore" style="border-color:#0891b2;color:#0891b2" title="현재 DB관리 화면에 표시된(필터 적용된) 업체 목록을 일자리가점표 형식으로 이미지(PNG)와 xlsx 2가지로 다운로드">📊 일자리가점표(이미지+xlsx)</button>
+        <button class="btn btn-ghost" id="btn-export-jobscore" style="border-color:#0891b2;color:#0891b2" title="현재 DB관리 화면에 표시된(필터 적용된) 업체 목록을 신인도가점표 형식의 xlsx로 다운로드">📊 신인도가점표</button>
         <button class="btn btn-ghost" id="btn-template-xlsx" style="border-color:#0369a1;color:#0369a1" title="임포트용 빈 서식(헤더+예시행) 다운로드">📥 임포트 서식</button>
         <button class="btn btn-warn" id="btn-add-company">＋ 업체 직접 추가</button>
         <button class="btn" id="btn-import-cert" style="background:#7c3aed">📋 경영확인서 등록</button>
@@ -5900,7 +5899,7 @@ function exportAgreementListXlsx(){
   XLSX.writeFile(wb2,'업체DB_협정업체리스트_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
-// ── 일자리가점표(이미지+xlsx) 내보내기 ──────────────────────────────────
+// ── 신인도가점표(xlsx) 내보내기 ──────────────────────────────────────
 // 2026-08-10: 사용자가 제공한 "일자리 가점 O월 투찰 기준" 표(업체가 참여하는 공사업종을
 // 행으로 나열하고, 상호/사업자번호/부채·유동비율/신용평가/안전보건/급여가점/일자리가점은
 // 업체 단위로 세로 병합)를 참고해 추가. DB관리 화면에 현재 적용된 필터·정렬을 그대로 반영.
@@ -5908,6 +5907,8 @@ function exportAgreementListXlsx(){
 // 필드 c.일자리가점(0/0.5/2.5/3.0)에서 분해. 신용평가·안전보건 만료일은 저장된 약어(YYMM 등)를
 // parseCreditRating/parseSafetySystem으로 그대로 해석한 값이며, 원본 이미지의 일부 날짜(일자리
 // 만료일이 월말이 아닌 경우)는 이 앱이 관리하지 않는 수기 입력값이라 정확히 재현되지 않을 수 있음.
+// 2026-08-10: html2canvas 이미지(PNG) 출력이 계속 빈 화면으로 나오는 문제가 해결되지 않아 이미지
+// 출력 기능은 제거하고 xlsx만 생성하도록 변경. 메뉴명도 '일자리가점표'에서 '신인도가점표'로 변경.
 function getVisibleDbCompanies(){
   var search=($('#db-search').value||'').toLowerCase();
   var region=$('#db-region-filter').value;
@@ -6005,75 +6006,14 @@ function buildJobScoreGroups(companies){
   });
 }
 var JOBSCORE_HEADERS=['상호','사업자등록번호','공사업','시공능력공시액','3년실적','5년실적','부채비율(%)','유동비율(%)','신용평가(만료일)','안전보건경영시스템(ISO)','급여가점','일자리가점'];
-function renderJobScoreTableEl(groups,monthLabel){
-  var html='<div style="display:inline-block;background:#fff;padding:16px;font-family:\'Malgun Gothic\',sans-serif">';
-  html+='<div style="text-align:center;font-size:18px;font-weight:700;margin-bottom:10px">일자리 가점 '+esc(monthLabel)+' 투찰 기준</div>';
-  html+='<table style="border-collapse:collapse;font-size:12px">';
-  html+='<thead><tr>'+JOBSCORE_HEADERS.map(function(h){return '<th style="border:1px solid #333;background:#f3f4f6;padding:6px 8px;white-space:nowrap">'+esc(h)+'</th>';}).join('')+'</tr></thead>';
-  html+='<tbody>';
-  groups.forEach(function(g){
-    var n=g.rows.length;
-    g.rows.forEach(function(r,ri){
-      html+='<tr>';
-      if(ri===0){
-        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center;font-weight:600">'+esc(g.업체명)+'</td>';
-        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.사업자번호)+'</td>';
-      }
-      html+='<td style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(r.공사업)+'</td>';
-      html+='<td style="border:1px solid #333;padding:6px 8px;text-align:right">'+FMT_NUM(r.시평액)+'</td>';
-      html+='<td style="border:1px solid #333;padding:6px 8px;text-align:right">'+FMT_NUM(r.실적3)+'</td>';
-      html+='<td style="border:1px solid #333;padding:6px 8px;text-align:right">'+FMT_NUM(r.실적5)+'</td>';
-      if(ri===0){
-        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.부채비율)+'</td>';
-        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.유동비율)+'</td>';
-        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.신용평가)+'</td>';
-        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.안전보건)+'</td>';
-        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.급여가점)+'</td>';
-        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center;font-weight:700;color:#dc2626">'+esc(g.일자리가점)+'</td>';
-      }
-      html+='</tr>';
-    });
-  });
-  html+='</tbody></table></div>';
-  var wrap=document.createElement('div');
-  wrap.style.cssText='position:fixed;left:0;top:0;background:#fff;z-index:-1;opacity:0;pointer-events:none;';
-  wrap.innerHTML=html;
-  document.body.appendChild(wrap);
-  return wrap;
-}
-function exportJobScoreImage(groups,monthLabel,cb){
-  if(typeof html2canvas==='undefined'){toast('이미지 생성 라이브러리(html2canvas) 로드 실패 — 네트워크를 확인하세요','err');if(cb)cb();return;}
-  var el=renderJobScoreTableEl(groups,monthLabel);
-  // 표 실제 크기(el.scrollWidth/Height)만큼 캡처 캔버스를 명시적으로 지정해, 브라우저 창 크기와
-  // 무관하게 표 전체가 잘리지 않고 캡처되도록 함.
-  var _capW=Math.ceil(el.scrollWidth)||1200,_capH=Math.ceil(el.scrollHeight)||400;
-  html2canvas(el,{
-    scale:2,backgroundColor:'#ffffff',
-    width:_capW,height:_capH,windowWidth:_capW,windowHeight:_capH,x:0,y:0,
-    onclone:function(clonedDoc,clonedEl){clonedEl.style.opacity='1';}
-  }).then(function(canvas){
-    document.body.removeChild(el);
-    canvas.toBlob(function(blob){
-      var a=document.createElement('a');
-      a.href=URL.createObjectURL(blob);
-      a.download='일자리가점표_'+new Date().toISOString().slice(0,10)+'.png';
-      document.body.appendChild(a);a.click();document.body.removeChild(a);
-      if(cb)cb();
-    },'image/png');
-  }).catch(function(err){
-    if(el.parentNode)document.body.removeChild(el);
-    toast('이미지 생성 실패: '+(err&&err.message?err.message:err),'err');
-    if(cb)cb();
-  });
-}
 function exportJobScoreXlsx(groups,monthLabel){
   if(typeof ExcelJS==='undefined'){toast('엑셀 생성 라이브러리(ExcelJS) 로드 실패 — 네트워크를 확인하세요','err');return;}
   var wb=new ExcelJS.Workbook();
-  var ws=wb.addWorksheet('일자리가점');
+  var ws=wb.addWorksheet('신인도가점');
   ws.columns=[{width:18},{width:16},{width:8},{width:16},{width:16},{width:16},{width:10},{width:10},{width:18},{width:20},{width:9},{width:9}];
   ws.mergeCells(1,1,1,JOBSCORE_HEADERS.length);
   var titleCell=ws.getCell(1,1);
-  titleCell.value='일자리 가점 '+monthLabel+' 투찰 기준';
+  titleCell.value='신인도 가점 '+monthLabel+' 투찰 기준';
   titleCell.font={bold:true,size:14};
   titleCell.alignment={horizontal:'center',vertical:'middle'};
   ws.getRow(1).height=24;
@@ -6135,7 +6075,7 @@ function exportJobScoreXlsx(groups,monthLabel){
     var blob=new Blob([buf],{type:'application/octet-stream'});
     var a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
-    a.download='일자리가점표_'+new Date().toISOString().slice(0,10)+'.xlsx';
+    a.download='신인도가점표_'+new Date().toISOString().slice(0,10)+'.xlsx';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
   }).catch(function(err){
     toast('엑셀 생성 실패: '+(err&&err.message?err.message:err),'err');
@@ -6147,9 +6087,7 @@ function generateJobScoreReport(){
   var groups=buildJobScoreGroups(companies);
   var monthLabel=(new Date().getMonth()+1)+'월';
   exportJobScoreXlsx(groups,monthLabel);
-  exportJobScoreImage(groups,monthLabel,function(){
-    toast('일자리가점표 이미지(PNG)+xlsx 저장 완료 ('+groups.length+'개 업체)','ok');
-  });
+  toast('신인도가점표 xlsx 저장 완료 ('+groups.length+'개 업체)','ok');
 }
 
 function exportTemplateXlsx(){
