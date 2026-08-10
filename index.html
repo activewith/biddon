@@ -495,7 +495,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
             <th class="c" style="color:#7c3aed" title="부채비율(%)">부채%</th>
             <th class="c" style="color:#7c3aed" title="유동비율(%)">유동%</th>
             <th class="c" style="color:#7c3aed" title="공사업 등록일">공사업등록</th>
-            <th class="l">신용평가</th><th class="c" title="K(YYMM)=KOSHA-MS / S(YYMM)=ISO45001">안전보건</th><th class="l">사업자번호</th><th class="c">메모</th><th></th>
+            <th class="l">신용평가</th><th class="c" title="K(YYMMDD)=KOSHA-MS / S(YYMMDD)=ISO45001">안전보건</th><th class="l">사업자번호</th><th class="c">메모</th><th></th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -503,7 +503,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       <div class="help" style="margin-top:8px">
         ※ xlsx 임포트는 "통합" 시트의 4행을 헤더로 인식, 5행부터 읽음. 지역(A열) 빈 칸은 이전 행 값으로 자동 채움. 신인도가 음수면 자동으로 감점란 분리.<br>
         ※ <b style="color:#7c3aed">경영확인서 등록</b> 버튼으로 전기공사협회 발급 확인서(PDF 또는 텍스트)를 파싱해 부채비율·유동비율·공사업등록일·실적·시평액을 자동 입력합니다.<br>
-        ※ 모든 데이터는 브라우저 LocalStorage에 자동 저장. 다른 PC로 옮길 땐 "DB → xlsx 백업"을 사용하세요.<br>※ <b>약어 입력 형식</b>: 신용평가 → <code>A+(2704)</code> (A+등급, 2027년04월말까지 유효) | 안전보건 → <code>K(2705)</code>=KOSHA-MS, <code>S(2705)</code>=ISO45001 (2027년05월말까지 유효) | 공사업종 → 2글자 (전기/통신/소방 등)
+        ※ 모든 데이터는 브라우저 LocalStorage에 자동 저장. 다른 PC로 옮길 땐 "DB → xlsx 백업"을 사용하세요.<br>※ <b>약어 입력 형식</b>: 신용평가 → <code>A+(2704)</code> (A+등급, 2027년04월말까지 유효) | 안전보건 → <code>K(270530)</code>=KOSHA-MS, <code>S(270530)</code>=ISO45001 (2027년05월30일까지 유효) | 공사업종 → 2글자 (전기/통신/소방 등)
       </div>
     </div>
   </section>
@@ -1539,15 +1539,20 @@ function calcYears(dateStr){
   return (Date.now()-d.getTime())/(1000*60*60*24*365.25);
 }
 
-// 안전보건경영시스템 파싱 (신형식: K(2705)=KOSHA-MS, S(2705)=ISO-45001, YYMM 해당 월 말일까지 유효)
+// 안전보건경영시스템 파싱 (신형식: K(270530)=KOSHA-MS, S(270530)=ISO-45001, YYMMDD 해당일까지 유효 / 4자리 YYMM 입력 시 해당 월 말일까지 유효(舊형식 호환))
 function parseSafetySystem(system){
   if(!system||system===''||system==='없음')return{type:null,valid:false,expiry:null};
   var s=system.trim();
-  var m=s.match(/^([KS])\((\d{4})\)$/i);
+  var m=s.match(/^([KS])\((\d{4,6})\)$/i);
   if(m){
     var tp=m[1].toUpperCase()==='K'?'KOSHA-MS':'ISO-45001';
-    var yy=parseInt(m[2].slice(0,2)),mo=parseInt(m[2].slice(2,4))-1;
-    var exp=new Date(new Date(2000+yy,mo+1,1).getTime()-86400000);
+    var code=m[2];var yy=parseInt(code.slice(0,2)),mo=parseInt(code.slice(2,4))-1,exp;
+    if(code.length===6){
+      var dd=parseInt(code.slice(4,6));
+      exp=new Date(2000+yy,mo,dd);
+    } else {
+      exp=new Date(new Date(2000+yy,mo+1,1).getTime()-86400000);
+    }
     var today=new Date();today.setHours(0,0,0,0);
     return{type:tp,valid:exp>=today,expiry:exp};
   }
@@ -1556,18 +1561,18 @@ function parseSafetySystem(system){
   if(s==='ISO-45001'||s==='ISO45001')return{type:'ISO-45001',valid:true,expiry:null};
   return{type:null,valid:false,expiry:null};
 }
-// 안전보건 표시 문자열: K(2705)→KOSHA-MS(2705), S(2705)→ISO45001(2705), 기존 텍스트 호환
+// 안전보건 표시 문자열: K(270530)→KOSHA-MS(2027.05.30), S(270530)→ISO45001(2027.05.30), 기존 텍스트 호환
 function safetyDisplayStr(system){
   if(!system||system===''||system==='없음')return '-';
   var ps=parseSafetySystem(system);
   if(!ps.type)return system; // 인식불가 → 원문 그대로
   var name=ps.type==='KOSHA-MS'?'KOSHA-MS':'ISO45001';
-  var yymm='';
-  if(ps.expiry){
-    var fy=ps.expiry.getFullYear();var fm=ps.expiry.getMonth()+1;
-    if(!isNaN(fy)&&!isNaN(fm))yymm='('+String(fy).slice(2)+String(fm).padStart(2,'0')+')';
+  var dateStr='';
+  if(ps.expiry&&!isNaN(ps.expiry.getTime())){
+    var y=ps.expiry.getFullYear(),m=String(ps.expiry.getMonth()+1).padStart(2,'0'),d=String(ps.expiry.getDate()).padStart(2,'0');
+    dateStr='('+y+'.'+m+'.'+d+')';
   }
-  return name+yymm+(ps.valid?'':' ⚠만료');
+  return name+dateStr+(ps.valid?'':' ⚠만료');
 }
 // 안전보건경영시스템 가점 (별표6 50억↑: KOSHA-MS=+1.0/ISO-45001=+0.8, 별표7A 10~50억: KOSHA-MS=+2.0/ISO-45001=+1.6)
 // LH별표2(50억~100억): KOSHA-MS·ISO-45001 모두 +1 / LH별표3(10~50억): 안전보건 항목 삭제(0)
@@ -3811,8 +3816,8 @@ function openCompanyModal(idx){
         '</span>'+
         '<div style="font-size:11px;color:#6b7280;margin-top:3px">합산: <span id="m-일자리합계">'+Number(c.일자리가점||0).toFixed(1)+'</span>점 (A+B 동시 가능)</div>'+
       '</div>'+
-      '<label style="color:#166534">안전보건시스템<br><span style="font-size:10px;color:#6b7280">K(YYMM)=KOSHA-MS / S(YYMM)=ISO45001<br>예) K(2705) → KOSHA-MS 2027.05월까지 유효(6월갱신)</span></label>'+
-      '<input id="m-안전보건시스템" autocomplete="off" value="'+esc(c.안전보건시스템||'')+'" placeholder="K(2705) 또는 S(2705)" style="border-color:#86efac" title="K(YYMM)=KOSHA-MS(+2.0/+1.0), S(YYMM)=ISO-45001(+1.6/+0.8). 비워두면 없음.">'+
+      '<label style="color:#166534">안전보건시스템<br><span style="font-size:10px;color:#6b7280">K(YYMMDD)=KOSHA-MS / S(YYMMDD)=ISO45001</span></label>'+
+      '<input id="m-안전보건시스템" autocomplete="off" value="'+esc(c.안전보건시스템||'')+'" placeholder="K(270530) 또는 S(270530)" style="border-color:#86efac" title="K(YYMMDD)=KOSHA-MS(+2.0/+1.0), S(YYMMDD)=ISO-45001(+1.6/+0.8). 비워두면 없음.">'+
             '<label>신용평가</label><input id="m-신용평가" autocomplete="off" value="'+esc(c.신용평가||'')+'">'+
       '<label>메모</label>'+
       '<textarea id="m-참고" rows="3" style="resize:vertical;font-size:13px">'+esc(c.참고||'')+'</textarea>'+
@@ -5972,10 +5977,10 @@ function _jobScoreSafetyStr(c){
 }
 function _jobScoreBonusStrs(c){
   var raw=Number(c.일자리가점!=null?c.일자리가점:(c.신인도||0));
-  var hasB=(raw===0.5||raw===3.0);
-  var aVal=hasB?Number((raw-0.5).toFixed(1)):raw;
-  var salaryStr=hasB?'+0.5':'X';
-  var jobStr=aVal>0?'+'+aVal.toFixed(1):'X';
+  var hasB=(raw===0.5||raw===3.0);              // B조건(급여증가, +0.5) 포함 여부
+  var aVal=hasB?Number((raw-0.5).toFixed(1)):raw; // A조건(고용증가, +2.5) 성분만 분리
+  var salaryStr=hasB?'O':'X';
+  var jobStr=aVal>0?'O':'X';
   return{salary:salaryStr,job:jobStr};
 }
 function buildJobScoreGroups(companies){
@@ -6031,7 +6036,7 @@ function renderJobScoreTableEl(groups,monthLabel){
   });
   html+='</tbody></table></div>';
   var wrap=document.createElement('div');
-  wrap.style.cssText='position:fixed;left:-99999px;top:0;background:#fff;z-index:-1;';
+  wrap.style.cssText='position:fixed;left:0;top:0;background:#fff;z-index:-1;opacity:0;pointer-events:none;';
   wrap.innerHTML=html;
   document.body.appendChild(wrap);
   return wrap;
@@ -6039,7 +6044,14 @@ function renderJobScoreTableEl(groups,monthLabel){
 function exportJobScoreImage(groups,monthLabel,cb){
   if(typeof html2canvas==='undefined'){toast('이미지 생성 라이브러리(html2canvas) 로드 실패 — 네트워크를 확인하세요','err');if(cb)cb();return;}
   var el=renderJobScoreTableEl(groups,monthLabel);
-  html2canvas(el,{scale:2,backgroundColor:'#ffffff'}).then(function(canvas){
+  // 표 실제 크기(el.scrollWidth/Height)만큼 캡처 캔버스를 명시적으로 지정해, 브라우저 창 크기와
+  // 무관하게 표 전체가 잘리지 않고 캡처되도록 함.
+  var _capW=Math.ceil(el.scrollWidth)||1200,_capH=Math.ceil(el.scrollHeight)||400;
+  html2canvas(el,{
+    scale:2,backgroundColor:'#ffffff',
+    width:_capW,height:_capH,windowWidth:_capW,windowHeight:_capH,x:0,y:0,
+    onclone:function(clonedDoc,clonedEl){clonedEl.style.opacity='1';}
+  }).then(function(canvas){
     document.body.removeChild(el);
     canvas.toBlob(function(blob){
       var a=document.createElement('a');
@@ -6142,17 +6154,17 @@ function generateJobScoreReport(){
 
 function exportTemplateXlsx(){
   // 신 임포트 서식 (일자리가점/감점 없음, 메모 맨 뒤, 공사업종 2글자)
-  // 약어: K(YYMM)=KOSHA-MS 안전보건 / S(YYMM)=ISO45001 / A+(YYMM)=신용평가 등급+유효기간
+  // 약어: K(YYMMDD)=KOSHA-MS 안전보건 / S(YYMMDD)=ISO45001 / A+(YYMM)=신용평가 등급+유효기간
   var legend=['[약어 범례]','지역:시/도 약칭','실적업체:Y=실적업체','자사:Y=자사',
     '신용평가:등급(YYMM) 예)A+(2704)→A+등급 2027년04월말까지 유효',
-    '안전보건:K(YYMM)=KOSHA-MS / S(YYMM)=ISO45001 예)K(2705)→KOSHA-MS 2027년05월말까지 유효',
+    '안전보건:K(YYMMDD)=KOSHA-MS / S(YYMMDD)=ISO45001 예)K(270530)→KOSHA-MS 2027년05월30일까지 유효',
     '공사업종:2글자 예)전기/통신/소방','약정지분율:지역업체 약정지분율(%)'];
   var header=['지역','업체명','5년실적','시평액','3년실적','실적업체','자사',
     '신용평가','안전보건시스템','사업자번호','부채비율','유동비율',
     '공사업등록일','대표자','공사업종','약정지분율','메모'];
   var example=[
-    ['경남','(주)예시업체',500000000,800000000,300000000,'','','A+(2704)','K(2705)','123-45-67890',120,200,'2015-03-01','홍길동','전기','','비고 예시'],
-    ['전국','(주)샘플전기',0,0,0,'Y','Y','BB+(2710)','S(2706)','987-65-43210',80,150,'2010-06-15','김철수','통신','50',''],
+    ['경남','(주)예시업체',500000000,800000000,300000000,'','','A+(2704)','K(270530)','123-45-67890',120,200,'2015-03-01','홍길동','전기','','비고 예시'],
+    ['전국','(주)샘플전기',0,0,0,'Y','Y','BB+(2710)','S(270630)','987-65-43210',80,150,'2010-06-15','김철수','통신','50',''],
   ];
   var ws=XLSX.utils.aoa_to_sheet([legend,header].concat(example));
   ws['!cols']=[
