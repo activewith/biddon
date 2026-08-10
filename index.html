@@ -2461,11 +2461,11 @@ function getExpiryAlerts(c){
   var ps=parseSafetySystem(c.안전보건시스템||'');
   if(ps&&ps.expiry){
     var dPs=Math.round((ps.expiry-today)/86400000);
-    // 안전보건: 일수 계산 대신 "만료 연월에 도달했는지"로 판정 (해당 월 1일부터 경고, 이후 만료 상태 계속 경고)
-    var _expY=ps.expiry.getFullYear(),_expM=ps.expiry.getMonth();
-    var _curY=today.getFullYear(),_curM=today.getMonth();
-    var _reachedExpiryMonth=(_curY>_expY)||(_curY===_expY&&_curM>=_expM);
-    if(_reachedExpiryMonth)alerts.push({kind:'안전보건',days:dPs,expiry:ps.expiry});
+    // 2026-08-10: 안전보건시스템이 YYMM(월말일 추정)만 지원하던 舊형식일 때는 정확한 일수를 알 수
+    // 없어 "만료 연월에 도달했는지"로 대략 판정했으나, YYMMDD(정확한 만료일) 지원 후에는 신용평가와
+    // 동일하게 실제 잔여일수 기준으로 판정(1개월=30일 이내). 舊형식(YYMM) 데이터도 만료일이 해당
+    // 월 말일로 계산되므로 이 기준으로도 기존과 거의 동일한 시점(월초 무렵)에 경고가 뜬다.
+    if(dPs<=30)alerts.push({kind:'안전보건',days:dPs,expiry:ps.expiry});
   }
   // 일자리창출 B조건: 매년 4/1부터 재확인 필요 — 업체등록 화면에서 저장하기 전까지 경고 유지(4/15 경과 후에는 자동 해제되어 더 이상 해당 없음)
   var bY=jobBCycleYear(today);
