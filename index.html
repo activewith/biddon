@@ -7,6 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- SECTION: CSS-스타일 -->
 <style>
 :root{--bg:#f5f6f8;--panel:#fff;--border:#e3e6ec;--text:#1f2937;--muted:#6b7280;--primary:#2563eb;--primary-d:#1d4ed8;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
@@ -423,6 +425,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
           <option value="append">단순 추가</option>
         </select>
         <button class="btn btn-ghost" id="btn-export-db">DB → xlsx 백업</button>
+        <button class="btn btn-ghost" id="btn-export-jobscore" style="border-color:#0891b2;color:#0891b2" title="현재 DB관리 화면에 표시된(필터 적용된) 업체 목록을 일자리가점표 형식으로 이미지(PNG)와 xlsx 2가지로 다운로드">📊 일자리가점표(이미지+xlsx)</button>
         <button class="btn btn-ghost" id="btn-template-xlsx" style="border-color:#0369a1;color:#0369a1" title="임포트용 빈 서식(헤더+예시행) 다운로드">📥 임포트 서식</button>
         <button class="btn btn-warn" id="btn-add-company">＋ 업체 직접 추가</button>
         <button class="btn" id="btn-import-cert" style="background:#7c3aed">📋 경영확인서 등록</button>
@@ -5892,6 +5895,251 @@ function exportAgreementListXlsx(){
   XLSX.writeFile(wb2,'업체DB_협정업체리스트_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
+// ── 일자리가점표(이미지+xlsx) 내보내기 ──────────────────────────────────
+// 2026-08-10: 사용자가 제공한 "일자리 가점 O월 투찰 기준" 표(업체가 참여하는 공사업종을
+// 행으로 나열하고, 상호/사업자번호/부채·유동비율/신용평가/안전보건/급여가점/일자리가점은
+// 업체 단위로 세로 병합)를 참고해 추가. DB관리 화면에 현재 적용된 필터·정렬을 그대로 반영.
+// 급여가점=B조건(급여증가, +0.5) / 일자리가점=A조건(고용증가, +2.5) — 둘 다 state.db의 단일
+// 필드 c.일자리가점(0/0.5/2.5/3.0)에서 분해. 신용평가·안전보건 만료일은 저장된 약어(YYMM 등)를
+// parseCreditRating/parseSafetySystem으로 그대로 해석한 값이며, 원본 이미지의 일부 날짜(일자리
+// 만료일이 월말이 아닌 경우)는 이 앱이 관리하지 않는 수기 입력값이라 정확히 재현되지 않을 수 있음.
+function getVisibleDbCompanies(){
+  var search=($('#db-search').value||'').toLowerCase();
+  var region=$('#db-region-filter').value;
+  var onlyPerf=$('#db-filter-실적').checked;
+  var only자사=$('#db-filter-자사').checked;
+  var only미참여=$('#db-filter-미참여').checked;
+  var onlyExpiring=$('#btn-exp-alert').classList.contains('active');
+  var fE=$('#db-filter-전기').checked,fT=$('#db-filter-통신').checked,fS=$('#db-filter-소방').checked;
+  var only시평없음=$('#db-filter-시평없음').checked;
+  var grpFilterEl=document.getElementById('db-group-filter');var activeGrp=grpFilterEl?grpFilterEl.value:'';
+  var entries=state.db.map(function(c,i){return{c:c,i:i};});
+  if(dbSort.key){
+    var sk=dbSort.key;
+    entries.sort(function(a,b){return dbSort.dir*((Number(a.c[sk])||0)-(Number(b.c[sk])||0));});
+  } else {
+    entries.sort(function(a,b){
+      var da=a.c.등록일시||'',db_=b.c.등록일시||'';
+      if(da!==db_)return da<db_?-1:1;
+      return cleanCompanyNameForSort(a.c.업체명).localeCompare(cleanCompanyNameForSort(b.c.업체명),'ko',{numeric:true,sensitivity:'base'});
+    });
+  }
+  var out=[];
+  entries.forEach(function(entry){var c=entry.c;
+    if(region&&c.지역!==region)return;
+    if(onlyPerf&&!c.is실적)return;
+    if(only자사&&!c.is자사)return;
+    if(only시평없음&&!(c.시평액==null||c.시평액===''||Number(c.시평액)===0))return;
+    if(onlyExpiring&&getExpiryAlerts(c).length===0)return;
+    var _ti=companyTradeInfo(c);
+    if(only미참여||fE||fT||fS){
+      if(only미참여&&(_ti.hasE||_ti.hasT||_ti.hasS))return;
+      if(fE||fT||fS){
+        var matched=(fE&&_ti.hasE)||(fT&&_ti.hasT)||(fS&&_ti.hasS);
+        if(!matched)return;
+        if(!fE&&_ti.hasE)return;
+        if(!fT&&_ti.hasT)return;
+        if(!fS&&_ti.hasS)return;
+      }
+    }
+    if(activeGrp&&!(c.groups&&c.groups.indexOf(activeGrp)>=0))return;
+    if(search){var hay=(c.업체명+' '+(c.사업자번호||'')).toLowerCase();if(!hay.includes(search))return;}
+    out.push(c);
+  });
+  return out;
+}
+function _jobScoreCreditStr(c){
+  var raw=(c.신용평가||'').trim();
+  if(!raw)return '';
+  var cr=parseCreditRating(raw);
+  if(!cr)return raw;
+  if(cr.expiry&&!isNaN(cr.expiry.getTime())){
+    var y=cr.expiry.getFullYear(),m=String(cr.expiry.getMonth()+1).padStart(2,'0'),d=String(cr.expiry.getDate()).padStart(2,'0');
+    return cr.grade+'('+y+'.'+m+'.'+d+'.)'+(cr.isValid?'':' ⚠만료');
+  }
+  return cr.grade;
+}
+function _jobScoreSafetyStr(c){
+  var raw=(c.안전보건시스템||'').trim();
+  if(!raw)return '';
+  var ps=parseSafetySystem(raw);
+  if(!ps||!ps.type)return raw;
+  if(ps.expiry&&!isNaN(ps.expiry.getTime())){
+    var y=ps.expiry.getFullYear(),m=String(ps.expiry.getMonth()+1).padStart(2,'0'),d=String(ps.expiry.getDate()).padStart(2,'0');
+    return ps.type+'('+y+'.'+m+'.'+d+'.)'+(ps.valid?'':' ⚠만료');
+  }
+  return ps.type;
+}
+function _jobScoreBonusStrs(c){
+  var raw=Number(c.일자리가점!=null?c.일자리가점:(c.신인도||0));
+  var hasB=(raw===0.5||raw===3.0);
+  var aVal=hasB?Number((raw-0.5).toFixed(1)):raw;
+  var salaryStr=hasB?'+0.5':'X';
+  var jobStr=aVal>0?'+'+aVal.toFixed(1):'X';
+  return{salary:salaryStr,job:jobStr};
+}
+function buildJobScoreGroups(companies){
+  return companies.map(function(c){
+    var ti=companyTradeInfo(c);
+    var tradeRows=[];
+    if(ti.hasE){var pdE=getCompPerfData(c,'전기');tradeRows.push({공사업:'전기',시평액:pdE.시평액,실적3:pdE.실적3,실적5:pdE.실적5});}
+    if(ti.hasT){var pdT=getCompPerfData(c,'통신');tradeRows.push({공사업:'통신',시평액:pdT.시평액,실적3:pdT.실적3,실적5:pdT.실적5});}
+    if(ti.hasS){var pdS=getCompPerfData(c,'소방');tradeRows.push({공사업:'소방',시평액:pdS.시평액,실적3:pdS.실적3,실적5:pdS.실적5});}
+    if(!tradeRows.length)tradeRows.push({공사업:'-',시평액:c.시평액||0,실적3:c.실적3||0,실적5:c.실적5||0});
+    var bonus=_jobScoreBonusStrs(c);
+    return{
+      업체명:c.업체명||'',사업자번호:c.사업자번호||'',
+      부채비율:c.부채비율!=null?c.부채비율+'%':'',
+      유동비율:c.유동비율!=null?c.유동비율+'%':'',
+      신용평가:_jobScoreCreditStr(c),
+      안전보건:_jobScoreSafetyStr(c),
+      급여가점:bonus.salary,
+      일자리가점:bonus.job,
+      rows:tradeRows
+    };
+  });
+}
+var JOBSCORE_HEADERS=['상호','사업자등록번호','공사업','시공능력공시액','3년실적','5년실적','부채비율(%)','유동비율(%)','신용평가(만료일)','안전보건경영시스템(ISO)','급여가점','일자리가점'];
+function renderJobScoreTableEl(groups,monthLabel){
+  var html='<div style="display:inline-block;background:#fff;padding:16px;font-family:\'Malgun Gothic\',sans-serif">';
+  html+='<div style="text-align:center;font-size:18px;font-weight:700;margin-bottom:10px">일자리 가점 '+esc(monthLabel)+' 투찰 기준</div>';
+  html+='<table style="border-collapse:collapse;font-size:12px">';
+  html+='<thead><tr>'+JOBSCORE_HEADERS.map(function(h){return '<th style="border:1px solid #333;background:#f3f4f6;padding:6px 8px;white-space:nowrap">'+esc(h)+'</th>';}).join('')+'</tr></thead>';
+  html+='<tbody>';
+  groups.forEach(function(g){
+    var n=g.rows.length;
+    g.rows.forEach(function(r,ri){
+      html+='<tr>';
+      if(ri===0){
+        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center;font-weight:600">'+esc(g.업체명)+'</td>';
+        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.사업자번호)+'</td>';
+      }
+      html+='<td style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(r.공사업)+'</td>';
+      html+='<td style="border:1px solid #333;padding:6px 8px;text-align:right">'+FMT_NUM(r.시평액)+'</td>';
+      html+='<td style="border:1px solid #333;padding:6px 8px;text-align:right">'+FMT_NUM(r.실적3)+'</td>';
+      html+='<td style="border:1px solid #333;padding:6px 8px;text-align:right">'+FMT_NUM(r.실적5)+'</td>';
+      if(ri===0){
+        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.부채비율)+'</td>';
+        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.유동비율)+'</td>';
+        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.신용평가)+'</td>';
+        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.안전보건)+'</td>';
+        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center">'+esc(g.급여가점)+'</td>';
+        html+='<td rowspan="'+n+'" style="border:1px solid #333;padding:6px 8px;text-align:center;font-weight:700;color:#dc2626">'+esc(g.일자리가점)+'</td>';
+      }
+      html+='</tr>';
+    });
+  });
+  html+='</tbody></table></div>';
+  var wrap=document.createElement('div');
+  wrap.style.cssText='position:fixed;left:-99999px;top:0;background:#fff;z-index:-1;';
+  wrap.innerHTML=html;
+  document.body.appendChild(wrap);
+  return wrap;
+}
+function exportJobScoreImage(groups,monthLabel,cb){
+  if(typeof html2canvas==='undefined'){toast('이미지 생성 라이브러리(html2canvas) 로드 실패 — 네트워크를 확인하세요','err');if(cb)cb();return;}
+  var el=renderJobScoreTableEl(groups,monthLabel);
+  html2canvas(el,{scale:2,backgroundColor:'#ffffff'}).then(function(canvas){
+    document.body.removeChild(el);
+    canvas.toBlob(function(blob){
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='일자리가점표_'+new Date().toISOString().slice(0,10)+'.png';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      if(cb)cb();
+    },'image/png');
+  }).catch(function(err){
+    if(el.parentNode)document.body.removeChild(el);
+    toast('이미지 생성 실패: '+(err&&err.message?err.message:err),'err');
+    if(cb)cb();
+  });
+}
+function exportJobScoreXlsx(groups,monthLabel){
+  if(typeof ExcelJS==='undefined'){toast('엑셀 생성 라이브러리(ExcelJS) 로드 실패 — 네트워크를 확인하세요','err');return;}
+  var wb=new ExcelJS.Workbook();
+  var ws=wb.addWorksheet('일자리가점');
+  ws.columns=[{width:18},{width:16},{width:8},{width:16},{width:16},{width:16},{width:10},{width:10},{width:18},{width:20},{width:9},{width:9}];
+  ws.mergeCells(1,1,1,JOBSCORE_HEADERS.length);
+  var titleCell=ws.getCell(1,1);
+  titleCell.value='일자리 가점 '+monthLabel+' 투찰 기준';
+  titleCell.font={bold:true,size:14};
+  titleCell.alignment={horizontal:'center',vertical:'middle'};
+  ws.getRow(1).height=24;
+  var headerRow=ws.getRow(2);
+  JOBSCORE_HEADERS.forEach(function(h,i){
+    var cell=headerRow.getCell(i+1);
+    cell.value=h;
+    cell.font={bold:true};
+    cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF3F4F6'}};
+  });
+  headerRow.height=20;
+  var r=3;
+  groups.forEach(function(g){
+    var n=g.rows.length;
+    var startRow=r;
+    g.rows.forEach(function(tr){
+      var row=ws.getRow(r);
+      row.getCell(3).value=tr.공사업;
+      row.getCell(3).alignment={horizontal:'center'};
+      row.getCell(4).value=Number(tr.시평액)||0;
+      row.getCell(5).value=Number(tr.실적3)||0;
+      row.getCell(6).value=Number(tr.실적5)||0;
+      [4,5,6].forEach(function(ci){row.getCell(ci).numFmt='#,##0';row.getCell(ci).alignment={horizontal:'right'};});
+      r++;
+    });
+    if(n>1){
+      ws.mergeCells(startRow,1,startRow+n-1,1);
+      ws.mergeCells(startRow,2,startRow+n-1,2);
+      ws.mergeCells(startRow,7,startRow+n-1,7);
+      ws.mergeCells(startRow,8,startRow+n-1,8);
+      ws.mergeCells(startRow,9,startRow+n-1,9);
+      ws.mergeCells(startRow,10,startRow+n-1,10);
+      ws.mergeCells(startRow,11,startRow+n-1,11);
+      ws.mergeCells(startRow,12,startRow+n-1,12);
+    }
+    ws.getCell(startRow,1).value=g.업체명;
+    ws.getCell(startRow,2).value=g.사업자번호;
+    ws.getCell(startRow,7).value=g.부채비율;
+    ws.getCell(startRow,8).value=g.유동비율;
+    ws.getCell(startRow,9).value=g.신용평가;
+    ws.getCell(startRow,10).value=g.안전보건;
+    ws.getCell(startRow,11).value=g.급여가점;
+    ws.getCell(startRow,12).value=g.일자리가점;
+    [1,2,7,8,9,10,11,12].forEach(function(ci){
+      ws.getCell(startRow,ci).alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    });
+    ws.getCell(startRow,1).font={bold:true};
+    ws.getCell(startRow,12).font={bold:true,color:{argb:'FFDC2626'}};
+  });
+  var lastRow=r-1;
+  for(var rr=2;rr<=lastRow;rr++){
+    for(var cc=1;cc<=JOBSCORE_HEADERS.length;cc++){
+      ws.getCell(rr,cc).border={top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
+    }
+  }
+  ws.views=[{state:'frozen',ySplit:2}];
+  wb.xlsx.writeBuffer().then(function(buf){
+    var blob=new Blob([buf],{type:'application/octet-stream'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='일자리가점표_'+new Date().toISOString().slice(0,10)+'.xlsx';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }).catch(function(err){
+    toast('엑셀 생성 실패: '+(err&&err.message?err.message:err),'err');
+  });
+}
+function generateJobScoreReport(){
+  var companies=getVisibleDbCompanies();
+  if(!companies.length){toast('표시할 업체가 없습니다 (검색/필터 조건을 확인하세요)','err');return;}
+  var groups=buildJobScoreGroups(companies);
+  var monthLabel=(new Date().getMonth()+1)+'월';
+  exportJobScoreXlsx(groups,monthLabel);
+  exportJobScoreImage(groups,monthLabel,function(){
+    toast('일자리가점표 이미지(PNG)+xlsx 저장 완료 ('+groups.length+'개 업체)','ok');
+  });
+}
+
 function exportTemplateXlsx(){
   // 신 임포트 서식 (일자리가점/감점 없음, 메모 맨 뒤, 공사업종 2글자)
   // 약어: K(YYMM)=KOSHA-MS 안전보건 / S(YYMM)=ISO45001 / A+(YYMM)=신용평가 등급+유효기간
@@ -7404,6 +7652,7 @@ function bind(){
     refreshDB();
   });
   $('#btn-export-db').addEventListener('click',exportDBXlsx);
+  $('#btn-export-jobscore').addEventListener('click',generateJobScoreReport);
   $('#btn-template-xlsx').addEventListener('click',exportTemplateXlsx);
   $('#db-search').addEventListener('input',refreshDB);
   $('#db-region-filter').addEventListener('change',refreshDB);
