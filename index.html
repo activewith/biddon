@@ -33,6 +33,9 @@ header nav button.active{background:var(--primary)}
 .bid-del-btn{background:transparent;color:#94a3b8;border:none;font-size:14px;line-height:1;cursor:pointer;padding:2px 4px;border-radius:4px;flex:0 0 auto}
 .bid-del-btn:hover{background:#dc2626;color:#fff}
 .bid-screen-tab-wrap.active-wrap .bid-del-btn{color:#64748b}
+.bid-screen-tab-wrap.search-hit{background:#f59e0b;box-shadow:0 0 0 2px #fbbf24 inset}
+.bid-screen-tab-wrap.search-hit button[data-bid-screen]{color:#1a1a2e;font-weight:700}
+.bid-screen-tab-wrap.search-hit.active-wrap{background:#fde68a}
 #btn-add-bid-screen{flex:0 0 auto;align-self:flex-end;background:#475569;font-weight:700;border-radius:7px 7px 0 0;height:32px;padding:0 12px;border:none;color:#fff;cursor:pointer}
 main{padding:12px;max-width:1700px;margin:0 auto}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px}
@@ -261,6 +264,10 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
     <span id="settings-alert-dot" style="display:none;position:absolute;top:1px;right:1px;width:8px;height:8px;border-radius:50%;background:#ef4444;border:1px solid #fff;pointer-events:none"></span>
   </span>
   <span id="session-info"><span id="session-user-label"></span><button id="btn-mypw" class="btn btn-ghost btn-sm" title="내 비밀번호 변경" style="padding:2px 6px">🔑</button><button id="btn-logout" class="btn btn-sm" style="background:#475569" title="로그아웃">로그아웃</button></span>
+  <span id="bid-tab-search-box" style="display:flex;align-items:center;gap:4px">
+    <input type="text" id="in-bid-tab-search" placeholder="공고검색" style="width:120px;padding:5px 8px;border:1px solid #475569;border-radius:6px;background:#0f172a;color:#fff;font-size:12px">
+    <button type="button" id="btn-bid-tab-search" style="background:#334155;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap">공고검색</button>
+  </span>
   <nav>
     <button data-tab="bid" id="btn-nav-bid" class="active">입찰적격판정</button>
     <button data-tab="db">업체 DB 관리</button>
@@ -8840,6 +8847,22 @@ function deleteBidScreen(idx){
   renderBidScreenTabs();
   save();
 }
+// ── 입찰적격판정 화면탭 검색 — 2026-08-11: 탭이 많아지면 원하는 공고를 찾기 어려워 추가.
+// 탭을 곧바로 전환하지 않고(검색어와 일치하는 화면이 여러 개일 수 있으므로) 일치하는 탭들의
+// 색만 강조 표시(.search-hit)하고, 실제 전환은 사용자가 강조된 탭을 직접 클릭해서 하도록 함.
+var bidTabSearchMatches=[];
+function searchBidScreens(term){
+  term=(term||'').trim();
+  if(!term){bidTabSearchMatches=[];renderBidScreenTabs();return;}
+  var q=term.toLowerCase();
+  bidTabSearchMatches=state.bidScreens.map(function(scr,i){
+    var hay=((scr.name||'')+' '+((scr.bid&&scr.bid.공고명)||'')+' '+((scr.bid&&scr.bid.공고번호)||'')).toLowerCase();
+    return hay.indexOf(q)>=0?i:-1;
+  }).filter(function(i){return i>=0;});
+  renderBidScreenTabs();
+  if(bidTabSearchMatches.length===0)toast('일치하는 입찰적격판정 탭이 없습니다','bad');
+  else toast(bidTabSearchMatches.length+'개 탭 일치','ok');
+}
 function renderBidScreenTabs(){
   var root=document.getElementById('bid-screen-tabs');
   if(!root)return;
@@ -8854,9 +8877,10 @@ function renderBidScreenTabs(){
   //    렌더링 순서(state.bidScreens 배열 순서)를 그대로 따라가면 최신 탭이 자동으로 '+' 바로 오른쪽(맨 왼쪽)에 옴.
   var html='<button type="button" id="btn-add-bid-screen" title="입찰적격판정 화면 추가">＋</button>'+state.bidScreens.map(function(scr,i){
     var isActive=(i===state.activeBidScreenIndex);
+    var isHit=bidTabSearchMatches.indexOf(i)>=0;
     var delBtn=state.bidScreens.length>1?('<button type="button" class="bid-del-btn" data-bid-del="'+i+'" title="화면 삭제">×</button>'):'';
     var _nm=(scr.bid&&scr.bid.공고명)?esc(scr.bid.공고명):'';
-    return '<span class="bid-screen-tab-wrap'+(isActive?' active-wrap':'')+'"><button data-tab="bid" data-bid-screen="'+i+'"'+(isActive?' class="active"':'')+(_nm?' title="'+_nm+'"':'')+'>'+esc(scr.name)+'</button>'+delBtn+'</span>';
+    return '<span class="bid-screen-tab-wrap'+(isActive?' active-wrap':'')+(isHit?' search-hit':'')+'"><button data-tab="bid" data-bid-screen="'+i+'"'+(isActive?' class="active"':'')+(_nm?' title="'+_nm+'"':'')+'>'+esc(scr.name)+'</button>'+delBtn+'</span>';
   }).join('');
   root.innerHTML=html;
   root.querySelectorAll('button[data-bid-screen]').forEach(function(btn){
@@ -9092,6 +9116,9 @@ function boot(){
   lhRefreshStats();
   var _gb=document.getElementById('btn-gist-sync');
   if(_gb)_gb.addEventListener('click',openGistModal);
+  var _bts=document.getElementById('btn-bid-tab-search'),_its=document.getElementById('in-bid-tab-search');
+  if(_bts)_bts.addEventListener('click',function(){searchBidScreens(_its?_its.value:'');});
+  if(_its)_its.addEventListener('keydown',function(e){if(e.key==='Enter')searchBidScreens(_its.value);});
   gistPull();
   startGistAutoPush();
   checkExpiryAlertsOnBoot();
