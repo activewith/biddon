@@ -16,7 +16,7 @@ body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",s
 #top-sticky{position:sticky;top:0;z-index:10}
 header{background:#1e293b;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:16px;flex-wrap:nowrap;overflow:hidden}
 header h1{margin:0;font-size:16px;font-weight:700}
-header nav{display:flex;gap:4px;margin-left:auto;flex:0 0 auto}
+header nav{display:flex;gap:4px;flex:0 0 auto}
 header nav button{background:#334155;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}
 header nav button.active{background:var(--primary)}
 /* ── 2026-07-31: '입찰적격판정' 버튼 색상 실험(짙은 네이비 → 오렌지)을 모두 원복. 다른 nav 버튼과
@@ -264,7 +264,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
     <span id="settings-alert-dot" style="display:none;position:absolute;top:1px;right:1px;width:8px;height:8px;border-radius:50%;background:#ef4444;border:1px solid #fff;pointer-events:none"></span>
   </span>
   <span id="session-info"><span id="session-user-label"></span><button id="btn-mypw" class="btn btn-ghost btn-sm" title="내 비밀번호 변경" style="padding:2px 6px">🔑</button><button id="btn-logout" class="btn btn-sm" style="background:#475569" title="로그아웃">로그아웃</button></span>
-  <span id="bid-tab-search-box" style="display:flex;align-items:center;gap:4px">
+  <span id="bid-tab-search-box" style="display:flex;align-items:center;gap:4px;margin-left:auto">
     <input type="text" id="in-bid-tab-search" placeholder="공고검색" style="width:120px;padding:5px 8px;border:1px solid #475569;border-radius:6px;background:#0f172a;color:#fff;font-size:12px">
     <button type="button" id="btn-bid-tab-search" style="background:#334155;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap">공고검색</button>
   </span>
@@ -4822,9 +4822,18 @@ function extractBidFields(t){
     // 1칸만 남는 경우(레이아웃이 CSS padding으로 처리되는 사이트) 1순위가 실패해 2순위(키워드 promiscuous 매칭:
     // "분담이행"·"전기공사업" 등 공동수급체 안내문·근거법령 문구는 단일공종 공고에도 거의 항상 등장함)로
     // 새버려 단일 종목(예: 전기)이 복합(전기+분담)으로 오판정되는 사례 발견. 여는 구분자만 1칸 이상으로 완화.
-    var _tmatch=t.match(/종\s*목[ \t]{1,}([^\r\n]{1,80}?)(?:[ \t]{2,}|[\r\n]|$)/);
-    if(_tmatch){
-      var _tt=_tmatch[1];
+    // 2026-08-11: 나라장터/전기넷 등 목록 화면 상단에는 "종목 전체 지역 전체 금액 전체" 같은
+    // 검색조건(필터) 위젯이 실제 "종목" 값보다 먼저 나오는 경우가 있음. t.match()는 문서 내 첫
+    // "종목" 위치만 보므로 이 필터 위젯("전체")에 걸려 진짜 값(예: "전기")을 못 찾고 포기하던 버그.
+    // → 후보를 전부 순회하며 "전체"(필터 기본값)는 건너뛰고 실제 값이 있는 첫 후보를 채택.
+    var _tRe=/종\s*목[ \t]{1,}([^\r\n]{1,80}?)(?:[ \t]{2,}|[\r\n]|$)/g;
+    var _tExec,_tt=null;
+    while((_tExec=_tRe.exec(t))){
+      var _cand=_tExec[1].trim();
+      if(_cand===''||_cand==='전체')continue; // 목록 화면 필터 위젯의 "종목: 전체"는 무시
+      _tt=_cand;break;
+    }
+    if(_tt!=null){
       // 복합 표기는 슬래시(/)로 구분: "전기/전문소방", "금속구조물.창호.온실/지붕판금.건축물조립" 등
       // 슬래시 없이 하나의 값만 있으면 단일 공종.
       var _segs=_tt.split('/').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
@@ -5172,7 +5181,7 @@ function extractBidFields(t){
 }
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
-  var labels={기초금액:'기초금액 E4',추정가격:'추정가격 E5',시평제한:'시평제한 E3',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수 H6',투찰률:'투찰률 H7(%)'};
+  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)'};
   var root=MODAL_ROOT;
   if(keys.length===0){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:400px">'+
@@ -7097,17 +7106,17 @@ function bind(){
   // ── 설정 팝업 (톱니바퀴) ──────────────────────────────────────────
   function openSettingsModal(initialTab){
     var KW_FIELDS=[
-      {key:'기초금액',   label:'기초금액 E4',       hint:'기초금액, 공사비'},
-      {key:'추정가격',   label:'추정가격 E5',       hint:'추정가격, 도급금액'},
-      {key:'시평제한',   label:'시평제한 E3',       hint:'시평제한, 평가기준금액'},
+      {key:'기초금액',   label:'기초금액',          hint:'기초금액, 공사비'},
+      {key:'추정가격',   label:'추정가격',          hint:'추정가격, 도급금액'},
+      {key:'시평제한',   label:'시평제한',          hint:'시평제한, 평가기준금액'},
       {key:'분담시평',   label:'분담 시평제한',     hint:'분담 시평, 타공종 시평'},
       {key:'lh지분율기준',label:'지분율기준(LH)',   hint:'추정금액'},
       {key:'lh순공사원가',label:'순공사원가(LH)',   hint:'순공사원가'},
       {key:'지역의무지분',label:'지역의무지분(%)',  hint:'지역의무, 시공참여비율'},
       {key:'최소지분율', label:'최소지분율(%)',     hint:'최소지분율, 최소분담비율'},
       {key:'구성업체수', label:'구성업체수',        hint:'구성업체수, 개사이내'},
-      {key:'배수',       label:'배수 H6',           hint:'실적배수'},
-      {key:'투찰률',     label:'투찰률 H7(%)',      hint:'투찰률'},
+      {key:'배수',       label:'배수',              hint:'실적배수'},
+      {key:'투찰률',     label:'투찰률(%)',         hint:'투찰률'},
       {key:'A값',        label:'A값',               hint:'A값, 예정가격'},
     ];
     {
