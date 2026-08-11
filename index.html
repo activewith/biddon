@@ -2621,9 +2621,13 @@ function buildBidMsgHeader(b){
   var line2=b.공고번호?(b.공고번호+(regStr?' ('+regStr+')':'')):'';
   if(line2)lines.push(line2);
   if(b.추정가격!=null&&b.추정가격!==''&&!isNaN(b.추정가격))lines.push('추정가격 '+FMT_NUM(b.추정가격)+'원');
-  if(b.마감일){
-    var 기준=기준약칭(b.적격기준);
-    lines.push('마감 '+b.마감일+(기준?' ('+기준+')':''));
+  if(b.협정마감일_YMD){
+    var _ymdH=String(b.협정마감일_YMD).split('-');
+    if(_ymdH.length===3){
+      var 마감표시=_ymdH[1]+'/'+_ymdH[2];
+      var 기준=기준약칭(b.적격기준);
+      lines.push('마감 '+마감표시+(기준?' ('+기준+')':''));
+    }
   }
   return lines.join('\n');
 }
@@ -2647,7 +2651,12 @@ function getOneLineSummary(b, c, hideLHNote) {
   var 구성str=n+'인'+(n<=2?'':(최소str||''));
   
   var parts=[];
-  parts.push((new Date().getMonth()+1)+'월'); // 2026-08-06: 메세지/요약 맨 앞에 표시 시점의 월 표기
+  var 마감str='';
+  if(b.협정마감일_YMD){
+    var _ymdP=String(b.협정마감일_YMD).split('-');
+    if(_ymdP.length===3){var _mm=parseInt(_ymdP[1],10);var _dd=parseInt(_ymdP[2],10);if(!isNaN(_mm)&&!isNaN(_dd))마감str='('+_mm+'/'+_dd+'마감)';}
+  }
+  parts.push((new Date().getMonth()+1)+'월'+마감str); // 2026-08-06: 메세지/요약 맨 앞에 표시 시점의 월 표기, 2026-08-11: 협정마감일 병기
   var 공종=b.공종||'전기';
   if(공종!=='전기')parts.push(공종);
   parts.push(기준,지역);
