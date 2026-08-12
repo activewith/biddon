@@ -285,8 +285,8 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
     <div class="panel">
       <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span><span id="o-kepco-badge" style="display:none;font-size:11px;font-weight:700;color:#fff;background:#7c3aed;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle">⚡ 한전적격 전용 페이지</span></h2>
       <div class="row" style="gap:12px">
-        <div class="field"><label>시평제한 (비우면 미적용)</label><input type="text" inputmode="numeric" class="money" id="in-시평제한" placeholder="예: 30,000,000,000"></div>
-        <div class="field"><label>분담 시평제한 <span style="font-size:10px;color:#6b7280">(복합공종, 비우면 미적용)</span></label><input type="text" inputmode="numeric" class="money" id="in-분담시평" placeholder="예: 100,000,000" style="background:#f1f5f9;border-color:#94a3b8"></div>
+        <div class="field" id="field-시평제한"><label>시평제한 (비우면 미적용)</label><input type="text" inputmode="numeric" class="money" id="in-시평제한" placeholder="예: 30,000,000,000"></div>
+        <div class="field" id="field-분담시평"><label>분담 시평제한 <span style="font-size:10px;color:#6b7280">(복합공종, 비우면 미적용)</span></label><input type="text" inputmode="numeric" class="money" id="in-분담시평" placeholder="예: 100,000,000" style="background:#f1f5f9;border-color:#94a3b8"></div>
         <div class="field"><label>기초금액 (없으면 비움)</label><input type="text" inputmode="numeric" class="money" id="in-기초금액" placeholder="자동: 추정×1.1"></div>
         <div class="field"><label>추정가격</label><input type="text" inputmode="numeric" class="money" id="in-추정가격" placeholder="예: 5,000,000,000"></div>
         <div class="field"><label>배수</label><input type="number" id="in-배수" step="0.01" placeholder="자동(50억↑=2)"></div>
@@ -343,7 +343,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       <!-- 업계평균 입력은 DB탭에서 관리 -->
       <div class="summary" style="margin-top:10px">
         <div class="stat"><div class="k">기초가격(자동)</div><div class="v" id="o-기초자동">-</div><div id="o-기초자동-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
-        <div class="stat"><div class="k">시평제한</div><div class="v" id="o-시평제한">미적용</div><div id="o-시평제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
+        <div class="stat" id="stat-시평제한"><div class="k">시평제한</div><div class="v" id="o-시평제한">미적용</div><div id="o-시평제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-분담시평" style="display:none;background:#f1f5f9;border-color:#94a3b8"><div class="k" style="color:#334155">분담시평제한</div><div class="v" style="color:#334155" id="o-분담시평">미적용</div><div id="o-분담시평-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat"><div class="k">실적제한</div><div class="v" id="o-실적제한">-</div><div id="o-실적제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-lh지분율기준" style="display:none;background:#fef3c7;border-color:#fde68a"><div class="k" style="color:#92400e">지분율기준</div><div class="v" style="color:#92400e" id="o-lh지분율기준">-</div><div id="o-lh지분율기준-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
@@ -5151,6 +5151,7 @@ function extractBidFields(t){
         if(Object.keys(_bmPairs).length>=2)r.한전분담비율=_bmPairs;
       }
     }
+    delete r.시평제한;delete r.분담시평;
   }
   m=t.match(/실적\s*배수\s*[：:\s]?\s*(\d(?:\.\d+)?)\s*배/);
   if(m)r.배수=Number(m[1]);
@@ -5282,6 +5283,30 @@ function extractBidFields(t){
   })();
   return r;
 }
+// 한전(한국전력공사) 전용: 공고문분석결과 모달에서 반영 전 미리보기로 실적제한 금액을 표시.
+// calcBid()의 한전분담E6 로직과 동일하게, 공동도급/분담이행 비율이 검출된 경우 업종별로 나눠 각각 10억 기준 배수(×1/×0.5)를 적용한다.
+function _kepcoPerfLimitPreviewHtml(found){
+  if(found.적격기준!=='한전')return'';
+  var base=(found.기초금액!=null&&found.기초금액!==''&&!isNaN(found.기초금액))?Number(found.기초금액):
+    ((found.추정가격!=null&&found.추정가격!==''&&!isNaN(found.추정가격))?Number(found.추정가격)*1.1:null);
+  if(base==null||isNaN(base)||base<=0)return'';
+  var lines=[];
+  if(found.한전분담비율&&Object.keys(found.한전분담비율).length>=2){
+    Object.keys(found.한전분담비율).forEach(function(k){
+      var pct=Number(found.한전분담비율[k])||0;
+      var amt=base*pct/100;
+      var mult=amt>=LIMIT_10?1:0.5;
+      var limit=amt*mult;
+      lines.push(k+'공사 '+pct+'% : '+FMT_NUM(Math.round(base))+'×'+pct+'%='+FMT_NUM(Math.round(amt))+' ('+(mult===1?'10억이상':'10억미만')+')×'+mult+' = <b>'+FMT_NUM(Math.round(limit))+'</b>');
+    });
+  } else {
+    var mult2=base>=LIMIT_10?1:0.5;
+    var limit2=base*mult2;
+    lines.push(FMT_NUM(Math.round(base))+' ('+(mult2===1?'10억이상':'10억미만')+')×'+mult2+' = <b>'+FMT_NUM(Math.round(limit2))+'</b>');
+  }
+  return '<div style="font-size:12px;font-weight:700;color:#7c3aed;margin:10px 0 4px">⚡ 실적제한 미리보기 (5년실적 기준, 참고용)</div>'+
+    '<div style="font-size:12px;color:#374151;line-height:1.7;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:6px 10px">'+lines.join('<br>')+'</div>';
+}
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
   var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)'};
@@ -5306,6 +5331,7 @@ function showPdfResultModal(found,preview){
   var commonKeys=(found.적격기준==='한전')?['공종','지역선택','추정가격','기초금액','적격기준','투찰률','A값']:['공종','지역선택','추정가격','기초금액','지역의무지분','최소지분율','구성업체수','적격기준','투찰률','A값'];
   var fallbackKeys={기초금액:1,A값:1}; // 미검출이어도 "미정"으로 표시하고 버튼을 막지 않음
   var excludeKeys=['공사명','공고번호','발주처','마감일','등록마감일','협정마감일_YMD','기초금액_label','한전분담비율'];
+  if(found.적격기준==='한전')excludeKeys=excludeKeys.concat(['시평제한','분담시평']);
   var _regionList=getRegionMasterList();
   // 2026-08-07: 지역선택 슬롯 개수 제한(기존 3개 고정) 제거 — 검출된 지역 수만큼 기본 슬롯을 그리고, "+"로 계속 추가 가능.
   var regionSlotN=Math.max(1,Array.isArray(found.지역선택)?found.지역선택.length:(found.지역선택?1:0));
@@ -5431,6 +5457,7 @@ function showPdfResultModal(found,preview){
     '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">반영할 항목을 선택하세요.</p>'+
     '<div style="font-size:12px;font-weight:700;color:#1d4ed8;margin:4px 0">공통(필수)항목</div>'+
     '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody id="m-pdf-common-tbody">'+commonRows+'</tbody></table>'+
+    _kepcoPerfLimitPreviewHtml(found)+
     (individualRows?(
     '<div style="font-size:12px;font-weight:700;color:#374151;margin:12px 0 4px">개별항목</div>'+
     '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody id="m-pdf-individual-tbody">'+individualRows+'</tbody></table>'
@@ -6304,6 +6331,7 @@ function renderSlotRow(ci,si,r,calc,forceAllocOn){
   var isDam=grp==='분담'||grp==='소방'||grp==='통신'; // 분담계열: 적격계산 제외
   // 시평액만은 예외: '분담' 그룹은 분담시평 게이트에 쓰이므로 입력 가능해야 함(레거시 소방/통신 그룹은 계속 비활성).
   var isDamSiPyeongLock=grp==='소방'||grp==='통신';
+  var _kHide=(calc&&calc.isKEPCO)?' style="display:none"':'';
   var bg=TYPE_BG[grp]||'#f3f4f6';
   var bd=TYPE_BD[grp]||'#d1d5db';
   var _expWarnSlot=(r.업체명&&r.업체명.trim())?expiryWarnHTML(state.db.find(function(x){return x.업체명===r.업체명;})):'';
@@ -6350,11 +6378,11 @@ function renderSlotRow(ci,si,r,calc,forceAllocOn){
         :' value="'+FMT_REP(Math.abs(r.감점||0))+'"'+(r.감점Override?' title="수동 입력값 (자동계산 대신 사용)" style="color:#1d4ed8;background:#eff6ff"':''))+
     '></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
-    '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDamSiPyeongLock?' disabled style="color:#9ca3af;background:#f3f4f6"':(grp==='분담'?' title="분담 업체의 시공능력평가액 — 분담시평 제한 판정에 사용"':''))+' ></td>'+
-    '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':(calc&&calc.isRail?' style="color:#d1d5db" title="철도공단: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isDoRo?' style="color:#d1d5db" title="도로공사: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isKEPCO?' style="color:#d1d5db" title="한전: 최대지분율 제한 미적용(실적비율 참고용)"':''))))+'>'+TRIMDEC(r.최대지분율_pct||0)+'%</td>'+
+    '<td'+_kHide+'><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDamSiPyeongLock?' disabled style="color:#9ca3af;background:#f3f4f6"':(grp==='분담'?' title="분담 업체의 시공능력평가액 — 분담시평 제한 판정에 사용"':''))+' ></td>'+
+    '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':(calc&&calc.isRail?' style="color:#d1d5db" title="철도공단: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isDoRo?' style="color:#d1d5db" title="도로공사: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isKEPCO?' style="display:none"':''))))+'>'+TRIMDEC(r.최대지분율_pct||0)+'%</td>'+
     '<td><input type="number" class="pct '+(r.over?'over':(r.under?'under':(r.isRec?'isrec':'')))+'" step="0.01" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율" value="'+(r.지분율||0)+'"></td>'+
     '<td data-cell="'+ci+'-'+si+'-환산실적">'+FMT_NUM(Math.round(r.지분환산실적))+'</td>'+
-    '<td data-cell="'+ci+'-'+si+'-환산시평">'+FMT_NUM(Math.round(r.지분환산시평))+'</td>'+
+    '<td data-cell="'+ci+'-'+si+'-환산시평"'+_kHide+'>'+FMT_NUM(Math.round(r.지분환산시평))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-신인도가점">'+FMT_REP(r.신인도가점)+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-감점가점">'+FMT_REP(r.감점가점)+'</td>'+
     (r.FuncNumeric?
@@ -6442,7 +6470,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         '<span class="small">감점환산: <b data-stat="감점환산">'+FMT_REP(result.감점환산)+'</b></span>'+
         '<span class="small">순신인도: <b data-stat="순신인도">'+FMT_REP(result.순신인도)+'</b></span>'+
         '<span class="small">합산실적: <b data-stat="합산실적">'+FMT_NUM(Math.round(result.합산실적))+'</b></span>'+
-        '<span class="small">합산시평: <b data-stat="합산시평">'+FMT_NUM(Math.round(result.합산시평))+'</b></span>'+
+        (comboCalc.isKEPCO?'':'<span class="small">합산시평: <b data-stat="합산시평">'+FMT_NUM(Math.round(result.합산시평))+'</b></span>')+
         '<span class="small">지분합: <b data-stat="지분합" class="'+(result.지분율OK?'ok-text':'bad-text')+'">'+TRIMDEC(FLOOR1(result.지분합_pct))+'%</b></span>'+
         '<span class="small" style="display:flex;align-items:center;gap:3px" title="이 조합만 적용할 사정률(0%기준). 비워두면 공고 사정률('+_sjPlaceholder+'%) 사용">'+
           '사정률<input type="number" class="combo-sajeong-input" data-ci="'+ci+'" step="0.001"'+
@@ -6468,9 +6496,9 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           '<thead><tr>'+
             '<th class="l" style="min-width:155px">유형 / 업체</th>'+
             '<th>신인도<br><span style="font-size:10px">(가점)</span></th><th>감점</th>'+
-            '<th>'+(comboCalc.use3yr?'3년':'5년')+'<br>실적</th><th>시평액</th>'+
-            '<th>최대<br>지분율</th><th>지분율<br>(%)</th>'+
-            '<th>환산<br>실적</th><th>환산<br>시평</th>'+
+            '<th>'+(comboCalc.use3yr?'3년':'5년')+'<br>실적</th><th'+(comboCalc.isKEPCO?' style="display:none"':'')+'>시평액</th>'+
+            '<th'+(comboCalc.isKEPCO?' style="display:none"':'')+'>최대<br>지분율</th><th>지분율<br>(%)</th>'+
+            '<th>환산<br>실적</th><th'+(comboCalc.isKEPCO?' style="display:none"':'')+'>환산<br>시평</th>'+
             '<th>신인도<br>가점</th><th>감점<br>가점</th>'+
             '<th style="color:#0369a1;min-width:56px" title="특별 계산점수 · 참고사항 수동 입력용 (예: 철도기술점수 총합산점수)">Func</th>'+
             '<th style="color:#7c3aed;min-width:128px;cursor:help" title="비율 = 해당업체/업계평균×100%\n\n부채비율 등급(비율 기준):\nA: 50% 미만  B: 50~75%\nC: 75~100%  D: 100~125%\nE: 125% 이상\n\n유동비율 등급(비율 기준):\nA: 150% 이상  B: 120~150%\nC: 100~120%  D: 70~100%\nE: 70% 미만">경영상태 등급 ℹ</th><th></th>'+
@@ -6482,7 +6510,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         '<div class="item"><span class="k">'+(comboCalc.isKEPCO?'실적비율':'적격여부')+'</span><span class="v '+(comboCalc.isKEPCO?'':(result.적격?'ok-text':'bad-text'))+'" data-stat="적격사유">'+(comboCalc.isKEPCO?result.적격사유:(result.적격?'OK':result.적격사유))+'</span></div>'+
         '<div data-scorefoot="'+ci+'" style="display:contents">'+scoreFootHtml+'</div>'+
         (comboCalc.isKEPCO&&comboCalc.한전분담E6?'':'<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>')+
-        '<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>'+
+        (comboCalc.isKEPCO?'':'<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>')+
         (comboCalc.분담시평!=null?('<div class="item"><span class="k">분담시평 대비</span><span class="v">'+분담시평대비+'</span></div>'):'')+
         '<div class="item"><span class="k">순 신인도</span><span class="v" data-stat="순신인도2">'+FMT_REP(result.순신인도)+'</span></div>'+
       '</div>';
@@ -6685,11 +6713,12 @@ function refreshBidStats(){
     $('#o-50억').textContent=c.is50억?'예 (배수2 / 87.495%)':'아니오 (배수1 / 88.745%)';
     if(!c.isJija&&!c.isLH)$('#o-50억-label').textContent='기준 구분';
   }
+  var _시평Stat=$('#stat-시평제한');if(_시평Stat)_시평Stat.style.display=c.isKEPCO?'none':'';
   var _시평El=$('#o-시평제한');if(_시평El)_시평El.textContent=c.E3==null?'미적용':FMT_NUM(c.E3);
   var _eok2=document.getElementById('o-시평제한-eok');if(_eok2)_eok2.textContent=c.E3!=null?fmtEok(c.E3):'';
   var _damStat=$('#stat-분담시평');
   if(_damStat){
-    var _isComplex=(normGongjong(state.bid.공종)==='복합(전기+분담)');
+    var _isComplex=(normGongjong(state.bid.공종)==='복합(전기+분담)')&&!c.isKEPCO;
     _damStat.style.display=_isComplex?'':'none';
     if(_isComplex){
       var _dEl=$('#o-분담시평');if(_dEl)_dEl.textContent=c.분담시평==null?'미적용':FMT_NUM(c.분담시평);
@@ -8977,6 +9006,8 @@ function applyKepcoModeUI(active){
   var f=document.getElementById('field-적격기준');if(f)f.style.display=active?'none':'';
   var badge=document.getElementById('o-kepco-badge');if(badge)badge.style.display=active?'':'none';
   var kb=document.getElementById('btn-nav-kepco');if(kb){kb.classList.toggle('active',active);kb.style.boxShadow=active?'0 0 0 2px #ede9fe, 0 0 0 4px #7c3aed':'';kb.style.outline=active?'2px solid #ede9fe':'';}
+  var f1=document.getElementById('field-시평제한');if(f1)f1.style.display=active?'none':'';
+  var f2=document.getElementById('field-분담시평');if(f2)f2.style.display=active?'none':'';
 }
 // 상단 nav를 '입찰적격판정' 버튼 활성 상태로 맞추고 tab-bid 섹션 + 화면탭 줄(#bid-screen-tabs)을 보여줌.
 // 2026-07-31: 화면탭 클릭/추가 시 다른 nav 버튼(업체DB관리 등)이 눌려있던 상태로 남아 화면탭 줄이
