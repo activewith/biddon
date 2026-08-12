@@ -322,6 +322,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
             <option value="LH">LH(토지주택공사)</option>
             <option value="도로공사">도로공사(한국도로공사)</option>
             <option value="수자원공사">수자원공사(한국수자원공사)</option>
+            <option value="한전">한전(한국전력공사)</option>
           </select>
         </div>
         <div class="field"><label>공종</label>
@@ -560,6 +561,7 @@ const DEFAULT_COMBOS=3;
 const LIMIT_30=3000000000;
 const LIMIT_50=5000000000;
 const LIMIT_100=10000000000;
+const LIMIT_10=1000000000;
 
 const FLOOR1=function(x){return Math.floor((Number(x)||0)*100)/100;}; // 지분율 등 %: 소수 2째 자리에서 내림(2026-07-28: 표시정밀도 1→2자리 상향)
 const FLOOR3=function(x){return Math.floor((Number(x)||0)*1000)/1000;};
@@ -2584,6 +2586,7 @@ function calcBid(){
   var E4_eff=(b.기초금액!=null&&b.기초금액!==''&&!isNaN(b.기초금액))?Number(b.기초금액):H4;
   // ── 지자체 tier 먼저 결정 (배수·투찰률 자동값 분기에 사용) ──────────
   var isJija=(b.적격기준==='지자체');
+  var isKEPCO=(b.적격기준==='한전');
   // jijaTier: 0=해당없음, 1=10억~30억, 2=30억~50억, 3=50억~100억, 4=100억~300억
   var jijaTier=0;
   if(isJija&&E5>0){
@@ -2599,6 +2602,10 @@ function calcBid(){
   if(isJija&&jijaTier>0){
     auto배수=jijaTier<=2?0.8:jijaTier===3?1.7:1.8;
     auto투찰률=jijaTier>=4?0.81995:(E5>=LIMIT_50?0.87495:0.88745);
+  } else if(isKEPCO){
+    // 한전(한국전력공사): 추정가격 10억 기준으로 기초금액 배수만 다름(10억 이상=×1, 10억 미만=×0.5). 투찰률은 참고용으로 조달청 기본값 유지.
+    auto배수=E5>=LIMIT_10?1:0.5;
+    auto투찰률=E5>=LIMIT_50?0.87495:0.88745;
   } else {
     auto배수=E5>=LIMIT_50?2:1;
     auto투찰률=E5>=LIMIT_50?0.87495:0.88745;
@@ -2635,14 +2642,16 @@ function calcBid(){
   // ── 철도공단 기준 (국가철도공단, 조달청과 시공경험/입찰가격 산식 동일 — 경영상태 배점표/신인도만 차이) ──
   var isRail=(b.적격기준==='철도공단');
   // E6 계산은 조달청과 동일 (이미 위에서 H6*E4_eff 로 계산됨)
+  // ── 한전 기준 (한국전력공사, 추정가격 10억 기준 배수만 다름. 시공경험/시평/신인도 등 다른 적격판정은 미적용) ──
+  var is10억=E5>=LIMIT_10;
   return{E3:E3,분담시평:분담시평,E4_eff:E4_eff,E5:E5,H4:H4,H6:H6,H7:H7,D7:D7,E6:E6,E7:E7,A값:A값,예정가격:예정가격,
-         is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,공종:normGongjong(state.bid.공종)||'전기',
+         is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,isKEPCO:isKEPCO,is10억:is10억,공종:normGongjong(state.bid.공종)||'전기',
          auto배수:auto배수,auto투찰률:auto투찰률};
 }
 
 // 적격기준 원본값 → 약칭 (마감일 표시, 한줄요약 등에서 공용 사용)
 function 기준약칭(v){
-  return v==='조달청'?'조달':v==='인천공항'?'인천':v==='철도공단'?'철도':v==='지자체'?'지자체':v==='LH'?'LH':v==='도로공사'?'도로':v==='수자원공사'?'수자원':(v||'');
+  return v==='조달청'?'조달':v==='인천공항'?'인천':v==='철도공단'?'철도':v==='지자체'?'지자체':v==='LH'?'LH':v==='도로공사'?'도로':v==='수자원공사'?'수자원':v==='한전'?'한전':(v||'');
 }
 // 확정메세지/조합결과TXT 상단 헤더(공고명·공고번호(지역)·추정가격·마감일) — state.bid의 저장된 구조화 필드에서 항상 재생성.
 // 협정메세지 텍스트가 지워지거나 비어 있어도 이 정보만은 사라지지 않도록 하기 위한 용도(공고문분석 시 state.bid.공고명/공고번호/마감일에 별도 저장됨).
@@ -2652,7 +2661,10 @@ function buildBidMsgHeader(b){
   var regStr=getRegionStr();
   var line2=b.공고번호?(b.공고번호+(regStr?' ('+regStr+')':'')):'';
   if(line2)lines.push(line2);
-  if(b.추정가격!=null&&b.추정가격!==''&&!isNaN(b.추정가격))lines.push('추정가격 '+FMT_NUM(b.추정가격)+'원');
+  if(b.적격기준==='한전'){
+    var _kc=calcBid();
+    if(_kc.E4_eff>0)lines.push('기초금액 '+FMT_NUM(Math.round(_kc.E4_eff)));
+  } else if(b.추정가격!=null&&b.추정가격!==''&&!isNaN(b.추정가격))lines.push('추정가격 '+FMT_NUM(b.추정가격)+'원');
   if(b.협정마감일_YMD){
     var _ymdH=String(b.협정마감일_YMD).split('-');
     if(_ymdH.length===3){
@@ -2705,7 +2717,7 @@ function getOneLineSummary(b, c, hideLHNote) {
   var summary=parts.join('/');
   // 시평 기반 최대지분율(=투찰금액 대비 시평) 계산 자체가 없는 기준은 문구 생략:
   // 지자체 30억 미만(jijaTier===1)·철도공단·도로공사(최대지분율 제한 자체가 없음), LH(지분율기준 방식이라 투찰금액 미사용)
-  var _showSiPy=!((b.적격기준==='지자체'&&c.jijaTier===1)||b.적격기준==='LH'||b.적격기준==='도로공사'||b.적격기준==='철도공단');
+  var _showSiPy=!((b.적격기준==='지자체'&&c.jijaTier===1)||b.적격기준==='LH'||b.적격기준==='도로공사'||b.적격기준==='철도공단'||b.적격기준==='한전');
   if(_showSiPy && !(hideLHNote && b.적격기준==='LH')){summary+='/시평>투찰금액*지분율';}
   return summary;
 }
@@ -2714,6 +2726,7 @@ function getOneLineSummary(b, c, hideLHNote) {
 // damLabel: 해당 조합의 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티"→"창호")가 있으면
 // "복합(전기+분담)" 표기의 "분담"을 이 라벨로 치환해서 보여주기 위한 값 (2026-07-29)
 function getEligibilityChecklist(b, c, damLabel, forceScoreInfo) {
+  if(b.적격기준==='한전') return '';
   if(b.적격기준==='지자체' && !(c.E5>=LIMIT_30) && !(c.E3!=null&&c.E3>0)) return '';
   var 의무=(b.지역의무지분!=null&&b.지역의무지분!=='')?'의무 '+Number(b.지역의무지분)+'%':'';
   var n=Number(b.구성업체수)||2;
@@ -2743,7 +2756,7 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo) {
     if(_rtChk&&_rtChk.rows&&_rtChk.rows[0])lines.push('기술 '+_rtChk.rows[0].min+'점');
   }
   if(b.적격기준==='LH'&&b.lh지분율기준!=null&&Number(b.lh지분율기준)>0){var _지억=Math.ceil(Number(b.lh지분율기준)/10000000)/10;lines.push('지분기준 '+_지억.toFixed(1)+'억');}
-  var _showSiPy2=!((b.적격기준==='지자체'&&c.jijaTier===1)||b.적격기준==='LH'||b.적격기준==='도로공사'||b.적격기준==='철도공단');
+  var _showSiPy2=!((b.적격기준==='지자체'&&c.jijaTier===1)||b.적격기준==='LH'||b.적격기준==='도로공사'||b.적격기준==='철도공단'||b.적격기준==='한전');
   if(_showSiPy2)lines.push('시평>투찰금액*지분율');
   var 공종=b.공종||'전기';
   if(공종==='복합(전기+분담)'&&damLabel)공종='복합(전기+'+damLabel+')';
@@ -2850,7 +2863,7 @@ function calcSlot(combo,calc){
       신인도가점:_신인도적용*f,
       감점가점:_감점적용*f,  // 지자체: 별표4/3/2 자동계산 또는 수동 override
       감점:_감점적용,  // 표시용 감점도 동기화
-      over:(calc.jijaTier===1||calc.isDoRo||calc.isRail||s.grp==='분담'||s.grp==='소방'||s.grp==='통신')?false:(지분율_pct>최대지분율_pct+1e-9),
+      over:(calc.jijaTier===1||calc.isDoRo||calc.isRail||calc.isKEPCO||s.grp==='분담'||s.grp==='소방'||s.grp==='통신')?false:(지분율_pct>최대지분율_pct+1e-9),
       under:hasComp&&최하지분율_pct>0&&지분율_pct<최하지분율_pct-1e-9&&s.grp!=='분담'&&s.grp!=='소방'&&s.grp!=='통신',
       econ:econ,
       지역매치:(hasComp&&dbEntry&&s.grp!=='분담'&&s.grp!=='소방'&&s.grp!=='통신')?(지역들.indexOf(NFC(dbEntry.지역))>=0):false,
@@ -3027,6 +3040,11 @@ function calcSlot(combo,calc){
       적격사유=적격?'적격 ('+rail총점.toFixed(2)+'점)':'부적격 ('+rail총점.toFixed(2)+'점 / 95점 미달)';
       railData={rail티어:railTier.tier,rail티어명:railTier.label,rail실적점수:rail실적점수,rail기술점수:rail기술점수,rail기술등급:(rail기술등급정보&&rail기술등급정보.grade)||null,rail경영상태점수:rail경영상태점수,rail신인도점수:rail신인도점수,rail시공계획점수:rail시공계획점수,rail가격점수:rail가격점수,rail가격비율:rail가격비율,rail총점:rail총점};
     }
+  } else if(calc.isKEPCO){
+    // 한전(한국전력공사): 기초금액 대비 5년실적 비율만 계산·표시. 시평/신인도를 포함한 적격·부적격 판정은 하지 않음(2026-08-12 사용자 요청).
+    var kepco실적비율=calc.E6>0?(합산실적/calc.E6*100):0;
+    적격=false;
+    적격사유='실적비율 '+kepco실적비율.toFixed(1)+'% (참고용 · 적격판정 미적용)';
   } else {
     var 실적OK=합산실적>calc.E6;
     var 시평OK=(calc.E3==null)?true:(합산시평>calc.E3);
@@ -3121,7 +3139,7 @@ function getDbByType(grp,calc){
       list=list.filter(function(c){var jt=c.공사업종||'';return jt.indexOf(_공종필터)>=0;});
     }
   }
-  if(최하>0&&calc&&!calc.isDoRo&&(calc.E7>0||calc.lh지분율기준)&&grp!=='소방'&&grp!=='통신'){
+  if(최하>0&&calc&&!calc.isDoRo&&!calc.isKEPCO&&(calc.E7>0||calc.lh지분율기준)&&grp!=='소방'&&grp!=='통신'){
     list=list.filter(function(c){
       // 개별최대지분율이 설정된 경우 우선 적용
       if(c.개별최대지분율!=null&&!isNaN(c.개별최대지분율))return Number(c.개별최대지분율)>=최하;
@@ -3145,7 +3163,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi){
   var list=getDbByType(grp,calc);
   var usedEl=currentCi!=null?getUsedElsewhere(currentCi):new Set();
   var html='<option value="">— 업체 선택 —</option>';
-  var showPct=calc&&!calc.isDoRo&&(calc.E7>0||(calc.isLH&&calc.lh지분율기준));
+  var showPct=calc&&!calc.isDoRo&&!calc.isKEPCO&&(calc.E7>0||(calc.isLH&&calc.lh지분율기준));
   var srType=calc&&calc.isLH?(calc.is50억?'LH6':'LH7A'):calc&&calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc&&calc.isKW?(calc.is50억?'KW6':'KW7A'):calc&&calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc&&calc.is50억?'6':'7A');
   // 업체 옵션 HTML 생성 헬퍼
   function makeOpt(c,extra){
@@ -3224,7 +3242,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi){
       if(!공종OKR)return jtR===''?'미참여':'공종불일치';
     }
     var 최하R=Number(state.bid.최소지분율)||0;
-    if(최하R>0&&!calc.isDoRo&&(calc.E7>0||calc.lh지분율기준)){
+    if(최하R>0&&!calc.isDoRo&&!calc.isKEPCO&&(calc.E7>0||calc.lh지분율기준)){
       var 최대R;
       if(c.개별최대지분율!=null&&!isNaN(c.개별최대지분율)){
         최대R=Number(c.개별최대지분율);
@@ -3818,7 +3836,7 @@ function setGroupPickerValues(prefix,groups){
 function openCompanyModal(idx){
   if(!canManageCompanyDB()){toast('업체 등록/수정 권한이 없습니다','bad');return;}
   var isNew=(idx==null);
-  var c=isNew?{지역:'',일자리가점:0,감점:0,업체명:'',실적5:0,시평액:0,실적3:0,신용평가:'',안전보건시스템:'',사업자번호:'',참고:'',is실적:false,is자사:false,개별최대지분율:null,부채비율:null,유동비율:null,부채만점:false,유동만점:false,공사업등록일:'',대표자:'',공사업종:'',통신_시평액:0,통신_실적3:0,통신_실적5:0,통신_부채비율:null,통신_유동비율:null,통신_부채만점:false,통신_유동만점:false,통신_공사업등록일:'',소방_시평액:0,소방_실적3:0,소방_실적5:0,소방_부채비율:null,소방_유동비율:null,소방_부채만점:false,소방_유동만점:false,소방_공사업등록일:'',전기_우선협정:'',통신_우선협정:'',소방_우선협정:''}:Object.assign({},state.db[idx]);
+  var c=isNew?{지역:'',일자리가점:0,감점:0,업체명:'',실적5:0,시평액:0,실적3:0,신용평가:'',안전보건시스템:'',사업자번호:'',계좌정보:'',참고:'',is실적:false,is자사:false,개별최대지분율:null,부채비율:null,유동비율:null,부채만점:false,유동만점:false,공사업등록일:'',대표자:'',공사업종:'',통신_시평액:0,통신_실적3:0,통신_실적5:0,통신_부채비율:null,통신_유동비율:null,통신_부채만점:false,통신_유동만점:false,통신_공사업등록일:'',소방_시평액:0,소방_실적3:0,소방_실적5:0,소방_부채비율:null,소방_유동비율:null,소방_부채만점:false,소방_유동만점:false,소방_공사업등록일:'',전기_우선협정:'',통신_우선협정:'',소방_우선협정:''}:Object.assign({},state.db[idx]);
   var root=MODAL_ROOT;
   var _업종=(c.공사업종||'');
   var _chkE=(_업종===''&&!c._공종수동설정)?(Number(c.시평액||0)+Number(c.실적5||0)+Number(c.실적3||0))>0:_업종.indexOf('전기')>=0;
@@ -3846,6 +3864,7 @@ function openCompanyModal(idx){
     '<div class="form-grid">'+
       '<label>업체명 *</label><div style="display:flex;gap:6px"><input id="m-업체명" autocomplete="off" style="flex:1" value="'+esc(c.업체명||'')+'"><input id="m-약어" autocomplete="off" style="width:90px" placeholder="약어" title="조합결과TXT에서 업체명 대신 표시" value="'+esc(c.약어||'')+'"></div>'+
       '<label>사업자번호</label><input id="m-사업자번호" autocomplete="off" value="'+esc(c.사업자번호||'')+'">'+
+      '<label>계좌정보</label><input id="m-계좌정보" autocomplete="off" placeholder="은행명 계좌번호 예금주명 (예: 농협 37021002515 명인)" value="'+esc(c.계좌정보||'')+'">'+
       '<label>대표자</label><input id="m-대표자" autocomplete="off" value="'+esc(c.대표자||'')+'">'+
       '<label>지역</label>'+regionSelectHTML('m-지역',c.지역||'')+
       '<label>약정지분율(%)</label><input id="m-개별최대지분율" autocomplete="off" type="number" step="0.1" min="0" max="100" value="'+(c.개별최대지분율!=null&&c.개별최대지분율!==''?c.개별최대지분율:'')+'" placeholder="비우면 시평액 자동계산">'+
@@ -3980,6 +3999,7 @@ function openCompanyModal(idx){
   $('#m-cancel').onclick=function(){root.innerHTML=''};
   attachCompanyAutocomplete('m-업체명',function(c){
     fv('m-사업자번호',c.사업자번호||'');
+    fv('m-계좌정보',c.계좌정보||'');
     fv('m-대표자',c.대표자||'');
     setRegionSelectValue('m-지역',c.지역||'');
     fv('m-감점',c.감점!=null?c.감점:'');
@@ -4035,6 +4055,7 @@ function openCompanyModal(idx){
       실적3:readMoney($('#m-전기-실적3'))||0,신용평가:$('#m-신용평가').value.trim(),
       안전보건시스템:$('#m-안전보건시스템').value,
       사업자번호:$('#m-사업자번호').value.trim(),
+      계좌정보:$('#m-계좌정보').value.trim(),
       대표자:$('#m-대표자').value.trim(),
       공사업종:(function(){var r='';var cE=$('#m-chk-전기'),cT=$('#m-chk-통신'),cS=$('#m-chk-소방');
         if(cE&&cE.checked)r+='전기';if(cT&&cT.checked)r+='통신';if(cS&&cS.checked)r+='소방';return r;})(),
@@ -5062,6 +5083,9 @@ function extractBidFields(t){
     // ── 철도공단(국가철도공단) 확인 ──────────────────────────────────────
     var isRail_=/국\s*가\s*철\s*도\s*공\s*단/.test(t)||/한\s*국\s*철\s*도\s*시\s*설\s*공\s*단/.test(t)||/철\s*도\s*공\s*단/.test(t);
     if(isRail_){r.적격기준='철도공단';return;}
+    // ── 한전(한국전력공사) 확인 ──────────────────────────────────────────
+    var isKEPCO_=/한\s*국\s*전\s*력\s*공\s*사/.test(t);
+    if(isKEPCO_){r.적격기준='한전';return;}
     var isJodal=/조\s*달\s*청\s*시\s*설\s*공\s*사\s*적\s*격\s*심\s*사\s*세\s*부\s*기\s*준/.test(t);
     if(isJodal){r.적격기준='조달청';return;}
     // ── 지자체 확인 ──────────────────────────────────────────────────────
@@ -5250,7 +5274,7 @@ function showPdfResultModal(found,preview){
     }
     if(k==='적격기준'){
       return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
-        '<option value="">직접선택</option><option value="조달청">조달청</option><option value="인천공항">인천공항</option><option value="철도공단">철도공단</option><option value="지자체">지자체</option><option value="LH">LH</option><option value="도로공사">도로공사</option><option value="수자원공사">수자원공사</option></select>';
+        '<option value="">직접선택</option><option value="조달청">조달청</option><option value="인천공항">인천공항</option><option value="철도공단">철도공단</option><option value="지자체">지자체</option><option value="LH">LH</option><option value="도로공사">도로공사</option><option value="수자원공사">수자원공사</option><option value="한전">한전</option></select>';
     }
     if(k==='지역선택'){
       var sst='width:80px;box-sizing:border-box;padding:2px 3px;border:1px solid #f59e0b;border-radius:3px;font-size:11px;background:#fffbeb;color:#111827';
@@ -5293,7 +5317,7 @@ function showPdfResultModal(found,preview){
     }
     if(k==='적격기준'){
       var cur2=found.적격기준||'';
-      var opts2=['조달청','인천공항','철도공단','지자체','LH','도로공사','수자원공사'];
+      var opts2=['조달청','인천공항','철도공단','지자체','LH','도로공사','수자원공사','한전'];
       return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
         '<option value=""'+(cur2?'':' selected')+'>직접선택</option>'+
         opts2.map(function(o){return '<option value="'+o+'"'+(cur2===o?' selected':'')+'>'+o+'</option>';}).join('')+
@@ -5718,7 +5742,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   // 5. 지역 후보 중 아직 조합에 사용되지 않은 업체의 최대지분율 (참고용)
   var remainLines=[];
   (function(){
-    if(c.isDoRo||!(c.E7>0||(c.isLH&&c.lh지분율기준)))return;
+    if(c.isDoRo||c.isKEPCO||!(c.E7>0||(c.isLH&&c.lh지분율기준)))return;
     var srType=c.isLH?(c.is50억?'LH6':'LH7A'):c.isKW?(c.is50억?'KW6':'KW7A'):c.isRail?(c.is50억?'철도6':'철도7A'):(c.is50억?'6':'7A');
     var 기준E7=c.isLH&&c.lh지분율기준?c.lh지분율기준:c.E7;
     var cand=getDbByType('지역',c).filter(function(cc){return !seen[cc.업체명];});
@@ -5761,7 +5785,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   out.push('');out.push(summary);out.push('');
   out=out.concat(comboLines);
   // 지자체 30억 미만(jijaTier===1)·철도공단·도로공사는 최대지분율 제한 예외이므로 최대지분율 섹션 자체를 생략
-  if(!((c.isJija&&c.jijaTier===1)||c.isRail||c.isDoRo)){
+  if(!((c.isJija&&c.jijaTier===1)||c.isRail||c.isDoRo||c.isKEPCO)){
     out.push('');out.push('--------------------');
     out.push('-최대지분율-');
     out=out.concat(maxLines);
@@ -6272,7 +6296,7 @@ function renderSlotRow(ci,si,r,calc,forceAllocOn){
     '></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDamSiPyeongLock?' disabled style="color:#9ca3af;background:#f3f4f6"':(grp==='분담'?' title="분담 업체의 시공능력평가액 — 분담시평 제한 판정에 사용"':''))+' ></td>'+
-    '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':(calc&&calc.isRail?' style="color:#d1d5db" title="철도공단: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isDoRo?' style="color:#d1d5db" title="도로공사: 시평 기반 최대지분율 제한 미적용"':'')))+'>'+TRIMDEC(r.최대지분율_pct||0)+'%</td>'+
+    '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':(calc&&calc.isRail?' style="color:#d1d5db" title="철도공단: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isDoRo?' style="color:#d1d5db" title="도로공사: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isKEPCO?' style="color:#d1d5db" title="한전: 최대지분율 제한 미적용(실적비율 참고용)"':''))))+'>'+TRIMDEC(r.최대지분율_pct||0)+'%</td>'+
     '<td><input type="number" class="pct '+(r.over?'over':(r.under?'under':(r.isRec?'isrec':'')))+'" step="0.01" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율" value="'+(r.지분율||0)+'"></td>'+
     '<td data-cell="'+ci+'-'+si+'-환산실적">'+FMT_NUM(Math.round(r.지분환산실적))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-환산시평">'+FMT_NUM(Math.round(r.지분환산시평))+'</td>'+
@@ -6336,11 +6360,13 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     var card=document.createElement('div');
     card.className='combo'+(result.적격?' ok':(result.used>0&&!result.지분율OK?' warn':''));
     card.dataset.ci=ci;
-    var status=result.적격
-      ?'<span class="badge b-ok" data-stat="status">적격</span>'
-      :(forceActive
-        ?'<span class="badge" data-stat="status" style="background:#fed7aa;color:#9a3412;border:1px solid #fdba74">'+result.적격사유+' · 강제할당</span>'
-        :'<span class="badge b-bad" data-stat="status">'+result.적격사유+'</span>');
+    var status=comboCalc.isKEPCO
+      ?'<span class="badge" data-stat="status" style="background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc">'+result.적격사유+'</span>'
+      :(result.적격
+        ?'<span class="badge b-ok" data-stat="status">적격</span>'
+        :(forceActive
+          ?'<span class="badge" data-stat="status" style="background:#fed7aa;color:#9a3412;border:1px solid #fdba74">'+result.적격사유+' · 강제할당</span>'
+          :'<span class="badge b-bad" data-stat="status">'+result.적격사유+'</span>'));
     var rowsHtml=result.ROW.map(function(r,si){return renderSlotRow(ci,si,r,comboCalc,!!combo.강제할당);}).join('');
     var _시평표시=comboCalc.isLH?(result.합산시평_raw||0):result.합산시평;
         var 시평제한대비=(comboCalc.E3==null)?'미적용':'<span data-stat="합산시평2">'+FMT_NUM(Math.round(_시평표시))+'</span>'+(comboCalc.isLH?' <span style="font-size:10px;color:#6b7280">(지분율미적용)</span>':'')+' / '+FMT_NUM(comboCalc.E3);
@@ -6398,7 +6424,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         '</table>'+
       '</div>'+
       '<div class="combo-foot">'+
-        '<div class="item"><span class="k">적격여부</span><span class="v '+(result.적격?'ok-text':'bad-text')+'" data-stat="적격사유">'+(result.적격?'OK':result.적격사유)+'</span></div>'+
+        '<div class="item"><span class="k">'+(comboCalc.isKEPCO?'실적비율':'적격여부')+'</span><span class="v '+(comboCalc.isKEPCO?'':(result.적격?'ok-text':'bad-text'))+'" data-stat="적격사유">'+(comboCalc.isKEPCO?result.적격사유:(result.적격?'OK':result.적격사유))+'</span></div>'+
         '<div data-scorefoot="'+ci+'" style="display:contents">'+scoreFootHtml+'</div>'+
         '<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>'+
         '<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>'+
@@ -6429,7 +6455,8 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
   if(je){je.textContent=TRIMDEC(FLOOR1(result.지분합_pct))+'%';je.className=result.지분율OK?'ok-text':'bad-text';}
   var se=card.querySelector('[data-stat="status"]');
   if(se){
-    if(result.적격){se.textContent='적격';se.className='badge b-ok';se.removeAttribute('style');}
+    if(comboCalc.isKEPCO){se.textContent=result.적격사유;se.className='badge';se.style.cssText='background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc';}
+    else if(result.적격){se.textContent='적격';se.className='badge b-ok';se.removeAttribute('style');}
     else if(forceActive){se.textContent=result.적격사유+' · 강제할당';se.className='badge';se.style.cssText='background:#fed7aa;color:#9a3412;border:1px solid #fdba74';}
     else{se.textContent=result.적격사유;se.className='badge b-bad';se.removeAttribute('style');}
     se.dataset.stat='status';
@@ -6445,14 +6472,14 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
     faBtn.textContent='강제할당'+(combo.강제할당?' ON':'');
   }
   var ae=card.querySelector('[data-stat="적격사유"]');
-  if(ae){ae.textContent=result.적격?'OK':result.적격사유;ae.className='v '+(result.적격?'ok-text':'bad-text');}
+  if(ae){ae.textContent=comboCalc.isKEPCO?result.적격사유:(result.적격?'OK':result.적격사유);ae.className=comboCalc.isKEPCO?'v':'v '+(result.적격?'ok-text':'bad-text');}
   set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(calc.isLH?(result.합산시평_raw||0):result.합산시평)));
   set('순신인도2',FMT_REP(result.순신인도));
   set('분담시평합산',FMT_NUM(Math.round(result.분담시평합산||0)));
   var sf=card.querySelector('[data-scorefoot]');
   if(sf)sf.innerHTML=buildScoreFootHtml(calc,result);  // LH/철도 점수 상세(Func×지분율 합산 등)도 실시간 반영
   result.ROW.forEach(function(r,si){
-    var m=card.querySelector('[data-cell="'+ci+'-'+si+'-max"]');if(m){m.textContent=(r.최대지분율_pct||0).toFixed(1)+'%';var _grey=(calc&&calc.jijaTier===1)||(calc&&calc.isRail)||(calc&&calc.isDoRo);m.style.color=_grey?'#d1d5db':'';m.title=(calc&&calc.jijaTier===1)?'지자체 30억 미만: 최대지분율 제한 미적용':((calc&&calc.isRail)?'철도공단: 시평 기반 최대지분율 제한 미적용':((calc&&calc.isDoRo)?'도로공사: 시평 기반 최대지분율 제한 미적용':''));}
+    var m=card.querySelector('[data-cell="'+ci+'-'+si+'-max"]');if(m){m.textContent=(r.최대지분율_pct||0).toFixed(1)+'%';var _grey=(calc&&calc.jijaTier===1)||(calc&&calc.isRail)||(calc&&calc.isDoRo)||(calc&&calc.isKEPCO);m.style.color=_grey?'#d1d5db':'';m.title=(calc&&calc.jijaTier===1)?'지자체 30억 미만: 최대지분율 제한 미적용':((calc&&calc.isRail)?'철도공단: 시평 기반 최대지분율 제한 미적용':((calc&&calc.isDoRo)?'도로공사: 시평 기반 최대지분율 제한 미적용':((calc&&calc.isKEPCO)?'한전: 최대지분율 제한 미적용(실적비율 참고용)':'')));}
     var a1=card.querySelector('[data-cell="'+ci+'-'+si+'-환산실적"]');if(a1)a1.textContent=FMT_NUM(Math.round(r.지분환산실적));
     var a2=card.querySelector('[data-cell="'+ci+'-'+si+'-환산시평"]');if(a2)a2.textContent=FMT_NUM(Math.round(r.지분환산시평));
     var a3=card.querySelector('[data-cell="'+ci+'-'+si+'-신인도가점"]');if(a3)a3.textContent=FMT_REP(r.신인도가점);
@@ -6472,7 +6499,7 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
   if(!used.length){toast('업체가 없습니다','bad');return;}
 
   var 기본지분율=Number(state.bid.기본지분율)||65;
-  var 최대무시=(calc.jijaTier===1)||calc.isRail; // 지자체 30억 미만·철도공단: 시평 기반 최대지분율 제한 없음
+  var 최대무시=(calc.jijaTier===1)||calc.isRail||calc.isKEPCO; // 지자체 30억 미만·철도공단·한전: 시평 기반 최대지분율 제한 없음
 
   // 시평 기반 최대지분율 (약정지분율 미포함)
   function getSiPyeongMax(s){
@@ -6590,6 +6617,9 @@ function refreshBidStats(){
   } else if(c.isKW) {
     $('#o-50억').textContent=c.is50억?'예 (배수2 / 87.495%)':'아니오 (배수1 / 88.745%)';
     $('#o-50억-label').textContent='수자원공사 기준';
+  } else if(c.isKEPCO) {
+    $('#o-50억').textContent=c.is10억?'예 (기초금액×1)':'아니오 (기초금액×0.5)';
+    $('#o-50억-label').textContent='한전 기준(10억)';
   } else {
     $('#o-50억').textContent=c.is50억?'예 (배수2 / 87.495%)':'아니오 (배수1 / 88.745%)';
     if(!c.isJija&&!c.isLH)$('#o-50억-label').textContent='기준 구분';
@@ -7295,7 +7325,7 @@ function bind(){
             '<div style="font-size:11px;color:#6b7280;margin-top:10px;line-height:1.6">'+
               '※ <b>자동분배</b> 버튼 실행 시: 업체에 <b>약정지분율</b>이 있으면 그 값을, 없으면 <b>기본지분율</b>을 지분율로 입력합니다.<br>'+
               '단, 계산된 <b>최대지분율</b>을 초과하면 최대지분율보다 낮은 5%단위 값으로 조정합니다 (예: 최대 45% → 40%, 최대 56% → 55%).<br>'+
-              '지자체 30억 미만·철도공단 공고는 최대지분율 제한 없이 약정지분율/기본지분율을 그대로 입력합니다.'+
+              '지자체 30억 미만·철도공단·한전 공고는 최대지분율 제한 없이 약정지분율/기본지분율을 그대로 입력합니다.'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -8171,6 +8201,14 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
   var compLines=slots.map(function(s){
     var dbEntry=state.db.find(function(x){return x.업체명===s.업체명;});
     var bizno=dbEntry&&dbEntry.사업자번호?dbEntry.사업자번호:'';
+    // 한전(한국전력공사): 신인도/Func 표기 없이 업체명+지분율만, 사업자번호·계좌정보를 각각 별도 줄로 표시(적격판정 없음)
+    if(_globalCalc.isKEPCO){
+      var _acct=dbEntry&&dbEntry.계좌정보?dbEntry.계좌정보:'';
+      var _kLines=[s.업체명+' '+TRIMDEC(Number(s.지분율)||0)+'%'];
+      if(bizno)_kLines.push('('+bizno+')');
+      if(_acct)_kLines.push('('+_acct+')');
+      return _kLines.join('\n');
+    }
     var _fr=_forceMap[_result.ROW.indexOf(s)];
     if(_fr){
       return s.업체명+' '+TRIMDEC(_fr.declaredPct)+'%['+TRIMDEC(_fr.actualPct)+']'+(bizno?'\n('+bizno+')':'');
@@ -8205,11 +8243,11 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
     var before=msg.substring(0,tagEnd);
     var after=msg.substring(tagEnd).replace(/^[\r\n]+/,'');
     if(!after||after.indexOf('협정 부탁')===-1){
-      after=(after?after+'\n\n':'')+'협정 부탁 드립니다.';
+      after=(after?after+'\n\n':'')+(_globalCalc.isKEPCO?'협정 부탁드립니다.':'협정 부탁 드립니다.');
     }
     result=before+'\n'+compLines+'\n\n'+after;
   }else{
-    result=msg+'\n\n'+TAG+'\n'+compLines+'\n\n협정 부탁 드립니다.';
+    result=msg+'\n\n'+TAG+'\n'+compLines+'\n\n'+(_globalCalc.isKEPCO?'협정 부탁드립니다.':'협정 부탁 드립니다.');
   }
   // 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티")를 라벨로 추출해 "복합(전기+분담)"의 "분담"을 대체
   var _damLabels=slots.filter(function(s){return s.grp==='분담';}).map(function(s){
