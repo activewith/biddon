@@ -266,7 +266,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
   <span id="session-info"><span id="session-user-label"></span><button id="btn-mypw" class="btn btn-ghost btn-sm" title="내 비밀번호 변경" style="padding:2px 6px">🔑</button><button id="btn-logout" class="btn btn-sm" style="background:#475569" title="로그아웃">로그아웃</button></span>
   <span id="bid-tab-search-box" style="display:flex;align-items:center;gap:4px;margin-left:auto">
     <input type="text" id="in-bid-tab-search" placeholder="공고검색" style="width:120px;padding:5px 8px;border:1px solid #475569;border-radius:6px;background:#0f172a;color:#fff;font-size:12px">
-    <button type="button" id="btn-bid-tab-search" style="background:#334155;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap">공고검색</button>
+    <button type="button" id="btn-bid-tab-search" style="background:#334155;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap">검색</button>
   </span>
   <nav>
     <button data-tab="bid" id="btn-nav-bid" class="active">입찰적격판정</button>
@@ -2644,8 +2644,22 @@ function calcBid(){
   // E6 계산은 조달청과 동일 (이미 위에서 H6*E4_eff 로 계산됨)
   // ── 한전 기준 (한국전력공사, 추정가격 10억 기준 배수만 다름. 시공경험/시평/신인도 등 다른 적격판정은 미적용) ──
   var is10억=E5>=LIMIT_10;
+  // 공동도급/분담이행(업종별 분담비율)이 감지된 경우: 업종별로 기초금액×분담비율을 먼저 나눈 뒤,
+  // 그 나눈 금액 자체가 10억 이상/미만인지로 각 업종의 배수(1/0.5)를 따로 적용한다(2026-08-12, 사용자 제공 예시 기준).
+  var 한전분담E6=null;
+  if(isKEPCO&&b.한전분담비율){
+    var _hbKeys=Object.keys(b.한전분담비율||{});
+    if(_hbKeys.length){
+      한전분담E6={};
+      _hbKeys.forEach(function(k){
+        var _amt=E4_eff*(Number(b.한전분담비율[k])||0)/100;
+        var _mult=_amt>=LIMIT_10?1:0.5;
+        한전분담E6[k]=_amt*_mult;
+      });
+    }
+  }
   return{E3:E3,분담시평:분담시평,E4_eff:E4_eff,E5:E5,H4:H4,H6:H6,H7:H7,D7:D7,E6:E6,E7:E7,A값:A값,예정가격:예정가격,
-         is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,isKEPCO:isKEPCO,is10억:is10억,공종:normGongjong(state.bid.공종)||'전기',
+         is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,isKEPCO:isKEPCO,is10억:is10억,한전분담E6:한전분담E6,공종:normGongjong(state.bid.공종)||'전기',
          auto배수:auto배수,auto투찰률:auto투찰률};
 }
 
@@ -3042,9 +3056,20 @@ function calcSlot(combo,calc){
     }
   } else if(calc.isKEPCO){
     // 한전(한국전력공사): 기초금액 대비 5년실적 비율만 계산·표시. 시평/신인도를 포함한 적격·부적격 판정은 하지 않음(2026-08-12 사용자 요청).
-    var kepco실적비율=calc.E6>0?(합산실적/calc.E6*100):0;
+    // 공동도급/분담이행으로 업종별 분담비율이 감지된 경우(calc.한전분담E6), 업종별로 각각 실적비율을 나눠 계산.
+    if(calc.한전분담E6){
+      var kepco상세=Object.keys(calc.한전분담E6).map(function(k){
+        var amt=(k==='전기')?합산실적:ROW.filter(function(r){return r.grp===k;}).reduce(function(a,r){return a+(r.지분환산실적||0);},0);
+        var e6k=calc.한전분담E6[k];
+        var pct=e6k>0?(amt/e6k*100):0;
+        return k+' '+pct.toFixed(1)+'%('+FMT_NUM(Math.round(amt))+'/'+FMT_NUM(Math.round(e6k))+')';
+      });
+      적격사유='실적비율 '+kepco상세.join(' · ')+' (참고용 · 적격판정 미적용)';
+    } else {
+      var kepco실적비율=calc.E6>0?(합산실적/calc.E6*100):0;
+      적격사유='실적비율 '+kepco실적비율.toFixed(1)+'% (참고용 · 적격판정 미적용)';
+    }
     적격=false;
-    적격사유='실적비율 '+kepco실적비율.toFixed(1)+'% (참고용 · 적격판정 미적용)';
   } else {
     var 실적OK=합산실적>calc.E6;
     var 시평OK=(calc.E3==null)?true:(합산시평>calc.E3);
@@ -3864,7 +3889,6 @@ function openCompanyModal(idx){
     '<div class="form-grid">'+
       '<label>업체명 *</label><div style="display:flex;gap:6px"><input id="m-업체명" autocomplete="off" style="flex:1" value="'+esc(c.업체명||'')+'"><input id="m-약어" autocomplete="off" style="width:90px" placeholder="약어" title="조합결과TXT에서 업체명 대신 표시" value="'+esc(c.약어||'')+'"></div>'+
       '<label>사업자번호</label><input id="m-사업자번호" autocomplete="off" value="'+esc(c.사업자번호||'')+'">'+
-      '<label>계좌정보</label><input id="m-계좌정보" autocomplete="off" placeholder="은행명 계좌번호 예금주명 (예: 농협 37021002515 명인)" value="'+esc(c.계좌정보||'')+'">'+
       '<label>대표자</label><input id="m-대표자" autocomplete="off" value="'+esc(c.대표자||'')+'">'+
       '<label>지역</label>'+regionSelectHTML('m-지역',c.지역||'')+
       '<label>약정지분율(%)</label><input id="m-개별최대지분율" autocomplete="off" type="number" step="0.1" min="0" max="100" value="'+(c.개별최대지분율!=null&&c.개별최대지분율!==''?c.개별최대지분율:'')+'" placeholder="비우면 시평액 자동계산">'+
@@ -3900,6 +3924,7 @@ function openCompanyModal(idx){
             '<label>신용평가</label><input id="m-신용평가" autocomplete="off" value="'+esc(c.신용평가||'')+'">'+
       '<label>메모</label>'+
       '<textarea id="m-참고" rows="3" style="resize:vertical;font-size:13px">'+esc(c.참고||'')+'</textarea>'+
+      '<label>계좌정보</label><input id="m-계좌정보" autocomplete="off" placeholder="은행명 계좌번호 예금주명 (예: 농협 37021002515 명인)" value="'+esc(c.계좌정보||'')+'">'+
       '<label>분류</label>'+
       '<div style="display:flex;gap:16px;align-items:center;padding:4px 0">'+
         '<label style="display:flex;align-items:center;gap:5px;cursor:pointer">'+
@@ -5098,6 +5123,28 @@ function extractBidFields(t){
                /시청|군청|구청|도청/.test(t);
     if(isJija)r.적격기준='지자체';
   })();
+  // ── 한전(한국전력공사) 전용 후처리 ──────────────────────────────────
+  // (a) "지역제한 전국" 문구가 있으면 본문 다른 곳의 지역명(발주처 주소 등) 오탐지를 무시하고 '전국'으로 확정
+  // (b) "공동도급"/"분담이행" + "업종명(비율%)" 목록이 있으면 업종별 분담비율을 저장해 실적제한을 업종별로 나눠 계산
+  if(r.적격기준==='한전'){
+    if(/지\s*역\s*제\s*한[^\n]{0,15}전\s*국/.test(t)){
+      r.지역선택=['전국'];
+    }
+    if(/공\s*동\s*도\s*급|분\s*담\s*이\s*행/.test(t)){
+      var _bmCtx=t.match(/(?:공\s*동\s*도\s*급|분\s*담\s*이\s*행)[\s\S]{0,300}/);
+      if(_bmCtx){
+        var _bmPairs={};
+        var _bmRe=/([가-힣]{2,6})\s*공\s*사\s*\(\s*(\d{1,3}(?:\.\d+)?)\s*%\s*\)/g;
+        var _bmM;
+        while((_bmM=_bmRe.exec(_bmCtx[0]))){
+          var _lbl=_bmM[1];
+          var _norm=_lbl.indexOf('전기')>=0?'전기':_lbl.indexOf('통신')>=0?'통신':_lbl.indexOf('소방')>=0?'소방':_lbl;
+          _bmPairs[_norm]=Number(_bmM[2]);
+        }
+        if(Object.keys(_bmPairs).length>=2)r.한전분담비율=_bmPairs;
+      }
+    }
+  }
   m=t.match(/실적\s*배수\s*[：:\s]?\s*(\d(?:\.\d+)?)\s*배/);
   if(m)r.배수=Number(m[1]);
   _tryKW(t,'배수',r);
@@ -5249,7 +5296,7 @@ function showPdfResultModal(found,preview){
   // 공통(필수)항목: 모든 공고에서 반드시 입력되어야 하는 항목.
   // 단, 기초금액/A값은 미검출 시 "미정" 표시로 대체하고(공고입력 섹션 기본 규칙 그대로 사용).
   // 그 외 미검출 항목은 버튼을 막지 않고, 대신 추출값 칸을 직접입력 가능한 입력란으로 대체한다.
-  var commonKeys=['공종','지역선택','추정가격','기초금액','지역의무지분','최소지분율','구성업체수','적격기준','투찰률','A값'];
+  var commonKeys=(found.적격기준==='한전')?['공종','지역선택','추정가격','기초금액','적격기준','투찰률','A값']:['공종','지역선택','추정가격','기초금액','지역의무지분','최소지분율','구성업체수','적격기준','투찰률','A값'];
   var fallbackKeys={기초금액:1,A값:1}; // 미검출이어도 "미정"으로 표시하고 버튼을 막지 않음
   var excludeKeys=['공사명','공고번호','발주처','마감일','등록마감일','협정마감일_YMD','기초금액_label'];
   var _regionList=getRegionMasterList();
@@ -6426,7 +6473,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
       '<div class="combo-foot">'+
         '<div class="item"><span class="k">'+(comboCalc.isKEPCO?'실적비율':'적격여부')+'</span><span class="v '+(comboCalc.isKEPCO?'':(result.적격?'ok-text':'bad-text'))+'" data-stat="적격사유">'+(comboCalc.isKEPCO?result.적격사유:(result.적격?'OK':result.적격사유))+'</span></div>'+
         '<div data-scorefoot="'+ci+'" style="display:contents">'+scoreFootHtml+'</div>'+
-        '<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>'+
+        (comboCalc.isKEPCO&&comboCalc.한전분담E6?'':'<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>')+
         '<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>'+
         (comboCalc.분담시평!=null?('<div class="item"><span class="k">분담시평 대비</span><span class="v">'+분담시평대비+'</span></div>'):'')+
         '<div class="item"><span class="k">순 신인도</span><span class="v" data-stat="순신인도2">'+FMT_REP(result.순신인도)+'</span></div>'+
@@ -6595,8 +6642,14 @@ function refreshBidStats(){
   var _in투찰률=$('#in-투찰률');if(_in투찰률)_in투찰률.placeholder='자동: '+(c.auto투찰률*100).toFixed(3)+'%';
   $('#o-기초자동').textContent=FMT_NUM(Math.round(c.E4_eff));
   var _eok1=document.getElementById('o-기초자동-eok');if(_eok1)_eok1.textContent=fmtEok(c.E4_eff);
-  $('#o-실적제한').textContent=FMT_NUM(Math.round(c.E6))+(c.use3yr?' [3년]':'');
-  var _eok3=document.getElementById('o-실적제한-eok');if(_eok3)_eok3.textContent=fmtEok(c.E6,c.use3yr?'·3년':'');
+  if(c.isKEPCO&&c.한전분담E6){
+    var _kbTxt=Object.keys(c.한전분담E6).map(function(k){return k+' '+FMT_NUM(Math.round(c.한전분담E6[k]));}).join(' / ');
+    $('#o-실적제한').textContent=_kbTxt;
+    var _eok3=document.getElementById('o-실적제한-eok');if(_eok3)_eok3.textContent='';
+  } else {
+    $('#o-실적제한').textContent=FMT_NUM(Math.round(c.E6))+(c.use3yr?' [3년]':'');
+    var _eok3=document.getElementById('o-실적제한-eok');if(_eok3)_eok3.textContent=fmtEok(c.E6,c.use3yr?'·3년':'');
+  }
   $('#o-투찰금액').textContent=FMT_NUM(Math.round(c.E7));
   var _e7El=$('#o-투찰금액');
   if(_e7El&&c.A값!=null){
