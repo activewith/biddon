@@ -680,6 +680,18 @@ const state={
 const GIST_WORKER_URL = 'https://bidgist.aw-82b.workers.dev';
 const GIST_APP_KEY    = 'ckdgmd9797!';
 const GIST_LAST_PUSH_KEY = 'jodal_gist_last_push'; // 마지막 push 성공 시각(yyMMddHHmmss) — Gist 버튼 idle 라벨에 표시
+const GIST_AUTO_PUSH_INTERVAL_KEY = 'jodal_gist_autopush_interval_min'; // 자동 Push 주기(분), 기본 15, 5~30 범위
+function getGistAutoPushIntervalMin(){
+  var v;try{v=parseInt(localStorage.getItem(GIST_AUTO_PUSH_INTERVAL_KEY),10);}catch(e){}
+  if(!v||isNaN(v))v=15;
+  if(v<5)v=5;if(v>30)v=30;
+  return v;
+}
+function setGistAutoPushIntervalMin(min){
+  var v=parseInt(min,10);if(!v||isNaN(v))v=15;if(v<5)v=5;if(v>30)v=30;
+  try{localStorage.setItem(GIST_AUTO_PUSH_INTERVAL_KEY,String(v));}catch(e){}
+  return v;
+}
 
 // 2026-08-06: Gist 버튼의 idle 라벨을 "Gist"에서 "Gist 260806090832" 형태(마지막 push 성공 시각)로 표시.
 // pull 시각은 표시 대상이 아님(요청: push만).
@@ -808,7 +820,7 @@ function startGistAutoPush(){
       _gistDirty=false;
       gistPushNow();
     }
-  },15*60*1000);
+  },getGistAutoPushIntervalMin()*60*1000);
 }
 
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -817,9 +829,14 @@ function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 // 이 모달은 상태 확인 + 수동 Pull/Push 테스트 용도로만 남김.
 function openGistModal(){
   var bk=document.createElement('div');bk.className='modal-back';bk.id='gist-modal-back';
+  var _gistIntervalOptsHtml=[5,10,15,20,25,30].map(function(m){return '<option value="'+m+'"'+(m===getGistAutoPushIntervalMin()?' selected':'')+'>'+m+'분</option>';}).join('');
   bk.innerHTML='<div class="modal gist-modal" style="width:min(420px,94vw);min-width:0">'
     +'<h3>☁ 클라우드 동기화</h3>'
-    +'<div style="font-size:12px;color:#374151;margin-bottom:12px">변경사항이 있으면 15분마다 자동 Push, 앱 열릴 때 자동 Pull됩니다. 즉시 반영하려면 아래 "수동 Push"를 누르세요.</div>'
+    +'<div style="font-size:12px;color:#374151;margin-bottom:12px">변경사항이 있으면 <span id="gist-interval-label">'+getGistAutoPushIntervalMin()+'</span>분마다 자동 Push, 앱 열릴 때 자동 Pull됩니다. 즉시 반영하려면 아래 "수동 Push"를 누르세요.</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
+    +'<label for="gist-interval-select" style="font-size:12px;color:#374151">자동 Push 주기</label>'
+    +'<select id="gist-interval-select" class="btn btn-ghost" style="padding:4px 8px">'+_gistIntervalOptsHtml+'</select>'
+    +'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
     +'<button class="btn btn-ghost" id="gist-btn-pull">수동 Pull</button>'
     +'<button class="btn btn-ghost" id="gist-btn-push">수동 Push</button>'
@@ -832,6 +849,14 @@ function openGistModal(){
   function msg(t,col){var m=document.getElementById('gist-msg');if(m){m.textContent=t;m.style.color=col||'#059669';}}
 
   document.getElementById('gist-btn-close').onclick=function(){bk.remove();};
+  var _gistIntervalSel=document.getElementById('gist-interval-select');
+  if(_gistIntervalSel)_gistIntervalSel.onchange=function(){
+    var v=setGistAutoPushIntervalMin(_gistIntervalSel.value);
+    _gistIntervalSel.value=String(v);
+    var lbl=document.getElementById('gist-interval-label');if(lbl)lbl.textContent=v;
+    startGistAutoPush();
+    msg('자동 Push 주기가 '+v+'분으로 변경되었습니다.');
+  };
   bk.addEventListener('click',function(e){if(e.target===bk)bk.remove();});
   document.getElementById('gist-btn-pull').onclick=async function(){msg('Pull 중…','#6b7280');await gistPull();msg('Pull 완료.');};
   document.getElementById('gist-btn-push').onclick=async function(){msg('Push 중…','#6b7280');await gistPushNow();msg('Push 완료.');};
