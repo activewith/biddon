@@ -345,7 +345,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <div class="stat"><div class="k">기초가격(자동)</div><div class="v" id="o-기초자동">-</div><div id="o-기초자동-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-시평제한"><div class="k">시평제한</div><div class="v" id="o-시평제한">미적용</div><div id="o-시평제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-분담시평" style="display:none;background:#f1f5f9;border-color:#94a3b8"><div class="k" style="color:#334155">분담시평제한</div><div class="v" style="color:#334155" id="o-분담시평">미적용</div><div id="o-분담시평-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
-        <div class="stat"><div class="k">실적제한</div><div class="v" id="o-실적제한">-</div><div id="o-실적제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
+        <div class="stat" id="stat-실적제한" style="min-width:150px"><div class="k">실적제한</div><div class="v" id="o-실적제한">-</div><div id="o-실적제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div><div id="o-실적제한-kepco" style="display:none;margin-top:2px"></div></div>
         <div class="stat" id="stat-lh지분율기준" style="display:none;background:#fef3c7;border-color:#fde68a"><div class="k" style="color:#92400e">지분율기준</div><div class="v" style="color:#92400e" id="o-lh지분율기준">-</div><div id="o-lh지분율기준-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" title="A값 미입력: 기초금액×사정률×낙찰하한율 | A값 입력 시: (기초금액×사정률 - A값)×낙찰하한율 + A값"><div class="k">예상투찰금액</div><div class="v" id="o-투찰금액">-</div></div>
         <div class="stat"><div class="k" id="o-50억-label">기준 구분</div><div class="v" id="o-50억">-</div></div>
@@ -1752,6 +1752,20 @@ function applyInstitutionUI(적격기준){
   var _lhg=$('#lh-group');if(_lhg)_lhg.style.display=isLH?'flex':'none';
   var _rg=$('#rail-group');if(_rg)_rg.style.display=isRail?'flex':'none';
   if(isRail)updateRailGroupInfo();
+  updateGongjongOptions(적격기준);
+}
+// 한전(한국전력공사)은 공종이 전기/복합(전기+분담) 2가지만 존재(통신/소방 없음) — 다른 기관에서는 4개 전부 유지.
+// #in-공종 <select>를 매번 새로 그리되, 현재 선택값이 허용목록에 있으면 유지하고 없으면 '전기'로 강제 전환.
+function updateGongjongOptions(적격기준){
+  var sel=$('#in-공종');if(!sel)return;
+  var isKEPCO=(적격기준==='한전');
+  var allOpts=[['전기','전기'],['통신','통신'],['소방','소방'],['복합(전기+분담)','복합(전기+분담)']];
+  var allow=isKEPCO?['전기','복합(전기+분담)']:['전기','통신','소방','복합(전기+분담)'];
+  var cur=sel.value||state.bid.공종;
+  sel.innerHTML=allOpts.filter(function(o){return allow.indexOf(o[0])>=0;})
+    .map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
+  if(allow.indexOf(cur)>=0){sel.value=cur;}
+  else{sel.value='전기';state.bid.공종='전기';}
 }
 
 // ── 철도공단(국가철도공단) 별표3 전기·정보통신공사 100점 배점제 ──────────────
@@ -2680,21 +2694,20 @@ function calcBid(){
   // ── 철도공단 기준 (국가철도공단, 조달청과 시공경험/입찰가격 산식 동일 — 경영상태 배점표/신인도만 차이) ──
   var isRail=(b.적격기준==='철도공단');
   // E6 계산은 조달청과 동일 (이미 위에서 H6*E4_eff 로 계산됨)
-  // ── 한전 기준 (한국전력공사, 추정가격 10억 기준 배수만 다름. 시공경험/시평/신인도 등 다른 적격판정은 미적용) ──
-  var is10억=E5>=LIMIT_10;
-  // 공동도급/분담이행(업종별 분담비율)이 감지된 경우: 업종별로 기초금액×분담비율을 먼저 나눈 뒤,
-  // 그 나눈 금액 자체가 10억 이상/미만인지로 각 업종의 배수(1/0.5)를 따로 적용한다(2026-08-12, 사용자 제공 예시 기준).
+  // ── 한전 기준 (한국전력공사): 실적제한은 자동계산하지 않고, 업종별 비율(%)·배수를 사용자가 직접 입력한다(2026-08-13 변경).
+  // 단일공종(전기)은 비율 100% 고정(자동), 복합(전기+분담)은 전기/분담 비율을 각각 수기입력. 배수는 두 경우 모두 항상 수기입력.
+  var is10억=E5>=LIMIT_10; // 참고용 표시(기준 구분 문구)에만 사용, 더 이상 배수 자동계산에는 쓰이지 않음
   var 한전분담E6=null;
-  if(isKEPCO&&b.한전분담비율){
-    var _hbKeys=Object.keys(b.한전분담비율||{});
-    if(_hbKeys.length){
-      한전분담E6={};
-      _hbKeys.forEach(function(k){
-        var _amt=E4_eff*(Number(b.한전분담비율[k])||0)/100;
-        var _mult=_amt>=LIMIT_10?1:0.5;
-        한전분담E6[k]=_amt*_mult;
-      });
-    }
+  if(isKEPCO){
+    var isComplexGJ=(normGongjong(b.공종)==='복합(전기+분담)');
+    var _한전입력=b.한전실적입력||{};
+    var _kKeys=isComplexGJ?['전기','분담']:['전기'];
+    한전분담E6={};
+    _kKeys.forEach(function(k){
+      var _pct=isComplexGJ?(Number((_한전입력[k]||{}).pct)||0):100;
+      var _mult=Number((_한전입력[k]||{}).mult)||0;
+      한전분담E6[k]=E4_eff*(_pct/100)*_mult;
+    });
   }
   return{E3:E3,분담시평:분담시평,E4_eff:E4_eff,E5:E5,H4:H4,H6:H6,H7:H7,D7:D7,E6:E6,E7:E7,A값:A값,예정가격:예정가격,
          is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,isKEPCO:isKEPCO,is10억:is10억,한전분담E6:한전분담E6,공종:normGongjong(state.bid.공종)||'전기',
@@ -5325,30 +5338,6 @@ function extractBidFields(t){
   })();
   return r;
 }
-// 한전(한국전력공사) 전용: 공고문분석결과 모달에서 반영 전 미리보기로 실적제한 금액을 표시.
-// calcBid()의 한전분담E6 로직과 동일하게, 공동도급/분담이행 비율이 검출된 경우 업종별로 나눠 각각 10억 기준 배수(×1/×0.5)를 적용한다.
-function _kepcoPerfLimitPreviewHtml(found){
-  if(found.적격기준!=='한전')return'';
-  var base=(found.기초금액!=null&&found.기초금액!==''&&!isNaN(found.기초금액))?Number(found.기초금액):
-    ((found.추정가격!=null&&found.추정가격!==''&&!isNaN(found.추정가격))?Number(found.추정가격)*1.1:null);
-  if(base==null||isNaN(base)||base<=0)return'';
-  var lines=[];
-  if(found.한전분담비율&&Object.keys(found.한전분담비율).length>=2){
-    Object.keys(found.한전분담비율).forEach(function(k){
-      var pct=Number(found.한전분담비율[k])||0;
-      var amt=base*pct/100;
-      var mult=amt>=LIMIT_10?1:0.5;
-      var limit=amt*mult;
-      lines.push(k+'공사 '+pct+'% : '+FMT_NUM(Math.round(base))+'×'+pct+'%='+FMT_NUM(Math.round(amt))+' ('+(mult===1?'10억이상':'10억미만')+')×'+mult+' = <b>'+FMT_NUM(Math.round(limit))+'</b>');
-    });
-  } else {
-    var mult2=base>=LIMIT_10?1:0.5;
-    var limit2=base*mult2;
-    lines.push(FMT_NUM(Math.round(base))+' ('+(mult2===1?'10억이상':'10억미만')+')×'+mult2+' = <b>'+FMT_NUM(Math.round(limit2))+'</b>');
-  }
-  return '<div style="font-size:12px;font-weight:700;color:#7c3aed;margin:10px 0 4px">⚡ 실적제한 미리보기 (5년실적 기준, 참고용)</div>'+
-    '<div style="font-size:12px;color:#374151;line-height:1.7;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:6px 10px">'+lines.join('<br>')+'</div>';
-}
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
   var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)'};
@@ -5499,7 +5488,6 @@ function showPdfResultModal(found,preview){
     '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">반영할 항목을 선택하세요.</p>'+
     '<div style="font-size:12px;font-weight:700;color:#1d4ed8;margin:4px 0">공통(필수)항목</div>'+
     '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody id="m-pdf-common-tbody">'+commonRows+'</tbody></table>'+
-    _kepcoPerfLimitPreviewHtml(found)+
     (individualRows?(
     '<div style="font-size:12px;font-weight:700;color:#374151;margin:12px 0 4px">개별항목</div>'+
     '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody id="m-pdf-individual-tbody">'+individualRows+'</tbody></table>'
@@ -5595,7 +5583,19 @@ function showPdfResultModal(found,preview){
     if(found.공고번호)state.bid.공고번호=found.공고번호;
     if(found.등록마감일)state.bid.마감일=found.등록마감일;
     if(found.협정마감일_YMD)state.bid.협정마감일_YMD=found.협정마감일_YMD; // 탭 자동삭제 기준일(연도 포함, autoRemoveExpiredBidScreens 참고)
-    if(found.한전분담비율)state.bid.한전분담비율=found.한전분담비율;
+    if(found.한전분담비율){
+      state.bid.한전분담비율=found.한전분담비율; // 참고용 원본 보존
+      // 한전 실적제한은 더 이상 자동계산하지 않지만(2026-08-13), 공고문에서 검출된 업종별 분담비율(%)은
+      // 수기입력칸의 초기값으로만 채워준다(배수는 항상 사용자가 직접 입력, 절대 자동으로 채우지 않음).
+      var _hb=found.한전분담비율;var _hbKeys=Object.keys(_hb);
+      var _elecPct=Number(_hb['전기'])||0;
+      var _otherPct=_hbKeys.filter(function(k){return k!=='전기';}).reduce(function(s,k){return s+(Number(_hb[k])||0);},0);
+      if(_elecPct>0||_otherPct>0){
+        if(!state.bid.한전실적입력)state.bid.한전실적입력={};
+        state.bid.한전실적입력.전기=Object.assign({},state.bid.한전실적입력.전기,{pct:_elecPct});
+        state.bid.한전실적입력.분담=Object.assign({},state.bid.한전실적입력.분담,{pct:_otherPct});
+      }
+    }
     document.querySelectorAll('[data-pdf-key]').forEach(function(cb){
       if(!cb.checked)return;
       var k=cb.dataset.pdfKey;var v=found[k];
@@ -6718,6 +6718,29 @@ function fmtEok(n,suffix){
   return'('+eok.toFixed(1)+'억'+(suffix||'')+')';
 }
 
+// 한전 전용: "실적제한" 통계칸 안에 업종별 비율(%)·배수 수기입력 행을 렌더링한다.
+// 단일공종(전기)은 비율 100%(자동) 고정 표시, 복합(전기+분담)은 전기/분담 비율을 각각 입력칸으로 제공.
+// 배수는 두 경우 모두 항상 수기입력(자동계산 없음). 계산값은 calcBid()가 반환한 c.한전분담E6[k](=기초금액×비율%×배수)를 그대로 표시.
+function kepcoPerfRowsHtml(c){
+  var isComplex=(c.공종==='복합(전기+분담)');
+  var 입력=state.bid.한전실적입력||{};
+  var keys=isComplex?['전기','분담']:['전기'];
+  return '<div style="display:flex;flex-direction:column;gap:3px">'+keys.map(function(k){
+    var v=입력[k]||{};
+    var calcVal=(c.한전분담E6&&c.한전분담E6[k]!=null)?c.한전분담E6[k]:0;
+    var pctField=isComplex
+      ?('<input type="number" step="0.01" min="0" max="100" data-kperf-pct="'+k+'" value="'+(v.pct!=null?v.pct:'')+'" placeholder="%" style="width:54px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #c4b5fd;border-radius:4px">%')
+      :('<span style="font-weight:700;font-size:11px">100%<span style="font-size:9px;color:#6b7280;font-weight:400"> (자동)</span></span>');
+    return '<div style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap">'+
+      '<span style="font-weight:700;width:24px;color:#5b21b6">'+k+'</span>'+
+      pctField+
+      '<span style="color:#6b7280">배수</span>'+
+      '<input type="number" step="0.01" min="0" data-kperf-mult="'+k+'" value="'+(v.mult!=null?v.mult:'')+'" placeholder="예:1" style="width:46px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #c4b5fd;border-radius:4px">'+
+      '<span style="color:#6b7280">=</span>'+
+      '<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>'+
+    '</div>';
+  }).join('')+'</div>';
+}
 function refreshBidStats(){
   var c=calcBid();
   // 배수/투찰률 입력칸이 비어있을 때 실제 내부 적용값(자동값)을 플레이스홀더로 명시
@@ -6725,13 +6748,17 @@ function refreshBidStats(){
   var _in투찰률=$('#in-투찰률');if(_in투찰률)_in투찰률.placeholder='자동: '+(c.auto투찰률*100).toFixed(3)+'%';
   $('#o-기초자동').textContent=FMT_NUM(Math.round(c.E4_eff));
   var _eok1=document.getElementById('o-기초자동-eok');if(_eok1)_eok1.textContent=fmtEok(c.E4_eff);
-  if(c.isKEPCO&&c.한전분담E6){
-    var _kbTxt=Object.keys(c.한전분담E6).map(function(k){return k+' '+FMT_NUM(Math.round(c.한전분담E6[k]));}).join(' / ');
-    $('#o-실적제한').textContent=_kbTxt;
-    var _eok3=document.getElementById('o-실적제한-eok');if(_eok3)_eok3.textContent='';
+  var _kwrap=document.getElementById('o-실적제한-kepco');
+  if(c.isKEPCO){
+    var _oEl=document.getElementById('o-실적제한');if(_oEl)_oEl.style.display='none';
+    var _eok3=document.getElementById('o-실적제한-eok');if(_eok3){_eok3.textContent='';_eok3.style.display='none';}
+    if(_kwrap){_kwrap.style.display='';_kwrap.innerHTML=kepcoPerfRowsHtml(c);}
   } else {
+    var _oEl2=document.getElementById('o-실적제한');if(_oEl2)_oEl2.style.display='';
+    var _eok3b=document.getElementById('o-실적제한-eok');if(_eok3b)_eok3b.style.display='';
+    if(_kwrap)_kwrap.style.display='none';
     $('#o-실적제한').textContent=FMT_NUM(Math.round(c.E6))+(c.use3yr?' [3년]':'');
-    var _eok3=document.getElementById('o-실적제한-eok');if(_eok3)_eok3.textContent=fmtEok(c.E6,c.use3yr?'·3년':'');
+    var _eok3c=document.getElementById('o-실적제한-eok');if(_eok3c)_eok3c.textContent=fmtEok(c.E6,c.use3yr?'·3년':'');
   }
   $('#o-투찰금액').textContent=FMT_NUM(Math.round(c.E7));
   var _e7El=$('#o-투찰금액');
@@ -6886,8 +6913,36 @@ function bind(){
   })();
   $('#in-적격기준').addEventListener('change',function(){
     state.bid.적격기준=$('#in-적격기준').value;
+    applyInstitutionUI(state.bid.적격기준);
     save();refreshBidStats();refreshCombos();
   });
+  // 한전 실적제한 수기입력(비율%/배수) — #o-실적제한-kepco 컨테이너에 이벤트 위임으로 바인딩
+  // (change: blur/Enter 시점에만 반영, 다른 수기입력칸과 동일 패턴).
+  // 주의: 여기서는 refreshBidStats() 전체를 다시 부르지 않고 계산값(<b data-kperf-calc>) 텍스트만 갱신한다.
+  // 전체 innerHTML을 다시 그리면 방금 입력한 다른 입력칸(예: 전기% 입력 직후의 분담 배수칸)이 DOM에서
+  // 통째로 교체되어 버려, Tab으로 다음 칸으로 넘어가려던 포커스가 끊기는 문제가 있었기 때문(2026-08-13 확인).
+  (function(){
+    var _kw=document.getElementById('o-실적제한-kepco');if(!_kw)return;
+    _kw.addEventListener('change',function(e){
+      var t=e.target;
+      var pk=t.getAttribute('data-kperf-pct');
+      var mk=t.getAttribute('data-kperf-mult');
+      if(!pk&&!mk)return;
+      var k=pk||mk;
+      if(!state.bid.한전실적입력)state.bid.한전실적입력={};
+      if(!state.bid.한전실적입력[k])state.bid.한전실적입력[k]={};
+      var val=t.value===''?null:Number(t.value);
+      if(pk)state.bid.한전실적입력[k].pct=val;else state.bid.한전실적입력[k].mult=val;
+      save();
+      var _c=calcBid();
+      _kw.querySelectorAll('[data-kperf-calc]').forEach(function(b){
+        var kk=b.getAttribute('data-kperf-calc');
+        var cv=(_c.한전분담E6&&_c.한전분담E6[kk]!=null)?_c.한전분담E6[kk]:0;
+        b.textContent=FMT_NUM(Math.round(cv));
+      });
+      refreshCombos();
+    });
+  })();
   (function(){var _kb=$('#btn-nav-kepco');if(_kb)_kb.addEventListener('click',enterKepcoPage);})();
   (function(){var _dbf=$('#in-db기준');if(!_dbf)return;
     _dbf.addEventListener('change',function(){
