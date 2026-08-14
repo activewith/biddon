@@ -813,10 +813,19 @@ async function gistPushNow(){
     syncActiveBidScreen();
     persistCurrentUserBidScreens();
     await mergeRemoteBidScreensBeforePush();
+    // 2026-08-14: state.bidScreens/activeBidScreenIndex는 현재 로그인 계정 파티션(state.bidScreensByUser[내계정])의
+    // 런타임 뷰일 뿐 — 바로 위 persistCurrentUserBidScreens()가 그 파티션에 이미 동일 내용을 반영했고,
+    // Pull 적용 시에도 gistApplyData는 이 두 필드를 전혀 읽지 않고 bidScreensByUser에서 다시 만들어씀
+    // (loadBidScreensForUser). 그대로 Push하면 같은 데이터가 두 번 직렬화되어 페이로드만 커지므로
+    // (실측 약 88KB, 전체의 14%) Push 본문에서만 제외한다 — 로컬 저장(save())·화면 동작에는 영향 없음.
+    var _pushState={};
+    for(var _pk in state){if(Object.prototype.hasOwnProperty.call(state,_pk))_pushState[_pk]=state[_pk];}
+    delete _pushState.bidScreens;
+    delete _pushState.activeBidScreenIndex;
     var r=await fetch(GIST_WORKER_URL+'/push',{
       method:'POST',
       headers:{'Content-Type':'application/json','X-App-Key':GIST_APP_KEY},
-      body:JSON.stringify(state)
+      body:JSON.stringify(_pushState)
     });
     if(!r.ok){gistStatus('err','Push '+r.status);return;}
     try{localStorage.setItem(GIST_LAST_PUSH_KEY,formatGistPushTs(new Date()));}catch(e){}
@@ -906,7 +915,7 @@ function saveBackupSettings(bs){
 // 파일에 내장된 정적 스냅샷(#analyzer-src)을 그대로 사용한다(하위호환). 슬롯2는 별도 탭(#analyzer-iframe2)이며 기본값 없음.
 const EXTAPP_KEY='jodal_extapps_v1'; // 2026-08-14 이전 버전과의 하위호환용 legacy 키(더 이상 primary 저장소 아님 — state.extApps로 이전됨, 1회 자동 마이그레이션)
 function getExtApps(){
-  var def={name:'',html:'',updated:''};
+  var def={name:'',html:'',updated:'',gz:false};
   // state.extApps가 비어있고 legacy localStorage에 값이 남아있으면(Gist 동기화 도입 전 로컬 등록분) 1회 마이그레이션
   if(!state.extApps||(!(state.extApps[1]&&state.extApps[1].html)&&!(state.extApps[2]&&state.extApps[2].html))){
     try{
@@ -914,9 +923,10 @@ function getExtApps(){
       if(raw){
         var legacy=JSON.parse(raw);
         if(legacy&&((legacy['1']&&legacy['1'].html)||(legacy['2']&&legacy['2'].html))){
+          // 레거시 등록분은 압축 없이 저장된 형식이므로 gz:false 고정
           state.extApps={
-            1:{name:(legacy['1']&&legacy['1'].name)||def.name,html:(legacy['1']&&legacy['1'].html)||def.html,updated:(legacy['1']&&legacy['1'].updated)||def.updated},
-            2:{name:(legacy['2']&&legacy['2'].name)||def.name,html:(legacy['2']&&legacy['2'].html)||def.html,updated:(legacy['2']&&legacy['2'].updated)||def.updated}
+            1:{name:(legacy['1']&&legacy['1'].name)||def.name,html:(legacy['1']&&legacy['1'].html)||def.html,updated:(legacy['1']&&legacy['1'].updated)||def.updated,gz:false},
+            2:{name:(legacy['2']&&legacy['2'].name)||def.name,html:(legacy['2']&&legacy['2'].html)||def.html,updated:(legacy['2']&&legacy['2'].updated)||def.updated,gz:false}
           };
           save();
         }
@@ -925,13 +935,14 @@ function getExtApps(){
   }
   var ea=state.extApps||{};
   return{
-    1:{name:(ea[1]&&ea[1].name)||def.name,html:(ea[1]&&ea[1].html)||def.html,updated:(ea[1]&&ea[1].updated)||def.updated},
-    2:{name:(ea[2]&&ea[2].name)||def.name,html:(ea[2]&&ea[2].html)||def.html,updated:(ea[2]&&ea[2].updated)||def.updated}
+    1:{name:(ea[1]&&ea[1].name)||def.name,html:(ea[1]&&ea[1].html)||def.html,updated:(ea[1]&&ea[1].updated)||def.updated,gz:!!(ea[1]&&ea[1].gz)},
+    2:{name:(ea[2]&&ea[2].name)||def.name,html:(ea[2]&&ea[2].html)||def.html,updated:(ea[2]&&ea[2].updated)||def.updated,gz:!!(ea[2]&&ea[2].gz)}
   };
 }
-function saveExtApp(slot,name,html){
+// 2026-08-14: gz(gzip 압축 여부) 파라미터 추가 — Gist Push 페이로드 크기 절감을 위해 압축 저장 지원
+function saveExtApp(slot,name,html,gz){
   var ea=getExtApps();
-  ea[slot]={name:name||'',html:html||'',updated:new Date().toISOString()};
+  ea[slot]={name:name||'',html:html||'',updated:new Date().toISOString(),gz:!!gz};
   state.extApps=ea;
   save(); // state 전체 저장(로컬) + _gistDirty=true → 다음 Push(자동/수동)에 포함됨
   return ea;
@@ -961,6 +972,45 @@ function readFileAsBase64(file,cb,errcb){
   };
   reader.onerror=function(){if(errcb)errcb(new Error('파일 읽기 오류'));};
   reader.readAsArrayBuffer(file);
+}
+// 2026-08-14: 외부앱 등록 시 Gist Push 페이로드 절감을 위해 gzip 압축 후 base64 저장.
+// 브라우저 내장 CompressionStream/DecompressionStream 사용(외부 라이브러리 불필요, Chrome/Edge 등 지원).
+// 미지원 브라우저에서는 압축 없이 저장하고 cb(base64, false)로 알려줌(정상 동작은 유지됨).
+function supportsCompressionStream(){
+  return typeof CompressionStream!=='undefined'&&typeof DecompressionStream!=='undefined';
+}
+function bytesToBase64(bytes){
+  var binary='';var chunk=0x8000;
+  for(var i=0;i<bytes.length;i+=chunk){binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));}
+  return btoa(binary);
+}
+function readFileAsGzipBase64(file,cb,errcb){
+  var reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      var bytes=new Uint8Array(e.target.result);
+      if(!supportsCompressionStream()){cb(bytesToBase64(bytes),false);return;}
+      var cs=new CompressionStream('gzip');
+      var writer=cs.writable.getWriter();
+      writer.write(bytes);writer.close();
+      var compressed=new Uint8Array(await new Response(cs.readable).arrayBuffer());
+      cb(bytesToBase64(compressed),true);
+    }catch(err){if(errcb)errcb(err);}
+  };
+  reader.onerror=function(){if(errcb)errcb(new Error('파일 읽기 오류'));};
+  reader.readAsArrayBuffer(file);
+}
+// base64(gzip) → 압축 해제된 원본 바이트. CompressionStream 미지원 환경에서 gz:true 데이터를 만나면
+// (다른 브라우저에서 압축 저장한 걸 이 브라우저에서 여는 경우) 예외를 던지므로 호출부에서 안내 처리.
+async function gzipDecodeBase64ToBytes(b64){
+  if(!supportsCompressionStream())throw new Error('이 브라우저는 압축 해제(DecompressionStream)를 지원하지 않습니다');
+  var binary=atob(b64);
+  var bytes=new Uint8Array(binary.length);
+  for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  var ds=new DecompressionStream('gzip');
+  var writer=ds.writable.getWriter();
+  writer.write(bytes);writer.close();
+  return new Uint8Array(await new Response(ds.readable).arrayBuffer());
 }
 // 설정 > 외부앱 탭의 슬롯별 UI 행(불러오기 버튼 + 이름 입력 + 저장 버튼)
 function extAppRowHTML(n){
@@ -6987,22 +7037,38 @@ function bind(){
         var _slot=(btn.dataset.tab==='analyzer2')?2:1;
         var fr=document.getElementById(_slot===2?'analyzer-iframe2':'analyzer-iframe');
         if(fr&&(!fr.src||fr.src==='about:blank'||fr.src===''||fr.getAttribute('src')===null)){
-          var enc=(getExtApps()[_slot].html)||'';
-          if(!enc&&_slot===1){
-            var _srcEl=document.getElementById('analyzer-src');
-            enc=_srcEl?_srcEl.textContent.trim():'';
-          }
-          if(enc){
-            var bytes=atob(enc);
-            var arr=new Uint8Array(bytes.length);
-            for(var i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
-            var blob=new Blob([arr],{type:'text/html;charset=utf-8'});
-            fr.removeAttribute('srcdoc');
-            fr.src=URL.createObjectURL(blob);
-          }else{
-            fr.removeAttribute('src');
-            fr.srcdoc='<div style="font-family:sans-serif;padding:60px 20px;text-align:center;color:#94a3b8;font-size:14px">⚙ 설정 → 외부앱 탭에서 앱을 등록하세요.</div>';
-          }
+          (async function(){
+            var _eaSlot=getExtApps()[_slot];
+            var enc=_eaSlot.html||'';
+            var isGz=!!_eaSlot.gz;
+            if(!enc&&_slot===1){
+              var _srcEl=document.getElementById('analyzer-src');
+              enc=_srcEl?_srcEl.textContent.trim():'';
+              isGz=false; // 파일 내장 정적 폴백은 비압축
+            }
+            if(enc){
+              try{
+                var arr;
+                if(isGz){
+                  arr=await gzipDecodeBase64ToBytes(enc); // 2026-08-14: gzip 압축 저장분은 해제 후 로드
+                }else{
+                  var bytes=atob(enc);
+                  arr=new Uint8Array(bytes.length);
+                  for(var i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
+                }
+                var blob=new Blob([arr],{type:'text/html;charset=utf-8'});
+                fr.removeAttribute('srcdoc');
+                fr.src=URL.createObjectURL(blob);
+              }catch(err){
+                console.warn('외부앱 로드 실패',err);
+                fr.removeAttribute('src');
+                fr.srcdoc='<div style="font-family:sans-serif;padding:60px 20px;text-align:center;color:#dc2626;font-size:14px">앱을 불러오는 중 오류가 발생했습니다(압축 해제 실패).</div>';
+              }
+            }else{
+              fr.removeAttribute('src');
+              fr.srcdoc='<div style="font-family:sans-serif;padding:60px 20px;text-align:center;color:#94a3b8;font-size:14px">⚙ 설정 → 외부앱 탭에서 앱을 등록하세요.</div>';
+            }
+          })();
         }
       }
     });
@@ -7900,32 +7966,36 @@ function bind(){
           var saveBtn=document.getElementById('extapp-save-'+n);
           var statusEl=document.getElementById('extapp-status-'+n);
           if(!loadBtn||!fileInp||!nameInp||!saveBtn||!statusEl)return;
-          var pendingB64=null,pendingFileName=null;
+          var pendingB64=null,pendingGz=false,pendingFileName=null;
           loadBtn.onclick=function(){fileInp.click();};
           fileInp.addEventListener('change',function(ev){
             var f=ev.target.files&&ev.target.files[0];
             ev.target.value='';
             if(!f)return;
             if(!/\.html?$/i.test(f.name)){toast('HTML 파일만 선택할 수 있습니다','bad');return;}
-            readFileAsBase64(f,function(b64){
-              pendingB64=b64;pendingFileName=f.name;
-              statusEl.textContent='불러옴: '+f.name+' (저장 필요)';
+            statusEl.textContent='불러오는 중… (압축 처리)';statusEl.style.color='#6b7280';
+            readFileAsGzipBase64(f,function(b64,gz){
+              pendingB64=b64;pendingGz=gz;pendingFileName=f.name;
+              var origKB=(f.size/1024).toFixed(1);
+              var storedKB=(b64.length*3/4/1024).toFixed(1);
+              statusEl.textContent='불러옴: '+f.name+' ('+origKB+'KB'+(gz?' → 압축 후 약 '+storedKB+'KB':' · 이 브라우저는 압축 미지원, 비압축 저장')+', 저장 필요)';
               statusEl.style.color='#d97706';
               if(!nameInp.value.trim())nameInp.value=f.name.replace(/\.html?$/i,'');
             },function(err){
               console.warn('extapp file read failed',err);toast('파일을 읽는 중 오류가 발생했습니다','err');
+              statusEl.textContent='미등록';statusEl.style.color='#9ca3af';
             });
           });
           saveBtn.onclick=function(){
             var nm=nameInp.value.trim();
             if(!pendingB64){toast('먼저 "외부앱'+n+'" 버튼으로 HTML 파일을 선택하세요','bad');return;}
             if(!nm){toast('앱 이름을 입력하세요','bad');return;}
-            saveExtApp(n,nm,pendingB64);
+            saveExtApp(n,nm,pendingB64,pendingGz);
             // 이미 로드된 iframe이 있으면 무효화 → 다음에 탭을 열 때 새로 로드
             var fr=document.getElementById(n===2?'analyzer-iframe2':'analyzer-iframe');
             if(fr){try{fr.removeAttribute('src');fr.removeAttribute('srcdoc');}catch(e){}}
             refreshExtAppNav();
-            statusEl.textContent='등록됨 · '+new Date().toLocaleString('ko-KR');
+            statusEl.textContent='등록됨 · '+new Date().toLocaleString('ko-KR')+(pendingGz?' (gzip 압축 저장됨)':'');
             statusEl.style.color='#059669';
             toast('외부앱'+n+' 저장 완료 ('+nm+')','ok');
           };
