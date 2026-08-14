@@ -677,7 +677,10 @@ const state={
   avgLegacySnapshot:null,       // 업계평균 부채·유동비율의 직전 연도 스냅샷 — archiveCompanyAvgIfNeeded()가 매년 자동 생성
   avgLegacySnapshotMeta:null,   // {createdAt, expireAt, finY} — dbLegacySnapshotMeta와 동일 구조(별도 트리거이므로 별도 보관)
   _legacySnapshotInit:false,    // 스냅샷을 한 번이라도 심은 적 있는지(rev 비교로 재시딩 여부 판단) — 2026 한정 마이그레이션용, 2026-09-01 이후 미사용
-  _legacySnapshotDeleted:false  // 사용자가 9/1 이후 명시적으로 완전삭제했는지(true면 다시 심지 않음)
+  _legacySnapshotDeleted:false,  // 사용자가 9/1 이후 명시적으로 완전삭제했는지(true면 다시 심지 않음)
+  // 2026-08-14: 외부앱(설정>외부앱) 등록 데이터. 예전엔 별도 localStorage 키(jodal_extapps_v1)에만 저장돼
+  // Gist 동기화 대상(state)에서 빠져있었음 — state에 포함시켜 db/조합처럼 ☁ Push/Pull로 다른 기기에도 전달되도록 함.
+  extApps:{1:{name:'',html:'',updated:''},2:{name:'',html:'',updated:''}}
 };
 
 
@@ -759,6 +762,7 @@ function gistApplyData(obj){
     state.combos=obj.combos;
   }
   if(obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object')state.bidScreensByUser=obj.bidScreensByUser;
+  if(obj.extApps&&typeof obj.extApps==='object')state.extApps=obj.extApps; // 2026-08-14: 외부앱도 다른 필드와 동일하게 pull 적용
   (function(){var _s=getSession();if(_s)loadBidScreensForUser(_s.id);})();
   try{runExpiryMaintenance();}catch(e){console.warn('runExpiryMaintenance error:',e);}
   try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){}
@@ -773,6 +777,13 @@ async function gistPull(){
     var obj;try{obj=JSON.parse(text);}catch(e){gistStatus('err','응답 오류');return;}
     gistApplyData(obj);
     renderBidScreenTabs();restoreBidInputsFromState();refreshDB();refreshBidStats();refreshCombos();
+    // 2026-08-14: pull로 다른 기기에서 등록한 외부앱이 새로 들어올 수 있으므로, 이미 열려있던 iframe은
+    // 무효화해 다음에 탭을 열 때 최신 버전으로 다시 로드되게 하고 nav 라벨/표시 여부도 갱신한다.
+    ['analyzer-iframe','analyzer-iframe2'].forEach(function(id){
+      var fr=document.getElementById(id);
+      if(fr){try{fr.removeAttribute('src');fr.removeAttribute('srcdoc');}catch(e){}}
+    });
+    refreshExtAppNav();
     gistStatus('ok','☁ Pull 완료');
     setTimeout(function(){gistStatus('');},3000);
   }catch(e){gistStatus('err','Pull 오류');console.warn('gistPull',e);}
@@ -893,22 +904,36 @@ function saveBackupSettings(bs){
 // ████ SECTION: 외부앱 통합 (설정 > 외부앱 탭에서 등록한 HTML을 iframe으로 통합) ████
 // 슬롯1은 기본적으로 "투찰금액산출" 탭(#analyzer-iframe)에 연결되며, 값이 없으면
 // 파일에 내장된 정적 스냅샷(#analyzer-src)을 그대로 사용한다(하위호환). 슬롯2는 별도 탭(#analyzer-iframe2)이며 기본값 없음.
-const EXTAPP_KEY='jodal_extapps_v1';
+const EXTAPP_KEY='jodal_extapps_v1'; // 2026-08-14 이전 버전과의 하위호환용 legacy 키(더 이상 primary 저장소 아님 — state.extApps로 이전됨, 1회 자동 마이그레이션)
 function getExtApps(){
   var def={name:'',html:'',updated:''};
-  try{
-    var raw=localStorage.getItem(EXTAPP_KEY);
-    var o=raw?JSON.parse(raw):{};
-    return{
-      1:{name:(o['1']&&o['1'].name)||def.name,html:(o['1']&&o['1'].html)||def.html,updated:(o['1']&&o['1'].updated)||def.updated},
-      2:{name:(o['2']&&o['2'].name)||def.name,html:(o['2']&&o['2'].html)||def.html,updated:(o['2']&&o['2'].updated)||def.updated}
-    };
-  }catch(e){return{1:Object.assign({},def),2:Object.assign({},def)};}
+  // state.extApps가 비어있고 legacy localStorage에 값이 남아있으면(Gist 동기화 도입 전 로컬 등록분) 1회 마이그레이션
+  if(!state.extApps||(!(state.extApps[1]&&state.extApps[1].html)&&!(state.extApps[2]&&state.extApps[2].html))){
+    try{
+      var raw=localStorage.getItem(EXTAPP_KEY);
+      if(raw){
+        var legacy=JSON.parse(raw);
+        if(legacy&&((legacy['1']&&legacy['1'].html)||(legacy['2']&&legacy['2'].html))){
+          state.extApps={
+            1:{name:(legacy['1']&&legacy['1'].name)||def.name,html:(legacy['1']&&legacy['1'].html)||def.html,updated:(legacy['1']&&legacy['1'].updated)||def.updated},
+            2:{name:(legacy['2']&&legacy['2'].name)||def.name,html:(legacy['2']&&legacy['2'].html)||def.html,updated:(legacy['2']&&legacy['2'].updated)||def.updated}
+          };
+          save();
+        }
+      }
+    }catch(e){}
+  }
+  var ea=state.extApps||{};
+  return{
+    1:{name:(ea[1]&&ea[1].name)||def.name,html:(ea[1]&&ea[1].html)||def.html,updated:(ea[1]&&ea[1].updated)||def.updated},
+    2:{name:(ea[2]&&ea[2].name)||def.name,html:(ea[2]&&ea[2].html)||def.html,updated:(ea[2]&&ea[2].updated)||def.updated}
+  };
 }
 function saveExtApp(slot,name,html){
   var ea=getExtApps();
   ea[slot]={name:name||'',html:html||'',updated:new Date().toISOString()};
-  try{localStorage.setItem(EXTAPP_KEY,JSON.stringify(ea));}catch(e){}
+  state.extApps=ea;
+  save(); // state 전체 저장(로컬) + _gistDirty=true → 다음 Push(자동/수동)에 포함됨
   return ea;
 }
 // 헤더 nav의 투찰금액산출/외부앱2 버튼 라벨·표시여부를 등록된 외부앱 이름에 맞춰 갱신
@@ -1228,6 +1253,7 @@ function load(){
       });
     }
     if(obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object')state.bidScreensByUser=obj.bidScreensByUser;
+    if(obj.extApps&&typeof obj.extApps==='object')state.extApps=obj.extApps; // 2026-08-14: 로컬 재로드 시에도 외부앱 유지
     var _s=getSession();
     if(_s)loadBidScreensForUser(_s.id);
     try{runExpiryMaintenance();}catch(e){console.warn('runExpiryMaintenance error:',e);}
@@ -7514,7 +7540,7 @@ function bind(){
           '<button type="button" class="settings-tabbtn" data-stab="companydb">🏢 업체DB설정</button>'+
           '<button type="button" class="settings-tabbtn" data-stab="bidinput">🗂️ 공고입력 설정</button>'+
           '<button type="button" class="settings-tabbtn" data-stab="combo">🤝 조합</button>'+
-          '<button type="button" class="settings-tabbtn" data-stab="extapps">🔗 외부앱</button>'+
+          (currentRole()==='super'?'<button type="button" class="settings-tabbtn" data-stab="extapps">🔗 외부앱</button>':'')+
           (isAdminOrAbove()?'<button type="button" class="settings-tabbtn" data-stab="accounts">👤 계정</button>':'')+
         '</div>'+
         '<div class="settings-tabpage" data-stabpage="backup">'+
@@ -7649,17 +7675,20 @@ function bind(){
             '</div>'+
           '</div>'+
         '</div>'+
+        (currentRole()==='super'?(
         '<div class="settings-tabpage" data-stabpage="extapps" style="display:none">'+
           '<div style="margin:12px 16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
             '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:8px">🔗 외부앱 통합</div>'+
             '<div style="font-size:11px;color:#6b7280;margin-bottom:6px;line-height:1.6">'+
               '독립 HTML 앱 파일을 불러와 탭에 통합합니다 (최대 2개). "외부앱1/2" 버튼으로 HTML 파일을 선택 → 이름 입력 → 저장 순서로 등록하세요.<br>'+
-              '<b>외부앱1</b>은 상단 "투찰금액산출" 탭에 연결됩니다. <b>외부앱2</b>는 등록하면 새 탭이 nav에 나타납니다.'+
+              '<b>외부앱1</b>은 상단 "투찰금액산출" 탭에 연결됩니다. <b>외부앱2</b>는 등록하면 새 탭이 nav에 나타납니다.<br>'+
+              '등록/수정한 앱은 ☁ Gist 동기화로 다른 기기에도 자동 전달됩니다(전체 계정 공통, 마지막 저장이 우선).'+
             '</div>'+
             extAppRowHTML(1)+
             extAppRowHTML(2)+
           '</div>'+
-        '</div>'+
+        '</div>'
+        ):'')+
         (isAdminOrAbove()?('<div class="settings-tabpage" data-stabpage="accounts" style="display:none">'+accountsTabHTML()+'</div>'):'')+
         '</div></div>';
       document.getElementById('bkp-choose').onclick=pickBackupFolder;
