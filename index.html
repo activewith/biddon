@@ -3134,9 +3134,13 @@ function calcSlot(combo,calc){
   else if(분담누락)적격사유=필요분담grp?(필요분담grp+'업체 미등록 ('+displayGongjong(calc.공종)+'은 '+필요분담grp+' 슬롯 1개 이상 필요)'):'분담업체 미등록 (복합(전기+분담)은 분담 슬롯 1개 이상 필요)';
   else if(분담시평미달)적격사유='분담 시평 부족 (합산 '+FMT_NUM(Math.round(분담시평합산))+' / 제한 '+FMT_NUM(calc.분담시평)+')';
   else if(calc.isLH){
-    // ── LH 시평제한 선행 체크 (지분율 미적용 합산) ──────────────────────
-    if(calc.E3!=null&&합산시평_raw<=calc.E3){
-      적격사유='시평 부족 (합산 '+FMT_NUM(Math.round(합산시평_raw))+' / 제한 '+FMT_NUM(calc.E3)+')';
+    // ── LH 시평제한 선행 체크 (지분율 가중 합산) ──────────────────────
+    // 2026-08-18: 입찰참가자격(지분율 무관 단순합산)과 적격심사(지분율 가중)는 별개 개념.
+    // 사용자 확인 후 이 게이트는 적격심사 기준에 맞춰 지분율 가중 합산(합산시평)으로 변경.
+    // 참고: 합산시평_raw(지분율 미적용 단순합산)는 계속 계산되어 result에 남아있음 — 별도 입찰참가자격
+    // 확인용으로 필요시 재사용 가능(현재는 이 게이트에서 참조하지 않음).
+    if(calc.E3!=null&&합산시평<=calc.E3){
+      적격사유='시평 부족 (합산 '+FMT_NUM(Math.round(합산시평))+' / 제한 '+FMT_NUM(calc.E3)+')';
     } else {
     // ── LH 점수 기반 적격 판정 ─────────────────────────────────────
     var lh실적점수=calc.E6>0?Math.min(Math.floor((합산실적/calc.E6)*13*1000)/1000,13):0;
@@ -6695,8 +6699,8 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           ?'<span class="badge" data-stat="status" style="background:#fed7aa;color:#9a3412;border:1px solid #fdba74">'+result.적격사유+' · 강제할당</span>'
           :'<span class="badge b-bad" data-stat="status">'+result.적격사유+'</span>'));
     var rowsHtml=result.ROW.map(function(r,si){return renderSlotRow(ci,si,r,comboCalc,!!combo.강제할당);}).join('');
-    var _시평표시=comboCalc.isLH?(result.합산시평_raw||0):result.합산시평;
-        var 시평제한대비=(comboCalc.E3==null)?'미적용':'<span data-stat="합산시평2">'+FMT_NUM(Math.round(_시평표시))+'</span>'+(comboCalc.isLH?' <span style="font-size:10px;color:#6b7280">(지분율미적용)</span>':'')+' / '+FMT_NUM(comboCalc.E3);
+    var _시평표시=result.합산시평;
+        var 시평제한대비=(comboCalc.E3==null)?'미적용':'<span data-stat="합산시평2">'+FMT_NUM(Math.round(_시평표시))+'</span>'+' / '+FMT_NUM(comboCalc.E3);
     var 분담시평대비=(comboCalc.분담시평==null)?'미적용':'<span data-stat="분담시평합산">'+FMT_NUM(Math.round(result.분담시평합산||0))+'</span> / '+FMT_NUM(comboCalc.분담시평);
     var slotFull=combo.slots.length>=MAX_SLOTS;
     // 사정률 표시값 (0% 기준으로 고정)
@@ -6800,7 +6804,7 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
   }
   var ae=card.querySelector('[data-stat="적격사유"]');
   if(ae){ae.textContent=comboCalc.isKEPCO?result.적격사유:(result.적격?'OK':result.적격사유);ae.className=comboCalc.isKEPCO?'v':'v '+(result.적격?'ok-text':'bad-text');}
-  set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(calc.isLH?(result.합산시평_raw||0):result.합산시평)));
+  set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(result.합산시평)));
   set('순신인도2',FMT_REP(result.순신인도));
   set('분담시평합산',FMT_NUM(Math.round(result.분담시평합산||0)));
   var sf=card.querySelector('[data-scorefoot]');
@@ -8759,7 +8763,9 @@ function showLHComboPop(ci) {
   wrap.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
 
   var warn=[];
-  var 합산시평=slots.reduce(function(a,s){return a+(Number(s.시평액)||0);},0);
+  // 2026-08-18: 적격심사 기준(지분율 가중 합산)으로 통일. 입찰참가자격 확인용 단순합산(출자비율 무관)은
+  // 이 팝업에서 더 이상 게이트로 쓰지 않음 — 필요시 slots.reduce(raw 시평액 합)으로 별도 확인할 것.
+  var 합산시평=slots.reduce(function(a,s){var f=(Number(s.지분율)||0)/100;return a+(Number(s.시평액)||0)*f;},0);
   var 합산지분=slots.reduce(function(a,s){return a+(Number(s.지분율)||0);},0);
   if(합산시평<추정가격)warn.push('⚠ 합산시평('+FN(합산시평)+') < 추정가격 → 시평 미달');
   if(!순공사원가)warn.push('ℹ 순공사원가 미입력 → 하한가 미적용');
