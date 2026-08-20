@@ -952,6 +952,14 @@ function saveExtApp(slot,name,html,gz){
   save(); // state 전체 저장(로컬) + _gistDirty=true → 다음 Push(자동/수동)에 포함됨
   return ea;
 }
+// 2026-08-20: 외부앱 슬롯 삭제(등록 해제). 슬롯1은 삭제 후 정적 스냅샷(#analyzer-src) 폴백으로 되돌아감(미등록 상태와 동일).
+function deleteExtApp(slot){
+  var ea=getExtApps();
+  ea[slot]={name:'',html:'',updated:'',gz:false};
+  state.extApps=ea;
+  save();
+  return ea;
+}
 // 헤더 nav의 투찰금액산출/외부앱2 버튼 라벨·표시여부를 등록된 외부앱 이름에 맞춰 갱신
 function refreshExtAppNav(){
   var ea=getExtApps();
@@ -1026,6 +1034,7 @@ function extAppRowHTML(n){
     '<input type="file" id="extapp-file-'+n+'" accept=".html,.htm,text/html" style="display:none">'+
     '<input type="text" id="extapp-name-'+n+'" value="'+esc(ea.name||'')+'" placeholder="앱 이름 (예: 투찰금액산출)" style="flex:1;min-width:160px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit">'+
     '<button type="button" class="btn btn-sm" id="extapp-save-'+n+'" style="background:#6366f1">저장</button>'+
+    '<button type="button" class="btn btn-sm" id="extapp-del-'+n+'" style="background:#dc2626;'+(registered?'':'display:none')+'">삭제</button>'+
     '<span id="extapp-status-'+n+'" style="font-size:10px;color:'+(registered?'#059669':'#9ca3af')+';min-width:140px">'+
       (registered?('등록됨'+(ea.updated?(' · '+new Date(ea.updated).toLocaleString('ko-KR')):'')):'미등록')+
     '</span>'+
@@ -8048,8 +8057,9 @@ function bind(){
           var fileInp=document.getElementById('extapp-file-'+n);
           var nameInp=document.getElementById('extapp-name-'+n);
           var saveBtn=document.getElementById('extapp-save-'+n);
+          var delBtn=document.getElementById('extapp-del-'+n);
           var statusEl=document.getElementById('extapp-status-'+n);
-          if(!loadBtn||!fileInp||!nameInp||!saveBtn||!statusEl)return;
+          if(!loadBtn||!fileInp||!nameInp||!saveBtn||!delBtn||!statusEl)return;
           var pendingB64=null,pendingGz=false,pendingFileName=null;
           loadBtn.onclick=function(){fileInp.click();};
           fileInp.addEventListener('change',function(ev){
@@ -8081,7 +8091,24 @@ function bind(){
             refreshExtAppNav();
             statusEl.textContent='등록됨 · '+new Date().toLocaleString('ko-KR')+(pendingGz?' (gzip 압축 저장됨)':'');
             statusEl.style.color='#059669';
+            delBtn.style.display='';
             toast('외부앱'+n+' 저장 완료 ('+nm+')','ok');
+          };
+          delBtn.onclick=function(){
+            var cur=getExtApps()[n];
+            if(!cur.html){toast('삭제할 외부앱'+n+'이 없습니다','bad');return;}
+            if(!confirm('외부앱'+n+'('+(cur.name||'이름없음')+')을 삭제할까요?\n삭제 후에는 등록된 앱 파일이 사라지며 되돌릴 수 없습니다.'))return;
+            deleteExtApp(n);
+            pendingB64=null;pendingGz=false;pendingFileName=null;
+            nameInp.value='';
+            // 이미 로드된 iframe이 있으면 무효화 → 다음에 탭을 열 때 새로 로드(슬롯1은 정적 스냅샷 폴백으로 복귀)
+            var fr=document.getElementById(n===2?'analyzer-iframe2':'analyzer-iframe');
+            if(fr){try{fr.removeAttribute('src');fr.removeAttribute('srcdoc');}catch(e){}}
+            refreshExtAppNav();
+            statusEl.textContent='미등록';
+            statusEl.style.color='#9ca3af';
+            delBtn.style.display='none';
+            toast('외부앱'+n+' 삭제 완료','ok');
           };
         });
       })();
