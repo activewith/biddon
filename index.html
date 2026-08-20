@@ -436,7 +436,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <button class="btn btn-ghost" id="btn-template-xlsx" style="border-color:#0369a1;color:#0369a1" title="임포트용 빈 서식(헤더+예시행) 다운로드">📥 임포트 서식</button>
         <button class="btn btn-warn" id="btn-add-company">＋ 업체 직접 추가</button>
         <button class="btn" id="btn-import-cert" style="background:#7c3aed">📋 경영확인서 등록</button>
-        <button class="btn btn-ghost" id="btn-exp-alert" style="border-color:#dc2626;color:#dc2626" title="신용평가(7일 이내)/안전보건(1개월 이내) 만료 임박 · 일자리 B조건 연1회 재확인 필요 업체만 아래 목록에 필터링 (다시 누르면 해제)">⚠ 만료임박 확인</button>
+        <button class="btn btn-ghost" id="btn-exp-alert" style="border-color:#dc2626;color:#dc2626" title="신용평가(7일 이내)/안전보건(1개월 이내) 만료 임박 · 일자리 B조건 연1회 재확인 필요 · 메모 알람 도달 업체만 아래 목록에 필터링 (다시 누르면 해제)">⚠ 만료임박(알람) 확인</button>
         <span style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:nowrap" id="avg-display-area">
           <table style="border-collapse:collapse;font-size:11px;line-height:1.4;text-align:center"><tr>
             <th style="padding:1px 6px;color:#7c3aed;font-size:10px;border-bottom:1px solid #e5e7eb;text-align:center">업종평균비율</th>
@@ -2653,6 +2653,13 @@ function getExpiryAlerts(c){
   if(hasB&&c._B저장연도!==bY&&!isPastJobBGrace(today,bY)){
     alerts.push({kind:'일자리B조건',custom:'연 1회 재확인 필요(4/15까지 업체등록 저장 안하면 자동 해제)'});
   }
+  // 2026-08-20: 메모 알람 — 업체등록에서 사용자가 켜고 지정한 년/월/일/시간이 지나면(끄기 전까지 계속) 알림에 포함
+  if(c.메모알람on&&c.메모알람일시){
+    var _maDt=new Date(c.메모알람일시);
+    if(!isNaN(_maDt.getTime())&&new Date()>=_maDt){
+      alerts.push({kind:'메모알람',custom:'설정 시각 도달('+String(c.메모알람일시).replace('T',' ')+')'});
+    }
+  }
   return alerts;
 }
 function expiryWarnHTML(c){
@@ -2721,6 +2728,34 @@ function checkExpiryAlertsOnBoot(){
   try{
     var hasAlert=state.db.some(function(c){return !c.만료알림제외&&getExpiryAlerts(c).length>0;});
     if(hasAlert)showExpiryAlertModal();
+  }catch(e){}
+}
+// 2026-08-20: 메모 알람 — 부팅 시점에 이미 도달한 알람은 checkExpiryAlertsOnBoot()가 다른 만료 항목과
+// 함께 이미 한 번 보여주므로, 세션 시작 시 그 시점까지 도달한 알람은 "이미 알림함"으로 표시해두고,
+// 이후 앱을 켜둔 채로 새로 도달하는 알람만 주기적으로 재확인해 팝업으로 알려준다(재확인 시 매번 뜨는 것 방지).
+var _메모알람알림됨=new Set();
+function initMemoAlarmWatcher(){
+  try{
+    state.db.forEach(function(c){
+      if(!c.메모알람on||!c.메모알람일시)return;
+      var dt=new Date(c.메모알람일시);
+      if(!isNaN(dt.getTime())&&new Date()>=dt)_메모알람알림됨.add(c.업체명+'|'+c.메모알람일시);
+    });
+  }catch(e){}
+  setInterval(checkMemoAlarmsLive,60*1000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)checkMemoAlarmsLive();});
+}
+function checkMemoAlarmsLive(){
+  try{
+    var due=state.db.filter(function(c){
+      if(!c.메모알람on||!c.메모알람일시)return false;
+      var dt=new Date(c.메모알람일시);
+      if(isNaN(dt.getTime())||new Date()<dt)return false;
+      return !_메모알람알림됨.has(c.업체명+'|'+c.메모알람일시);
+    });
+    if(!due.length)return;
+    due.forEach(function(c){_메모알람알림됨.add(c.업체명+'|'+c.메모알람일시);});
+    showExpiryAlertModal();
   }catch(e){}
 }
 
@@ -4084,6 +4119,13 @@ function openCompanyModal(idx){
             '<label>신용평가</label><input id="m-신용평가" autocomplete="off" value="'+esc(c.신용평가||'')+'">'+
       '<label>메모</label>'+
       '<textarea id="m-참고" rows="3" style="resize:vertical;font-size:13px">'+esc(c.참고||'')+'</textarea>'+
+      '<label>메모 알람</label>'+
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:2px 0">'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">'+
+          '<input type="checkbox" id="m-메모알람on" '+(c.메모알람on?'checked':'')+'> 알람'+
+        '</label>'+
+        '<input type="datetime-local" id="m-메모알람일시" step="3600" style="'+(c.메모알람on?'':'display:none;')+'font-size:12px;padding:2px 4px" value="'+esc(c.메모알람일시||'')+'" title="년/월/일/시간 지정 — 해당 시각이 지나면 만료임박(알람) 확인 팝업에 표시됩니다">'+
+      '</div>'+
       '<label>계좌정보</label><input id="m-계좌정보" autocomplete="off" placeholder="은행명 계좌번호 예금주명 (예: 농협 37021002515 명인)" value="'+esc(c.계좌정보||'')+'">'+
       '<label>분류</label>'+
       '<div style="display:flex;gap:16px;align-items:center;padding:4px 0">'+
@@ -4133,6 +4175,10 @@ function openCompanyModal(idx){
     _showYr(_d.value);updateMGam();
   }
 })();
+  (function(){
+    var _acb=$('#m-메모알람on'),_ain=$('#m-메모알람일시');
+    if(_acb&&_ain)_acb.addEventListener('change',function(){_ain.style.display=this.checked?'':'none';});
+  })();
   (function(){
     (function(){
       function autoDate(id){
@@ -4246,6 +4292,8 @@ function openCompanyModal(idx){
         if(cE&&cE.checked)r+='전기';if(cT&&cT.checked)r+='통신';if(cS&&cS.checked)r+='소방';return r;})(),
       _공종수동설정:true,
       참고:$('#m-참고').value.trim(),
+      메모알람on:!!($('#m-메모알람on')&&$('#m-메모알람on').checked),
+      메모알람일시:($('#m-메모알람일시')&&$('#m-메모알람일시').value)||'',
       is실적:$('#m-is실적').checked,is자사:$('#m-is자사').checked,
       개별최대지분율:(function(){var v=$('#m-개별최대지분율').value.trim();return v===''?null:Number(v);})(),
       부채비율:_readSingleRatio('부채비율'),
@@ -8668,10 +8716,15 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
     }
     // 월 표시는 감점/가점 숫자가 실제로 있을 때만 붙임 — 신용등급만 있을 때는 매월 갱신되는 자료가 아니므로 생략
     if(_hasNum7)netStr=jobAMonthTag(dbEntry,s.신인도,netStr);
-    // 대체(구제) 적용 안 됐어도 BB0 이상 유효 신용등급이 있으면 참고용으로 등급 병기 — 감점(음수)일 때만
+    // 대체(구제) 적용 안 됐어도 유효 신용등급이 있으면 실제 감점과 비교해 더 유리한 쪽만 표시(감점(음수)일 때만).
+    // 2026-08-20: 확정메세지에서는 감점과 신용등급을 "|"로 함께 병기하지 않고 둘 중 유리한 것 하나만 남기도록 변경
+    // (예: -3.2 vs BB0(=0) → BB0만 표시 / -0.2 vs B+(=0.43) → -0.2만 표시). 조합결과TXT(exportCombosText)는 미변경 — 기존대로 둘 다 표시.
     if(!s.creditApplied&&net<0){
       var _cg7=getCreditDeduction(dbEntry||{});
-      if(_cg7&&_cg7.deduction===0&&netStr)netStr=netStr.slice(0,-1)+'|'+_cg7.grade+')';
+      if(_cg7&&netStr){
+        if(_cg7.deduction<Math.abs(net))netStr=' ('+_cg7.grade+')'; // 신용등급이 더 유리 → 등급만 표시(숫자·월 표시 제거)
+        // else: 실제 감점이 더 유리하거나 같으면 기존 감점(+월) 표시를 그대로 유지, 등급은 병기하지 않음
+      }
     }
     return s.업체명+' '+TRIMDEC(Number(s.지분율)||0)+'%'+netStr+funcSuffixText(s)+(bizno?'\n('+bizno+')':'');
   }).join('\n');
@@ -9695,6 +9748,7 @@ function boot(){
   gistPull();
   startGistAutoPush();
   checkExpiryAlertsOnBoot();
+  initMemoAlarmWatcher();
   initBackupOnBoot();
   enableModalDrag();
   // 협정마감일 경과 탭 자동삭제: 부팅/로그인 시점은 loadBidScreensForUser()가 처리하므로,
