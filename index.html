@@ -95,6 +95,9 @@ tr.hover:hover{background:#f8fafc}
 .stat{background:#f8fafc;border:1px solid var(--border);border-radius:4px;padding:5px 8px;text-align:center}
 .stat .k{font-size:10px;color:var(--muted);font-weight:600}
 .stat .v{font-size:13px;font-weight:700;color:#0f172a}
+@keyframes blinkBaseWarn{0%,100%{background:#fee2e2;border-color:#ef4444}50%{background:#fecaca;border-color:#b91c1c}}
+.stat.base-warn{animation:blinkBaseWarn 1s ease-in-out infinite}
+.stat.base-warn .v{color:#b91c1c}
 .toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
 .toolbar input[type="text"]{padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:160px;font-family:inherit}
 .small{font-size:11px;color:var(--muted)}
@@ -342,7 +345,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       </div>
       <!-- 업계평균 입력은 DB탭에서 관리 -->
       <div class="summary" style="margin-top:10px">
-        <div class="stat"><div class="k">기초가격(자동)</div><div class="v" id="o-기초자동">-</div><div id="o-기초자동-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
+        <div class="stat" id="stat-기초자동" title="기초금액이 추정가격보다 작거나 1.2배 이상이면 경고 표시"><div class="k">기초가격(자동)</div><div class="v" id="o-기초자동">-</div><div id="o-기초자동-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-시평제한"><div class="k">시평제한</div><div class="v" id="o-시평제한">미적용</div><div id="o-시평제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-분담시평" style="display:none;background:#f1f5f9;border-color:#94a3b8"><div class="k" style="color:#334155">분담시평제한</div><div class="v" style="color:#334155" id="o-분담시평">미적용</div><div id="o-분담시평-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div></div>
         <div class="stat" id="stat-실적제한" style="min-width:150px"><div class="k">실적제한</div><div class="v" id="o-실적제한">-</div><div id="o-실적제한-eok" style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600"></div><div id="o-실적제한-kepco" style="display:none;margin-top:2px"></div></div>
@@ -7016,6 +7019,12 @@ function refreshBidStats(){
   var _in투찰률=$('#in-투찰률');if(_in투찰률)_in투찰률.placeholder='자동: '+(c.auto투찰률*100).toFixed(3)+'%';
   $('#o-기초자동').textContent=FMT_NUM(Math.round(c.E4_eff));
   var _eok1=document.getElementById('o-기초자동-eok');if(_eok1)_eok1.textContent=fmtEok(c.E4_eff);
+  // 기초금액이 추정가격보다 작거나(과소) 추정가격×1.2 이상(과대)이면 경고 깜빡임
+  var _statBase=document.getElementById('stat-기초자동');
+  if(_statBase){
+    var _baseWarn=(c.E5>0&&c.E4_eff>0&&(c.E4_eff<c.E5||c.E4_eff>=c.E5*1.2));
+    _statBase.classList.toggle('base-warn',_baseWarn);
+  }
   var _kwrap=document.getElementById('o-실적제한-kepco');
   if(c.isKEPCO){
     var _oEl=document.getElementById('o-실적제한');if(_oEl)_oEl.style.display='none';
