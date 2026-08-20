@@ -2667,11 +2667,11 @@ function getExpiryAlerts(c){
   if(hasB&&c._B저장연도!==bY&&!isPastJobBGrace(today,bY)){
     alerts.push({kind:'일자리B조건',custom:'연 1회 재확인 필요(4/15까지 업체등록 저장 안하면 자동 해제)'});
   }
-  // 2026-08-20: 메모 알람 — 업체등록에서 사용자가 켜고 지정한 년/월/일/시간이 지나면(끄기 전까지 계속) 알림에 포함
+  // 2026-08-20: 메모 알람 — 업체등록에서 사용자가 켜고 지정한 날짜(시각은 항상 오전 10시 고정)가 지나면(끄기 전까지 계속) 알림에 포함
   if(c.메모알람on&&c.메모알람일시){
     var _maDt=new Date(c.메모알람일시);
     if(!isNaN(_maDt.getTime())&&new Date()>=_maDt){
-      alerts.push({kind:'메모알람',custom:'설정 시각 도달('+String(c.메모알람일시).replace('T',' ')+')',memo:c.참고||''});
+      alerts.push({kind:'메모알람',custom:'설정일 도달('+String(c.메모알람일시).slice(0,10)+')',memo:c.참고||''});
     }
   }
   return alerts;
@@ -4137,15 +4137,25 @@ function openCompanyModal(idx){
       '<label style="color:#166534">안전보건시스템<br><span style="font-size:10px;color:#6b7280">K(YYMMDD)=KOSHA-MS / S(YYMMDD)=ISO45001</span></label>'+
       '<input id="m-안전보건시스템" autocomplete="off" value="'+esc(c.안전보건시스템||'')+'" placeholder="K(270530) 또는 S(270530)" style="border-color:#86efac" title="K(YYMMDD)=KOSHA-MS(+2.0/+1.0), S(YYMMDD)=ISO-45001(+1.6/+0.8). 비워두면 없음.">'+
             '<label>신용평가</label><input id="m-신용평가" autocomplete="off" value="'+esc(c.신용평가||'')+'">'+
-      '<label>메모</label>'+
-      '<textarea id="m-참고" rows="3" style="resize:vertical;font-size:13px">'+esc(c.참고||'')+'</textarea>'+
-      '<label>메모 알람</label>'+
-      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:2px 0">'+
-        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">'+
-          '<input type="checkbox" id="m-메모알람on" '+(c.메모알람on?'checked':'')+'> 알람'+
-        '</label>'+
-        '<input type="datetime-local" id="m-메모알람일시" step="3600" style="'+(c.메모알람on?'':'display:none;')+'font-size:12px;padding:2px 4px" value="'+esc(c.메모알람일시||'')+'" title="년/월/일/시간 지정 — 해당 시각이 지나면 만료임박(알람) 확인 팝업에 표시됩니다">'+
+      '<div style="position:relative">'+
+        '<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">메모'+
+          '<label style="display:flex;align-items:center;gap:3px;font-size:11px;font-weight:400;color:#374151;cursor:pointer;margin:0">'+
+            '<input type="checkbox" id="m-메모알람on" style="cursor:pointer" '+(c.메모알람on?'checked':'')+'>알람'+
+          '</label>'+
+        '</span>'+
+        '<span id="m-메모알람표시" style="display:'+((c.메모알람on&&c.메모알람일시)?'block':'none')+';font-size:11px;color:#dc2626;font-weight:600;margin-top:2px">'+((c.메모알람on&&c.메모알람일시)?('('+esc(String(c.메모알람일시).slice(0,10))+')'):'')+'</span>'+
+        '<input type="hidden" id="m-메모알람일시" value="'+esc(c.메모알람일시||'')+'">'+
+        '<div id="m-메모알람panel" style="display:none;position:absolute;z-index:200;background:#fff;border:1px solid #d1d5db;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.15);padding:10px;top:100%;left:0;margin-top:3px;width:190px">'+
+          '<div style="font-size:11px;color:#374151;margin-bottom:6px;font-weight:600">알람 날짜 선택</div>'+
+          '<input type="date" id="m-메모알람날짜입력" style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;box-sizing:border-box" value="'+esc(String(c.메모알람일시||'').slice(0,10))+'">'+
+          '<div style="font-size:10px;color:#9ca3af;margin-top:4px">알람 시각은 오전 10시로 자동 설정됩니다</div>'+
+          '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px">'+
+            '<button type="button" id="m-메모알람취소" style="font-size:11px;padding:3px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;cursor:pointer">취소</button>'+
+            '<button type="button" id="m-메모알람확인" style="font-size:11px;padding:3px 8px;background:#0369a1;color:#fff;border:none;border-radius:4px;cursor:pointer">확인</button>'+
+          '</div>'+
+        '</div>'+
       '</div>'+
+      '<textarea id="m-참고" rows="3" style="resize:vertical;font-size:13px">'+esc(c.참고||'')+'</textarea>'+
       '<label>계좌정보</label><input id="m-계좌정보" autocomplete="off" placeholder="은행명 계좌번호 예금주명 (예: 농협 37021002515 명인)" value="'+esc(c.계좌정보||'')+'">'+
       '<label>분류</label>'+
       '<div style="display:flex;gap:16px;align-items:center;padding:4px 0">'+
@@ -4196,8 +4206,33 @@ function openCompanyModal(idx){
   }
 })();
   (function(){
-    var _acb=$('#m-메모알람on'),_ain=$('#m-메모알람일시');
-    if(_acb&&_ain)_acb.addEventListener('change',function(){_ain.style.display=this.checked?'':'none';});
+    var _acb=$('#m-메모알람on'),_hid=$('#m-메모알람일시'),_disp=$('#m-메모알람표시'),_panel=$('#m-메모알람panel'),_dateInp=$('#m-메모알람날짜입력'),_okBtn=$('#m-메모알람확인'),_cancelBtn=$('#m-메모알람취소');
+    if(!_acb||!_hid||!_panel)return;
+    function openPanel(){
+      if(_dateInp)_dateInp.value=(_hid.value||'').slice(0,10);
+      _panel.style.display='block';
+      setTimeout(function(){document.addEventListener('click',closePanelOutside,{once:true});},0);
+    }
+    function closePanelOutside(){
+      _panel.style.display='none';
+      if(!_hid.value)_acb.checked=false; // 날짜를 한 번도 지정한 적 없는데 바깥을 클릭해 닫으면 체크 해제
+    }
+    _panel.addEventListener('click',function(e){e.stopPropagation();});
+    _acb.addEventListener('change',function(){
+      if(this.checked){openPanel();}
+      else{_panel.style.display='none';if(_disp)_disp.style.display='none';}
+    });
+    if(_okBtn)_okBtn.addEventListener('click',function(){
+      var dv=_dateInp?_dateInp.value:'';
+      if(!dv){toast('알람 날짜를 선택하세요','bad');return;}
+      _hid.value=dv+'T10:00'; // 시간은 사용자에게 물어보지 않고 오전 10시로 고정
+      if(_disp){_disp.textContent='('+dv+')';_disp.style.display='block';}
+      _panel.style.display='none';
+    });
+    if(_cancelBtn)_cancelBtn.addEventListener('click',function(){
+      _panel.style.display='none';
+      if(!_hid.value)_acb.checked=false;
+    });
   })();
   (function(){
     (function(){
