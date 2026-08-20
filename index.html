@@ -8115,7 +8115,7 @@ function bind(){
               statusEl.textContent='미등록';statusEl.style.color='#9ca3af';
             });
           });
-          saveBtn.onclick=function(){
+          saveBtn.onclick=async function(){
             var nm=nameInp.value.trim();
             if(!pendingB64){toast('먼저 "외부앱'+n+'" 버튼으로 HTML 파일을 선택하세요','bad');return;}
             if(!nm){toast('앱 이름을 입력하세요','bad');return;}
@@ -8124,12 +8124,20 @@ function bind(){
             var fr=document.getElementById(n===2?'analyzer-iframe2':'analyzer-iframe');
             if(fr){try{fr.removeAttribute('src');fr.removeAttribute('srcdoc');}catch(e){}}
             refreshExtAppNav();
+            statusEl.textContent='저장됨 · 클라우드 동기화 중…';statusEl.style.color='#6b7280';
+            saveBtn.disabled=true;delBtn.disabled=true;
+            // 2026-08-20: 저장은 15분 배치 Push(dirty 플래그)만으로는 부족함 — 새로고침 시 boot()의 gistPull()이
+            // 아직 Push 안 된 이 변경을 무시하고 예전 클라우드 값으로 되돌려버리는 문제가 있어(사용자 실측 재현),
+            // 여기서는 즉시 Push까지 기다린 뒤 완료를 알림. gistPushNow는 실패해도 내부에서 흡수하고 gistStatus만
+            // 갱신하므로(throw 안 함) 여기서 추가로 실패를 구분해 알리진 않지만, 헤더의 ☁ 상태로 확인 가능.
+            await gistPushNow();
+            saveBtn.disabled=false;delBtn.disabled=false;
             statusEl.textContent='등록됨 · '+new Date().toLocaleString('ko-KR')+(pendingGz?' (gzip 압축 저장됨)':'');
             statusEl.style.color='#059669';
             delBtn.style.display='';
             toast('외부앱'+n+' 저장 완료 ('+nm+')','ok');
           };
-          delBtn.onclick=function(){
+          delBtn.onclick=async function(){
             var cur=getExtApps()[n];
             if(!cur.html){toast('삭제할 외부앱'+n+'이 없습니다','bad');return;}
             if(!confirm('외부앱'+n+'('+(cur.name||'이름없음')+')을 삭제할까요?\n삭제 후에는 등록된 앱 파일이 사라지며 되돌릴 수 없습니다.'))return;
@@ -8140,6 +8148,12 @@ function bind(){
             var fr=document.getElementById(n===2?'analyzer-iframe2':'analyzer-iframe');
             if(fr){try{fr.removeAttribute('src');fr.removeAttribute('srcdoc');}catch(e){}}
             refreshExtAppNav();
+            statusEl.textContent='삭제 처리 중… (클라우드 동기화)';statusEl.style.color='#9ca3af';
+            delBtn.disabled=true;saveBtn.disabled=true;
+            // 2026-08-20: 삭제도 저장과 동일하게 즉시 Push — 그렇지 않으면 새로고침 시 boot()의 gistPull()이
+            // 아직 지워지지 않은 클라우드 값으로 로컬 삭제를 덮어써 "삭제했는데 새로고침하면 다시 생김" 재발
+            await gistPushNow();
+            delBtn.disabled=false;saveBtn.disabled=false;
             statusEl.textContent='미등록';
             statusEl.style.color='#9ca3af';
             delBtn.style.display='none';
