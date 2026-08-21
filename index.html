@@ -960,6 +960,34 @@ function deleteExtApp(slot){
   save();
   return ea;
 }
+// 2026-08-21: 등록된 외부앱을 다시 파일로 저장(다운로드) — 업로드(불러오기)의 반대 방향.
+// iframe lazy-load(7181번대)와 동일하게 gz 여부에 따라 압축 해제한 뒤 Blob으로 만들어 <a download>로 저장.
+async function downloadExtApp(slot){
+  var ea=getExtApps()[slot];
+  if(!ea.html){toast('등록된 외부앱'+slot+'이 없습니다','bad');return;}
+  try{
+    var arr;
+    if(ea.gz){
+      arr=await gzipDecodeBase64ToBytes(ea.html);
+    }else{
+      var bytes=atob(ea.html);
+      arr=new Uint8Array(bytes.length);
+      for(var i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
+    }
+    var blob=new Blob([arr],{type:'text/html;charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    a.download=(ea.name||('외부앱'+slot))+'.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  }catch(err){
+    console.warn('외부앱 다운로드 실패',err);
+    toast('파일 저장 중 오류가 발생했습니다(압축 해제 실패)','err');
+  }
+}
 // 헤더 nav의 투찰금액산출/외부앱2 버튼 라벨·표시여부를 등록된 외부앱 이름에 맞춰 갱신
 function refreshExtAppNav(){
   var ea=getExtApps();
@@ -1034,6 +1062,7 @@ function extAppRowHTML(n){
     '<input type="file" id="extapp-file-'+n+'" accept=".html,.htm,text/html" style="display:none">'+
     '<input type="text" id="extapp-name-'+n+'" value="'+esc(ea.name||'')+'" placeholder="앱 이름 (예: 투찰금액산출)" style="flex:1;min-width:160px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit">'+
     '<button type="button" class="btn btn-sm" id="extapp-save-'+n+'" style="background:#6366f1">저장</button>'+
+    '<button type="button" class="btn btn-sm" id="extapp-dl-'+n+'" style="background:#059669;'+(registered?'':'display:none')+'">⬇ 다운로드</button>'+
     '<button type="button" class="btn btn-sm" id="extapp-del-'+n+'" style="background:#dc2626;'+(registered?'':'display:none')+'">삭제</button>'+
     '<span id="extapp-status-'+n+'" style="font-size:10px;color:'+(registered?'#059669':'#9ca3af')+';min-width:140px">'+
       (registered?('등록됨'+(ea.updated?(' · '+new Date(ea.updated).toLocaleString('ko-KR')):'')):'미등록')+
@@ -2332,6 +2361,25 @@ function jijaEffectiveDeduction(dbEntry,calc){
     return{value:ratioDed,method:'ratio',grade:(cr&&cr.isValid)?cr.grade:null,ratioDed:ratioDed,ok:true};
   }
   return{value:Math.abs(Number(dbEntry.감점)||0),method:'fallback',grade:null,ratioDed:null,ok:false};
+}
+
+// 확정메세지/조합결과TXT 참고용 신용등급 병기: 신용등급 대체가 실제 적용되지 않은 업체라도, 신용등급 감점이
+// 실제 적용된(경영비율) 감점보다 유리하면 "|등급" 또는 "|등급/-감점"으로 참고 병기한다.
+// 지자체는 jijaEffectiveDeduction과 동일한 신용평가표(별표10, 15점 만점 직접 환산 — 별표3만 ×10/15)를 써야 하고,
+// 그 외(조달청/LH/철도 등)는 기존 getCreditDeduction(별표10 35점→15점 환산)을 그대로 쓴다.
+// 2026-08-21: 확정메세지(showConfirmPop)가 지자체 건에서 이 구분 없이 getCreditDeduction(비지자체용 35점 환산)을
+// 그대로 써서 신용등급 감점을 실제보다 훨씬 작게 오판(예: BB- 실제 1.0점을 0.21점으로 오판)해, 감점 숫자 자체가
+// 사라지고 등급만 남는 버그가 있었음(삼화그린텍 사례). 이 함수로 두 표시(확정메세지/조합결과TXT) 모두 통일.
+function creditRefForRow(dbEntry,calc){
+  if(!dbEntry)return null;
+  if(calc&&calc.isJija&&calc.jijaTier>0){
+    var cr=parseCreditRating(dbEntry.신용평가||'');
+    if(!cr||!cr.isValid)return null;
+    var cs15=creditGradeScore(cr.grade)>=35.0?15.0:(cr.grade==='BB-'?14.0:(['B+','B','B0','B-'].indexOf(cr.grade)>=0?13.0:10.0));
+    var ded=Math.round((calc.jijaTier===2?(15-cs15)*10/15:(15-cs15))*1000)/1000;
+    return{grade:cr.grade,deduction:ded};
+  }
+  return getCreditDeduction(dbEntry);
 }
 
 function econGradeColor(g){
@@ -6139,16 +6187,24 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       var sn=ROUND3((row.신인도||0)-(row.감점||0));
       var _hasNum=hasDed&&sn!==0;
       var snSuffix=_hasNum?'('+(sn>=0?'+':'')+TRIM3(sn)+')':'';
-      // 신용등급은 경영상태비율로 부적격이라 대체 적용된 경우에만 표시
-      if(row.creditApplied&&row._creditInfo&&row._creditInfo.grade){
-        snSuffix=snSuffix?snSuffix+row._creditInfo.grade:'('+row._creditInfo.grade+')';
-      }
-      // 월 표시는 감점/가점 숫자가 실제로 있을 때만 붙임 — 신용등급만 있을 때는 매월 갱신되는 자료가 아니므로 생략
-      if(_hasNum)snSuffix=jobAMonthTag(_dbE3,row.신인도,snSuffix);
-      // 대체(구제) 적용 안 됐어도 BB0 이상 유효 신용등급이 있으면 참고용으로 등급 병기 — 감점(음수)일 때만 (예: (-3.2_8월|BB0))
-      if(!row.creditApplied&&sn<0){
-        var _cg3=getCreditDeduction(_dbE3||{});
-        if(_cg3&&_cg3.deduction===0&&snSuffix)snSuffix=snSuffix.slice(0,-1)+'|'+_cg3.grade+')';
+      // 신용등급 대체 적용: 신인도(가점) 기여가 전혀 없는 순수 신용등급 대체 감점이면 "(등급/-감점)" 형태로만 표시
+      // (월 표시 없음 — 신용등급은 매월 갱신되는 자료가 아니라 유효기간 단위이므로). 신인도(가점)가 섞여 있는 경우만
+      // 기존처럼 합산 숫자에 월 표시를 붙이고 등급을 참고로 이어붙임(예: (+0.3_8월)BB-).
+      var _pureCredit3=row.creditApplied&&row._creditInfo&&row._creditInfo.grade&&!row.신인도;
+      if(_pureCredit3){
+        snSuffix='('+row._creditInfo.grade+(row._creditInfo.deduction>0?('/-'+TRIM3(row._creditInfo.deduction)):'')+')';
+      }else{
+        if(row.creditApplied&&row._creditInfo&&row._creditInfo.grade){
+          snSuffix=snSuffix?snSuffix+row._creditInfo.grade:'('+row._creditInfo.grade+')';
+        }
+        // 월 표시는 감점/가점 숫자가 실제로 있을 때만 붙임 — 신용등급만 있을 때는 매월 갱신되는 자료가 아니므로 생략
+        if(_hasNum)snSuffix=jobAMonthTag(_dbE3,row.신인도,snSuffix);
+        // 대체(구제) 적용 안 됐어도 신용등급 감점이 실제 적용된 감점보다 유리하면 참고용으로 병기 — 감점(음수)일 때만
+        // (예: 순감점 0이면 (-3.2_8월|BB0), 0보다 크면 (-1.5_8월|BB-/-1))
+        if(!row.creditApplied&&sn<0){
+          var _cg3=creditRefForRow(_dbE3,c);
+          if(_cg3&&_cg3.deduction<Math.abs(sn)&&snSuffix)snSuffix=snSuffix.slice(0,-1)+'|'+_cg3.grade+(_cg3.deduction>0?('/-'+TRIM3(_cg3.deduction)):'')+')';
+        }
       }
       return nm+' '+TRIMDEC(Number(row.지분율)||0)+snSuffix+funcSuffixText(row);
     }).join(' : ');
@@ -6169,16 +6225,21 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       var snSfx2=_hasNum2?'('+(sn2>=0?'+':'')+TRIM3(sn2)+')':'';
       var _dbE4=state.db.find(function(x){return x.업체명===nm;});
       var nm4=(_dbE4&&_dbE4.약어)?_dbE4.약어:nm;
-      // 신용등급은 경영상태비율로 부적격이라 대체 적용된 경우에만 표시
-      if(row.creditApplied&&row._creditInfo&&row._creditInfo.grade){
-        snSfx2=snSfx2?snSfx2+row._creditInfo.grade:'('+row._creditInfo.grade+')';
-      }
-      // 월 표시는 감점/가점 숫자가 실제로 있을 때만 붙임 — 신용등급만 있을 때는 매월 갱신되는 자료가 아니므로 생략
-      if(_hasNum2)snSfx2=jobAMonthTag(_dbE4,row.신인도,snSfx2);
-      // 대체(구제) 적용 안 됐어도 BB0 이상 유효 신용등급이 있으면 참고용으로 등급 병기 — 감점(음수)일 때만
-      if(!row.creditApplied&&sn2<0){
-        var _cg4=getCreditDeduction(_dbE4||{});
-        if(_cg4&&_cg4.deduction===0&&snSfx2)snSfx2=snSfx2.slice(0,-1)+'|'+_cg4.grade+')';
+      // 신용등급 대체 적용: 신인도(가점) 기여가 전혀 없는 순수 신용등급 대체 감점이면 "(등급/-감점)" 형태로만 표시
+      var _pureCredit4=row.creditApplied&&row._creditInfo&&row._creditInfo.grade&&!row.신인도;
+      if(_pureCredit4){
+        snSfx2='('+row._creditInfo.grade+(row._creditInfo.deduction>0?('/-'+TRIM3(row._creditInfo.deduction)):'')+')';
+      }else{
+        if(row.creditApplied&&row._creditInfo&&row._creditInfo.grade){
+          snSfx2=snSfx2?snSfx2+row._creditInfo.grade:'('+row._creditInfo.grade+')';
+        }
+        // 월 표시는 감점/가점 숫자가 실제로 있을 때만 붙임 — 신용등급만 있을 때는 매월 갱신되는 자료가 아니므로 생략
+        if(_hasNum2)snSfx2=jobAMonthTag(_dbE4,row.신인도,snSfx2);
+        // 대체(구제) 적용 안 됐어도 신용등급 감점이 실제 적용된 감점보다 유리하면 참고용으로 병기 — 감점(음수)일 때만
+        if(!row.creditApplied&&sn2<0){
+          var _cg4=creditRefForRow(_dbE4,c);
+          if(_cg4&&_cg4.deduction<Math.abs(sn2)&&snSfx2)snSfx2=snSfx2.slice(0,-1)+'|'+_cg4.grade+(_cg4.deduction>0?('/-'+TRIM3(_cg4.deduction)):'')+')';
+        }
       }
       seen[nm]=true;maxLines.push(nm4+' '+Math.floor(mx)+'%'+snSfx2);
     });
@@ -7876,7 +7937,8 @@ function bind(){
             '<div style="font-size:11px;color:#6b7280;margin-bottom:6px;line-height:1.6">'+
               '독립 HTML 앱 파일을 불러와 탭에 통합합니다 (최대 2개). "외부앱1/2" 버튼으로 HTML 파일을 선택 → 이름 입력 → 저장 순서로 등록하세요.<br>'+
               '<b>외부앱1</b>은 상단 "투찰금액산출" 탭에 연결됩니다. <b>외부앱2</b>는 등록하면 새 탭이 nav에 나타납니다.<br>'+
-              '등록/수정한 앱은 ☁ Gist 동기화로 다른 기기에도 자동 전달됩니다(전체 계정 공통, 마지막 저장이 우선).'+
+              '등록/수정한 앱은 ☁ Gist 동기화로 다른 기기에도 자동 전달됩니다(전체 계정 공통, 마지막 저장이 우선).<br>'+
+              '⬇ <b>다운로드</b> 버튼으로 등록된 앱을 다시 HTML 파일로 내려받을 수 있습니다.'+
             '</div>'+
             extAppRowHTML(1)+
             extAppRowHTML(2)+
@@ -8092,11 +8154,13 @@ function bind(){
           var fileInp=document.getElementById('extapp-file-'+n);
           var nameInp=document.getElementById('extapp-name-'+n);
           var saveBtn=document.getElementById('extapp-save-'+n);
+          var dlBtn=document.getElementById('extapp-dl-'+n);
           var delBtn=document.getElementById('extapp-del-'+n);
           var statusEl=document.getElementById('extapp-status-'+n);
-          if(!loadBtn||!fileInp||!nameInp||!saveBtn||!delBtn||!statusEl)return;
+          if(!loadBtn||!fileInp||!nameInp||!saveBtn||!dlBtn||!delBtn||!statusEl)return;
           var pendingB64=null,pendingGz=false,pendingFileName=null;
           loadBtn.onclick=function(){fileInp.click();};
+          dlBtn.onclick=function(){downloadExtApp(n);};
           fileInp.addEventListener('change',function(ev){
             var f=ev.target.files&&ev.target.files[0];
             ev.target.value='';
@@ -8135,6 +8199,7 @@ function bind(){
             statusEl.textContent='등록됨 · '+new Date().toLocaleString('ko-KR')+(pendingGz?' (gzip 압축 저장됨)':'');
             statusEl.style.color='#059669';
             delBtn.style.display='';
+            dlBtn.style.display='';
             toast('외부앱'+n+' 저장 완료 ('+nm+')','ok');
           };
           delBtn.onclick=async function(){
@@ -8157,6 +8222,7 @@ function bind(){
             statusEl.textContent='미등록';
             statusEl.style.color='#9ca3af';
             delBtn.style.display='none';
+            dlBtn.style.display='none';
             toast('외부앱'+n+' 삭제 완료','ok');
           };
         });
@@ -8803,20 +8869,30 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
     var net=ROUND3((Number(s.신인도)||0)-(Number(s.감점)||0));
     var _hasNum7=hasDed&&net!==0;
     var netStr=_hasNum7?' ('+(net>0?'+':'')+TRIM3(net)+')':'';
-    // 신용등급은 '경영상태비율로 부적격일 때 대체 적용된 경우'에만 표시 (BB0 이상=감점0이면 점수 없이 등급만)
-    if(s.creditApplied&&s._creditInfo&&s._creditInfo.grade){
-      netStr=netStr?netStr+s._creditInfo.grade:' ('+s._creditInfo.grade+')';
-    }
-    // 월 표시는 감점/가점 숫자가 실제로 있을 때만 붙임 — 신용등급만 있을 때는 매월 갱신되는 자료가 아니므로 생략
-    if(_hasNum7)netStr=jobAMonthTag(dbEntry,s.신인도,netStr);
-    // 대체(구제) 적용 안 됐어도 유효 신용등급이 있으면 실제 감점과 비교해 더 유리한 쪽만 표시(감점(음수)일 때만).
-    // 2026-08-20: 확정메세지에서는 감점과 신용등급을 "|"로 함께 병기하지 않고 둘 중 유리한 것 하나만 남기도록 변경
-    // (예: -3.2 vs BB0(=0) → BB0만 표시 / -0.2 vs B+(=0.43) → -0.2만 표시). 조합결과TXT(exportCombosText)는 미변경 — 기존대로 둘 다 표시.
-    if(!s.creditApplied&&net<0){
-      var _cg7=getCreditDeduction(dbEntry||{});
-      if(_cg7&&netStr){
-        if(_cg7.deduction<Math.abs(net))netStr=' ('+_cg7.grade+')'; // 신용등급이 더 유리 → 등급만 표시(숫자·월 표시 제거)
-        // else: 실제 감점이 더 유리하거나 같으면 기존 감점(+월) 표시를 그대로 유지, 등급은 병기하지 않음
+    // 신용등급 대체 적용: 신인도(가점) 기여가 전혀 없는 순수 신용등급 대체 감점이면 "(등급/-감점)" 형태로만 표시
+    // (월 표시 없음 — 신용등급은 매월 갱신되는 자료가 아니라 유효기간 단위). 신인도(가점)가 섞여 있을 때만
+    // 기존처럼 합산 숫자에 월 표시를 붙이고 등급을 참고로 이어붙임(예: (+0.3_8월)BB-).
+    // 2026-08-21: (-1.0_8월)BB- 형식은 신용등급이 매월 갱신되는 것처럼 보여 오해 소지가 있다는 지적으로 수정.
+    var _pureCredit7=s.creditApplied&&s._creditInfo&&s._creditInfo.grade&&!s.신인도;
+    if(_pureCredit7){
+      netStr=' ('+s._creditInfo.grade+(s._creditInfo.deduction>0?('/-'+TRIM3(s._creditInfo.deduction)):'')+')';
+    }else{
+      // 신용등급은 '경영상태비율로 부적격일 때 대체 적용된 경우'에만 표시 (BB0 이상=감점0이면 점수 없이 등급만)
+      if(s.creditApplied&&s._creditInfo&&s._creditInfo.grade){
+        netStr=netStr?netStr+s._creditInfo.grade:' ('+s._creditInfo.grade+')';
+      }
+      // 월 표시는 감점/가점 숫자가 실제로 있을 때만 붙임 — 신용등급만 있을 때는 매월 갱신되는 자료가 아니므로 생략
+      if(_hasNum7)netStr=jobAMonthTag(dbEntry,s.신인도,netStr);
+      // 대체(구제) 적용 안 됐어도 신용등급 감점이 실제 적용된 감점보다 유리하면 참고용으로 "|등급"(또는 "|등급/-감점") 병기.
+      // 2026-08-20: 한때 감점 숫자를 지우고 등급만 남기도록 바꿨었으나(둘 중 하나만 표시), 2026-08-21에 조합결과TXT
+      // (exportCombosText)와 동일하게 "감점 숫자는 유지 + 신용등급 참고 병기" 방식으로 재통일함(사용자 요청).
+      // 지자체 건은 creditRefForRow가 별표10 15점 직접 환산표를 쓰므로, 기존에 여기서 쓰던 getCreditDeduction(비지자체용
+      // 35점→15점 환산)이 지자체 신용등급 감점을 실제보다 훨씬 작게 오판해 감점 숫자 자체를 지워버리던 버그도 함께 해결됨.
+      if(!s.creditApplied&&net<0){
+        var _cg7=creditRefForRow(dbEntry,_comboCalc);
+        if(_cg7&&_cg7.deduction<Math.abs(net)&&netStr){
+          netStr=netStr.slice(0,-1)+'|'+_cg7.grade+(_cg7.deduction>0?('/-'+TRIM3(_cg7.deduction)):'')+')';
+        }
       }
     }
     return s.업체명+' '+TRIMDEC(Number(s.지분율)||0)+'%'+netStr+funcSuffixText(s)+(bizno?'\n('+bizno+')':'');
