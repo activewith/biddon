@@ -1898,6 +1898,10 @@ function updateEligNoteTooltip(적격기준){
   var tip=note?('📝 '+적격기준+' 메모: '+note):'';
   var f=document.getElementById('field-적격기준');if(f)f.title=tip;
   var s=document.getElementById('stat-적격기준');if(s)s.title=tip;
+  // 한전은 field-적격기준이 숨김 처리되는 전용 페이지라(applyKepcoModeUI), 대신 상단 "한전적격 전용 페이지" 배지에 표시
+  var kepcoNote=notes['한전']||'';
+  var badge=document.getElementById('o-kepco-badge');
+  if(badge)badge.title=kepcoNote?('📝 한전 메모: '+kepcoNote):'';
 }
 // 한전(한국전력공사)은 공종이 전기/복합(전기+분담) 2가지만 존재(통신/소방 없음) — 다른 기관에서는
 // 전기/통신/소방/복합(전기+통신)/복합(전기+소방) 5개를 유지한다. 2026-08-14: 일반(비한전) 기관 대상
