@@ -265,7 +265,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
 
   <button id="btn-gist-sync" title="GitHub Gist 클라우드 동기화"><span class="gist-icon">☁</span> <span id="gist-lbl">Gist</span></button>
   <span style="position:relative;display:inline-flex">
-    <button id="btn-settings" title="설정 (공고입력 설정: 공고문분석 키워드·지역편집 · 데이터 백업 · 계정 · 업체DB설정)">⚙</button>
+    <button id="btn-settings" title="설정 (공고/적격: 공고문분석 키워드·지역편집·적격메모 · 데이터 백업 · 계정 · 업체DB)">⚙</button>
     <span id="settings-alert-dot" style="display:none;position:absolute;top:1px;right:1px;width:8px;height:8px;border-radius:50%;background:#ef4444;border:1px solid #fff;pointer-events:none"></span>
   </span>
   <span id="session-info"><span id="session-user-label"></span><button id="btn-mypw" class="btn btn-ghost btn-sm" title="내 비밀번호 변경" style="padding:2px 6px">🔑</button><button id="btn-logout" class="btn btn-sm" style="background:#475569" title="로그아웃">로그아웃</button></span>
@@ -355,7 +355,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         <div class="stat" title="A값 미입력: 기초금액×사정률×낙찰하한율 | A값 입력 시: (기초금액×사정률 - A값)×낙찰하한율 + A값"><div class="k">예상투찰금액</div><div class="v" id="o-투찰금액">-</div></div>
         <div class="stat"><div class="k" id="o-50억-label">기준 구분</div><div class="v" id="o-50억">-</div></div>
         <div class="stat" style="background:#dbeafe;border-color:#93c5fd"><div class="k" style="color:#1d4ed8">선택 지역</div><div class="v" style="color:#1d4ed8" id="o-지역선택">미선택</div></div>
-        <div class="stat" style="background:#d1fae5;border-color:#6ee7b7"><div class="k" style="color:#065f46">적격기준</div><div class="v" style="color:#065f46" id="o-적격기준">미선택</div></div>
+        <div class="stat" id="stat-적격기준" style="background:#d1fae5;border-color:#6ee7b7"><div class="k" style="color:#065f46">적격기준</div><div class="v" style="color:#065f46" id="o-적격기준">미선택</div></div>
         <div class="stat" style="background:#fef3c7;border-color:#fde68a"><div class="k" style="color:#92400e">최소지분율</div><div class="v" style="color:#92400e" id="o-최소지분율">미설정</div></div>
         <div class="stat" style="background:#f5f3ff;border-color:#c4b5fd"><div class="k" style="color:#7c3aed">평균부채/유동(<span id="o-공종-label">전기</span>)</div><div class="v" style="color:#7c3aed;font-size:11px" id="o-업계평균">미입력</div></div>
       </div>
@@ -461,7 +461,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
             <td style="padding:1px 7px;text-align:center;font-weight:700;color:#7c3aed" id="avg-disp-소방유동">-</td>
           </tr></table>
           <span id="db-avg-stale-note" style="display:none;font-size:10px;color:#dc2626;font-weight:700;white-space:nowrap">⚠ 갱신필요</span>
-          <button class="btn btn-ghost" id="btn-edit-avg" title="업체DB설정(전체 계정 공통) — 설정 메뉴에서 관리합니다" style="border-color:#c4b5fd;color:#7c3aed;padding:3px 10px;font-size:12px;white-space:nowrap">⚙ 설정</button>
+          <button class="btn btn-ghost" id="btn-edit-avg" title="업체DB(전체 계정 공통) — 설정 메뉴에서 관리합니다" style="border-color:#c4b5fd;color:#7c3aed;padding:3px 10px;font-size:12px;white-space:nowrap">⚙ 설정</button>
         </span>
       </div>
       <div class="toolbar">
@@ -662,12 +662,24 @@ var _initKepcoCombos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
 // 공고입력 화면의 "지역 선택" 드롭다운에 쓰이는 지역 마스터 목록 기본값.
 // (기존에는 업체DB에 실제로 등록된 지역만 목록에 나타나서, DB에 없는 지역(예: 광주)은 선택 자체가 불가능했던 문제 → 설정>공고입력 설정>지역편집에서 관리하는 고정 목록으로 분리)
 const DEFAULT_REGIONS=['서울','부산','대구','인천','광주','대전','울산','세종','경기','강원','충북','충남','전북','전남','경북','경남','제주'];
+// 설정 > 공고/적격 > 적격메모에서 관리하는 적격기준 목록. #in-적격기준의 옵션 순서와 동일하게 맞추고,
+// 별도 페이지로 분리된 한전(적격기준 항상 고정)도 메모 대상에 포함.
+const ELIG_NOTE_INSTITUTIONS=[
+  ['조달청','조달청'],
+  ['인천공항','인천공항(인천국제공항공사)'],
+  ['철도공단','철도공단(국가철도공단)'],
+  ['지자체','지자체'],
+  ['LH','LH(토지주택공사)'],
+  ['도로공사','도로공사(한국도로공사)'],
+  ['수자원공사','수자원공사(한국수자원공사)'],
+  ['한전','한전(한국전력공사)']
+];
 const state={
   schemaVersion:SCHEMA_VERSION,
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null}},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{}},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -752,6 +764,7 @@ function gistApplyData(obj){
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
+  if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
   ensureDefaultAccounts();
@@ -1241,6 +1254,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
+  if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
   if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
@@ -1319,6 +1333,7 @@ function load(){
     if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
     if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
     if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
+  if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
     if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
     if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
@@ -1872,6 +1887,17 @@ function applyInstitutionUI(적격기준){
   var _rg=$('#rail-group');if(_rg)_rg.style.display=isRail?'flex':'none';
   if(isRail)updateRailGroupInfo();
   updateGongjongOptions(적격기준);
+  updateEligNoteTooltip(적격기준);
+}
+// 설정 > 공고/적격 > 적격메모에 입력해둔 메모를, 공고 입력 화면의 적격기준 select/요약박스에
+// title 속성(브라우저 기본 풍선 도움말)로 반영. 적격기준이 바뀌거나(select change), 화면이 복원되거나
+// (restoreBidInputsFromState), 적격메모를 저장할 때마다 applyInstitutionUI 경유로 호출됨.
+function updateEligNoteTooltip(적격기준){
+  var notes=(state.settings&&state.settings.eligNotes)||{};
+  var note=적격기준?(notes[적격기준]||''):'';
+  var tip=note?('📝 '+적격기준+' 메모: '+note):'';
+  var f=document.getElementById('field-적격기준');if(f)f.title=tip;
+  var s=document.getElementById('stat-적격기준');if(s)s.title=tip;
 }
 // 한전(한국전력공사)은 공종이 전기/복합(전기+분담) 2가지만 존재(통신/소방 없음) — 다른 기관에서는
 // 전기/통신/소방/복합(전기+통신)/복합(전기+소방) 5개를 유지한다. 2026-08-14: 일반(비한전) 기관 대상
@@ -7792,8 +7818,8 @@ function bind(){
         '</div>'+
         '<div class="settings-tabbar">'+
           '<button type="button" class="settings-tabbtn active" data-stab="backup">💾 백업</button>'+
-          '<button type="button" class="settings-tabbtn" data-stab="companydb">🏢 업체DB설정</button>'+
-          '<button type="button" class="settings-tabbtn" data-stab="bidinput">🗂️ 공고입력 설정</button>'+
+          '<button type="button" class="settings-tabbtn" data-stab="companydb">🏢 업체DB</button>'+
+          '<button type="button" class="settings-tabbtn" data-stab="bidinput">🗂️ 공고/적격</button>'+
           '<button type="button" class="settings-tabbtn" data-stab="combo">🤝 조합</button>'+
           (currentRole()==='super'?'<button type="button" class="settings-tabbtn" data-stab="extapps">🔗 외부앱</button>':'')+
           (isAdminOrAbove()?'<button type="button" class="settings-tabbtn" data-stab="accounts">👤 계정</button>':'')+
@@ -7883,6 +7909,7 @@ function bind(){
           '<div class="settings-subtabbar">'+
             '<button type="button" class="settings-subtabbtn active" data-substab="analyzer">📋 공고문분석</button>'+
             '<button type="button" class="settings-subtabbtn" data-substab="region">🗺️ 지역편집</button>'+
+            '<button type="button" class="settings-subtabbtn" data-substab="eligmemo">📝 적격메모</button>'+
           '</div>'+
           '<div class="settings-subtabpage" data-substabpage="analyzer">'+
             '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
@@ -7914,6 +7941,25 @@ function bind(){
             '</div>'+
             '<div style="display:flex;justify-content:flex-end;gap:6px;padding:4px 16px 12px">'+
               '<button class="btn btn-ghost" id="region-reset-btn">기본값 복원</button>'+
+            '</div>'+
+          '</div>'+
+          '<div class="settings-subtabpage" data-substabpage="eligmemo" style="display:none">'+
+            '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
+              '적격기준별로 메모를 입력해두면, 공고 입력 화면의 <b>적격기준</b>에 마우스를 올렸을 때 풍선 도움말로 표시됩니다.'+
+            '</div>'+
+            '<div style="padding:0 16px 12px">'+
+              '<table class="settings-table">'+
+              '<thead><tr><th style="width:170px">적격기준</th><th>메모</th></tr></thead>'+
+              '<tbody>'+
+                ELIG_NOTE_INSTITUTIONS.map(function(o){
+                  return '<tr><td>'+esc(o[1])+'</td>'+
+                    '<td><textarea id="eligmemo-'+esc(o[0])+'" rows="2" style="width:100%;resize:vertical;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" placeholder="'+esc(o[1])+' 관련 메모를 입력하세요"></textarea></td></tr>';
+                }).join('')+
+              '</tbody>'+
+              '</table>'+
+            '</div>'+
+            '<div style="display:flex;justify-content:flex-end;gap:6px;padding:4px 16px 12px">'+
+              '<button class="btn" id="eligmemo-save" style="background:#059669">저장</button>'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -8063,6 +8109,27 @@ function bind(){
           toast('초기화 완료','ok');
         };
       }
+      // ── 적격메모 (공고입력 설정 탭 > 적격메모 서브탭) ──
+      (function(){
+        var notes=state.settings.eligNotes||{};
+        ELIG_NOTE_INSTITUTIONS.forEach(function(o){
+          var el=document.getElementById('eligmemo-'+o[0]);
+          if(el)el.value=notes[o[0]]||'';
+        });
+        var _emSave=document.getElementById('eligmemo-save');
+        if(_emSave)_emSave.onclick=function(){
+          if(!state.settings.eligNotes)state.settings.eligNotes={};
+          ELIG_NOTE_INSTITUTIONS.forEach(function(o){
+            var el=document.getElementById('eligmemo-'+o[0]);
+            if(!el)return;
+            var v=el.value.trim();
+            if(v)state.settings.eligNotes[o[0]]=v;else delete state.settings.eligNotes[o[0]];
+          });
+          save();
+          updateEligNoteTooltip(state.bid.적격기준);
+          toast('적격메모 저장','ok');
+        };
+      })();
       // 기본지분율 (조합 탭)
       var _bpEl=document.getElementById('in-기본지분율');
       if(_bpEl){
