@@ -9761,15 +9761,26 @@ function renderBidScreenTabs(){
   });
   // ── '+' 버튼을 가장 왼쪽에 고정. 새 탭은 addBidScreen()에서 배열 맨 앞(unshift)에 추가되므로
   //    렌더링 순서(state.bidScreens 배열 순서)를 그대로 따라가면 최신 탭이 자동으로 '+' 바로 오른쪽(맨 왼쪽)에 옴.
+  // 탭 title에 메모 첫 줄을 요약해 보여주기 위한 헬퍼 — 공고명 옆에 "(메모 첫줄)" 형태로 병기.
+  function _memoExcerpt(memo){
+    var lines=String(memo||'').split(/\r?\n/).map(function(s){return s.trim();}).filter(Boolean);
+    if(!lines.length)return '';
+    var first=lines[0];
+    if(first.length>60)first=first.slice(0,60)+'…';
+    else if(lines.length>1)first+=' …';
+    return first;
+  }
   var html='<button type="button" id="btn-add-bid-screen" title="입찰적격판정 화면 추가">＋</button>'+state.bidScreens.map(function(scr,i){
     var isActive=(i===state.activeBidScreenIndex);
     var isHit=bidTabSearchMatches.indexOf(i)>=0;
     var delBtn=state.bidScreens.length>1?('<button type="button" class="bid-del-btn" data-bid-del="'+i+'" title="화면 삭제">×</button>'):'';
     var _nm=(scr.bid&&scr.bid.공고명)?esc(scr.bid.공고명):'';
-    // 메모(협정메세지)에 내용이 있으면 탭 글자를 오렌지색으로 — 화면을 열지 않고 탭바만 봐도 메모 유무를 알 수 있도록.
+    // 메모(협정메세지)에 내용이 있으면 탭 글자를 오렌지색으로, title에는 공고명+메모 첫줄을 함께 보여줌
+    // — 화면을 열지 않고 탭바만 봐도(마우스오버) 메모 유무와 내용을 바로 알 수 있도록.
     var _hasMemo=!!(scr.bid&&scr.bid.협정메세지&&String(scr.bid.협정메세지).trim());
     var _memoStyle=_hasMemo?' style="color:#f97316;font-weight:700"':'';
-    var _memoTitle=_hasMemo?(_nm?_nm+' (메모 있음)':'메모 있음'):_nm;
+    var _memoLine=_hasMemo?_memoExcerpt(scr.bid.협정메세지):'';
+    var _memoTitle=_hasMemo?(_nm?(_memoLine?_nm+' ('+_memoLine+')':_nm):(_memoLine||'메모 있음')):_nm;
     return '<span class="bid-screen-tab-wrap'+(isActive?' active-wrap':'')+(isHit?' search-hit':'')+(_hasMemo?' has-memo':'')+'"><button data-tab="bid" data-bid-screen="'+i+'"'+(isActive?' class="active"':'')+_memoStyle+(_memoTitle?' title="'+esc(_memoTitle)+'"':'')+'>'+esc(scr.name)+'</button>'+delBtn+'</span>';
   }).join('');
   root.innerHTML=html;
