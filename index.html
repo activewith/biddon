@@ -343,7 +343,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
         </div>
         <button class="btn" id="btn-paste-text" title="스캔 PDF 등 직접 추출이 안 될 때 텍스트를 붙여넣어 분석" style="background:#2563eb;color:#fff;border-color:#1d4ed8">📋 공고문분석(텍스트)</button>
         <button class="btn" id="btn-reset-bid" style="background:#111827;color:#fff;border-color:#111827">공고 초기화</button>
-        <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 메모 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 메세지/요약</button>
+        <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 메모 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 한줄요약/메모</button>
       </div>
       <!-- 업계평균 입력은 DB탭에서 관리 -->
       <div class="summary" style="margin-top:10px">
@@ -5723,6 +5723,34 @@ function _bindKepcoPerfInputs(found){
   });
   _updateKepcoPerfPreview(found);
 }
+// 공고문분석 결과에서 검출 실패해 수동입력칸으로 대체될 때, 기관(적격기준)+추정가격 구간별로
+// 실무상 거의 고정적으로 쓰이는 참고값을 placeholder에 "추천: N" 형태로 보여준다.
+// 어디까지나 참고용 배경값이며(공고마다 실제 다를 수 있음) 값을 강제 채우지 않고 입력칸은 그대로 둔다.
+// - 투찰률: calcBid()의 auto투찰률과 동일한 기관·추정가격 구간별 고정 로직을 그대로 재사용.
+// - 최소지분율: 공동수급체 구성원 최소지분율 실무 관행값. 지자체는 5%, 그 외 기관은 10%(사용자 확인, 2026-08-25).
+// - 지역의무지분: 지자체를 제외한 기관은 30%가 실무상 흔한 값(사용자 확인, 2026-08-25). 지자체는
+//   조례·공고별 편차가 커서 확정값이 없으므로 추천하지 않음(기존 "예: N" 표시로 폴백).
+function _pdfFieldRecommend(k,found){
+  var 기준=found?found.적격기준:'';
+  if(k==='최소지분율')return (기준==='지자체')?5:10;
+  if(k==='지역의무지분')return (기준==='지자체')?null:30;
+  if(k==='투찰률'){
+    var E5=Number(found?found.추정가격:0)||0;
+    if(!E5)return null;
+    if(기준==='지자체'){
+      var jijaTier=E5<LIMIT_30?1:E5<LIMIT_50?2:E5<LIMIT_100?3:4;
+      return jijaTier>=4?81.995:(E5>=LIMIT_50?87.495:88.745);
+    }
+    if(기준==='LH')return E5>=LIMIT_50?87.5:88.75;
+    return E5>=LIMIT_50?87.495:88.745; // 조달청/인천공항/철도공단/도로공사/수자원공사/한전/미상 공통
+  }
+  return null;
+}
+function _pdfPlaceholder(k,found){
+  var rec=_pdfFieldRecommend(k,found);
+  if(rec!=null)return '추천: '+TRIMDEC(rec,3);
+  return (k==='최소지분율'||k==='지역의무지분'||k==='투찰률')?'예: 10':(k==='구성업체수'?'예: 3':'직접입력');
+}
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
   var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)'};
@@ -5783,7 +5811,7 @@ function showPdfResultModal(found,preview){
     }
     // 나머지 항목은 숫자 직접입력형
     var numAttrs={추정가격:'min="0" step="1"',분담시평:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"'};
-    var ph=(k==='최소지분율'||k==='지역의무지분'||k==='투찰률')?'예: 10':(k==='구성업체수'?'예: 3':'직접입력');
+    var ph=_pdfPlaceholder(k,found);
     return '<input type="number" data-pdf-manual="'+k+'" '+(numAttrs[k]||'')+' placeholder="'+ph+'" style="'+st+'">';
   }
   // ── 전체 수정 모드 ─────────────────────────────────────────
@@ -5831,7 +5859,7 @@ function showPdfResultModal(found,preview){
       '</div>';
     }
     var numAttrs={추정가격:'min="0" step="1"',기초금액:'min="0" step="1"',시평제한:'min="0" step="1"',분담시평:'min="0" step="1"',A값:'min="0" step="1"',lh지분율기준:'min="0" step="1"',lh순공사원가:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"',배수:'min="0" step="0.1"'};
-    var ph=(k==='최소지분율'||k==='지역의무지분'||k==='투찰률')?'예: 10':(k==='구성업체수'?'예: 3':'직접입력');
+    var ph=_pdfPlaceholder(k,found);
     var v=found[k];
     var vAttr=(v!=null&&v!=='')?' value="'+esc(String(v))+'"':'';
     return '<input type="number" data-pdf-manual="'+k+'" '+(numAttrs[k]||'')+vAttr+' placeholder="'+ph+'" style="'+st+'">';
@@ -7752,7 +7780,7 @@ function bind(){
       var mr=MODAL_ROOT;
       mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:480px;max-width:96vw;padding:0;overflow:hidden">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:2px solid var(--border)">'+
-          '<span style="font-weight:700;font-size:15px;color:#1e293b">📋 메세지/요약</span>'+
+          '<span style="font-weight:700;font-size:15px;color:#1e293b">📋 한줄요약/메모</span>'+
           '<button id="m-ms-close" class="btn btn-ghost" style="padding:2px 8px">닫기</button>'+
         '</div>'+
         // 상단: 한줄요약
@@ -9738,7 +9766,11 @@ function renderBidScreenTabs(){
     var isHit=bidTabSearchMatches.indexOf(i)>=0;
     var delBtn=state.bidScreens.length>1?('<button type="button" class="bid-del-btn" data-bid-del="'+i+'" title="화면 삭제">×</button>'):'';
     var _nm=(scr.bid&&scr.bid.공고명)?esc(scr.bid.공고명):'';
-    return '<span class="bid-screen-tab-wrap'+(isActive?' active-wrap':'')+(isHit?' search-hit':'')+'"><button data-tab="bid" data-bid-screen="'+i+'"'+(isActive?' class="active"':'')+(_nm?' title="'+_nm+'"':'')+'>'+esc(scr.name)+'</button>'+delBtn+'</span>';
+    // 메모(협정메세지)에 내용이 있으면 탭 글자를 오렌지색으로 — 화면을 열지 않고 탭바만 봐도 메모 유무를 알 수 있도록.
+    var _hasMemo=!!(scr.bid&&scr.bid.협정메세지&&String(scr.bid.협정메세지).trim());
+    var _memoStyle=_hasMemo?' style="color:#c2410c"':'';
+    var _memoTitle=_hasMemo?(_nm?_nm+' (메모 있음)':'메모 있음'):_nm;
+    return '<span class="bid-screen-tab-wrap'+(isActive?' active-wrap':'')+(isHit?' search-hit':'')+(_hasMemo?' has-memo':'')+'"><button data-tab="bid" data-bid-screen="'+i+'"'+(isActive?' class="active"':'')+_memoStyle+(_memoTitle?' title="'+esc(_memoTitle)+'"':'')+'>'+esc(scr.name)+'</button>'+delBtn+'</span>';
   }).join('');
   root.innerHTML=html;
   root.querySelectorAll('button[data-bid-screen]').forEach(function(btn){
