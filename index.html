@@ -9768,7 +9768,7 @@ function renderBidScreenTabs(){
     var _nm=(scr.bid&&scr.bid.공고명)?esc(scr.bid.공고명):'';
     // 메모(협정메세지)에 내용이 있으면 탭 글자를 오렌지색으로 — 화면을 열지 않고 탭바만 봐도 메모 유무를 알 수 있도록.
     var _hasMemo=!!(scr.bid&&scr.bid.협정메세지&&String(scr.bid.협정메세지).trim());
-    var _memoStyle=_hasMemo?' style="color:#c2410c"':'';
+    var _memoStyle=_hasMemo?' style="color:#f97316;font-weight:700"':'';
     var _memoTitle=_hasMemo?(_nm?_nm+' (메모 있음)':'메모 있음'):_nm;
     return '<span class="bid-screen-tab-wrap'+(isActive?' active-wrap':'')+(isHit?' search-hit':'')+(_hasMemo?' has-memo':'')+'"><button data-tab="bid" data-bid-screen="'+i+'"'+(isActive?' class="active"':'')+_memoStyle+(_memoTitle?' title="'+esc(_memoTitle)+'"':'')+'>'+esc(scr.name)+'</button>'+delBtn+'</span>';
   }).join('');
