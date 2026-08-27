@@ -2119,6 +2119,18 @@ function applyRailTechToCombo(ci){
 // 등급별 점수 및 영업기간 처리가 별표에 따라 다름
 function _dg(r){if(r<50)return 'A';if(r<75)return 'B';if(r<100)return 'C';if(r<125)return 'D';return 'E';}
 function _lg(r){if(r>=150)return 'A';if(r>=120)return 'B';if(r>=100)return 'C';if(r>=70)return 'D';return 'E';}
+// ── 경영비율 등급 강제지정(2026-08-27) ──────────────────────────────────
+// 기존엔 "만점" 체크박스 하나(=A등급 강제)만 있었으나, 특정 등급(B~E)을 직접 지정할 수 있도록 확장.
+// 저장값은 ''(강제없음, 자동계산) 또는 'A'~'E' 문자열. 구버전 데이터의 boolean true는 'A'로, false/undefined는 ''로 취급(하위호환).
+function econForcedGrade(v){if(!v)return '';return v===true?'A':v;}
+// 강제 지정된 등급을 실제 배점 계산에 반영하기 위한 대표 비율값.
+// 부채(낮을수록 유리)/유동(높을수록 유리) 등급구간(50/75/100/125, 150/120/100/70)은 조달청 표준·지자체·철도1/2·LH별표2 등
+// 이 파일의 거의 모든 배점표에서 동일하게 쓰이므로, 이 대표값 하나로 어떤 배점표를 타더라도 같은 등급이 재현된다.
+// 예외: LH 별표3(A공사)는 부채구간이 다름(100/130/160/190) — lhEconFromDB()에서 별도 대표값을 쓴다.
+var ECON_FORCE_DEBT_RATIO={A:0,B:60,C:85,D:110,E:130};
+var ECON_FORCE_LIQ_RATIO={A:9999,B:130,C:110,D:80,E:50};
+function econForcedDebtRatio(g){return ECON_FORCE_DEBT_RATIO[g]!=null?ECON_FORCE_DEBT_RATIO[g]:0;}
+function econForcedLiqRatio(g){return ECON_FORCE_LIQ_RATIO[g]!=null?ECON_FORCE_LIQ_RATIO[g]:9999;}
 function calcEconScoreJija(rD,rU,yr,tier){
   var d=_dg(rD),l=_lg(rU);
   if(tier===1){
@@ -2157,9 +2169,9 @@ function calcEconScoreJija(rD,rU,yr,tier){
 // 다만 그 값을 어떤 등급으로 환산하느냐는 업종별 업계평균(분모)이 달라서 결과 등급이 달라질 수 있고,
 // "만점(A) 강제" 여부도 업종별로 별도 지정 가능(예: 소방 협회 확인서만 다르게 처리해야 하는 경우 등).
 function getCompPerfData(cc,공종){
-  if(공종==='소방')return{실적5:cc.소방_실적5||0,실적3:cc.소방_실적3||0,시평액:cc.소방_시평액||0,공사업등록일:cc.소방_공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:!!cc.소방_부채만점,유동만점:!!cc.소방_유동만점};
-  if(공종==='통신')return{실적5:cc.통신_실적5||0,실적3:cc.통신_실적3||0,시평액:cc.통신_시평액||0,공사업등록일:cc.통신_공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:!!cc.통신_부채만점,유동만점:!!cc.통신_유동만점};
-  return{실적5:cc.실적5||0,실적3:cc.실적3||0,시평액:cc.시평액||0,공사업등록일:cc.공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:!!cc.부채만점,유동만점:!!cc.유동만점};
+  if(공종==='소방')return{실적5:cc.소방_실적5||0,실적3:cc.소방_실적3||0,시평액:cc.소방_시평액||0,공사업등록일:cc.소방_공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:cc.소방_부채만점||false,유동만점:cc.소방_유동만점||false};
+  if(공종==='통신')return{실적5:cc.통신_실적5||0,실적3:cc.통신_실적3||0,시평액:cc.통신_시평액||0,공사업등록일:cc.통신_공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:cc.통신_부채만점||false,유동만점:cc.통신_유동만점||false};
+  return{실적5:cc.실적5||0,실적3:cc.실적3||0,시평액:cc.시평액||0,공사업등록일:cc.공사업등록일||'',부채비율:cc.부채비율,유동비율:cc.유동비율,부채만점:cc.부채만점||false,유동만점:cc.유동만점||false};
 }
 // 2026-08-14: 복합(전기+통신)/복합(전기+소방) 조합의 통신/소방 슬롯에 업체를 선택할 때,
 // getCompPerfData에 조합 전체의 공종(예: "복합(전기+통신)")을 그대로 넘기면 '소방'/'통신' 문자열과
@@ -2267,8 +2279,9 @@ function calcEconScore(dbEntry,calc){
   var hasD=_pd.부채만점||_pd.부채비율!=null;
   var hasU=_pd.유동만점||_pd.유동비율!=null;
   if(!hasD||!hasU)return null;
-  var rD=_pd.부채만점?0:(Number(_pd.부채비율)/avgD)*100;
-  var rU=_pd.유동만점?9999:(Number(_pd.유동비율)/avgU)*100;
+  var _fD1=econForcedGrade(_pd.부채만점),_fU1=econForcedGrade(_pd.유동만점);
+  var rD=_fD1?econForcedDebtRatio(_fD1):(Number(_pd.부채비율)/avgD)*100;
+  var rU=_fU1?econForcedLiqRatio(_fU1):(Number(_pd.유동비율)/avgU)*100;
   if(isNaN(rD)||isNaN(rU))return null;
   var yr=calcYears(_pd.공사업등록일);
   // ── 지자체 기준 분기 ──────────────────────────────────────────────
@@ -2374,8 +2387,9 @@ function jijaEffectiveDeduction(dbEntry,calc){
     var pd=getCompPerfData(dbEntry,calc.공종||'전기');
     var hasD=pd.부채만점||pd.부채비율!=null,hasU=pd.유동만점||pd.유동비율!=null;
     if(hasD&&hasU){
-      var rD=pd.부채만점?0:(Number(pd.부채비율)/avgD)*100;
-      var rU=pd.유동만점?9999:(Number(pd.유동비율)/avgU)*100;
+      var _fDj=econForcedGrade(pd.부채만점),_fUj=econForcedGrade(pd.유동만점);
+      var rD=_fDj?econForcedDebtRatio(_fDj):(Number(pd.부채비율)/avgD)*100;
+      var rU=_fUj?econForcedLiqRatio(_fUj):(Number(pd.유동비율)/avgU)*100;
       var yr=calcYears(pd.공사업등록일);
       var econJ=calcEconScoreJija(rD,rU,yr,calc.jijaTier);
       if(econJ){
@@ -3702,8 +3716,9 @@ function dbGamHTML(c,공종override){
     }
     return dv>0?'<span style="color:#dc2626">-'+dv+'</span>':'<span style="color:#d1d5db">-</span>';
   }
-  var rD=_pd0.부채만점?0:(Number(_pd0.부채비율)/avgD)*100;
-  var rU=_pd0.유동만점?9999:(Number(_pd0.유동비율)/avgU)*100;
+  var _fD0=econForcedGrade(_pd0.부채만점),_fU0=econForcedGrade(_pd0.유동만점);
+  var rD=_fD0?econForcedDebtRatio(_fD0):(Number(_pd0.부채비율)/avgD)*100;
+  var rU=_fU0?econForcedLiqRatio(_fU0):(Number(_pd0.유동비율)/avgU)*100;
   var yr=calcYears(_pd0.공사업등록일);
   // 별표7A
   var bd7=부채등급7A(rD),ud7=유동등급7A(rU),od7=yr!=null?영업등급7(yr):null;
@@ -4197,10 +4212,14 @@ function openCompanyModal(idx){
   // 부채비율/유동비율 원자값은 업종과 무관하게 회사 공통 하나뿐이라 입력칸은 아래 별도 단일 입력을 쓰고,
   // 여기서는 업종별 업계평균이 달라서 갈리는 등급 결과 + 업종별 만점(A) 강제 체크박스만 보여준다.
   function _econGradeCell(k){
-    function part(field,mjChecked){
+    function part(field,mjVal){
+      var _sel=econForcedGrade(mjVal);
+      var _opts=['','A','B','C','D','E'].map(function(o){
+        return '<option value="'+o+'"'+(_sel===o?' selected':'')+'>'+(o===''?'자동':o)+'</option>';
+      }).join('');
       return '<span style="display:inline-flex;align-items:center;gap:2px">'+(field==='부채비율'?'부채':'유동')+
         ' <b id="m-'+k+'-'+field+'-등급" style="min-width:11px;display:inline-block"></b>'+
-        ' <input type="checkbox" id="m-'+k+'-'+field+'만점" '+(mjChecked?'checked':'')+' title="'+k+' 평가에서만 만점(A) 강제 적용">'+
+        ' <select id="m-'+k+'-'+field+'만점" title="'+k+' 평가에서 이 등급으로 강제 적용(자동=업종평균 대비 계산)" style="font-size:10px;padding:0 1px;cursor:pointer;width:42px">'+_opts+'</select>'+
         '</span>';
     }
     var 부채mj=k==='전기'?c.부채만점:c[k+'_부채만점'];
@@ -4377,7 +4396,7 @@ function openCompanyModal(idx){
           if(!sp)return;
           if(mj)mj.disabled=!참여;
           if(!참여){sp.textContent='';return;} // 미참여 업종은 경영비율 계산/표시 안 함
-          if(mj&&mj.checked){sp.textContent='A';sp.style.color=econGradeColor('A');return;}
+          if(mj&&mj.value){sp.textContent=mj.value;sp.style.color=econGradeColor(mj.value);return;}
           var avg=Number(_ca3[spec.avgKey])||0;
           if(!isNaN(spec.v)&&avg>0){var g=spec.g(spec.v/avg*100);sp.textContent=g;sp.style.color=econGradeColor(g);}
           else sp.textContent='';
@@ -4414,15 +4433,16 @@ function openCompanyModal(idx){
     function setM(id,v){var el=$('#'+id);if(el)el.value=v>0?FMT_NUM(v):'';}
     function setN(id,v){var el=$('#'+id);if(el)el.value=v!=null?v:'';}
     function setC(id,v){var el=$('#'+id);if(el)el.checked=!!v;}
+    function setSel(id,v){var el=$('#'+id);if(el)el.value=econForcedGrade(v);}
     setM('m-전기-시평액',c.시평액);setM('m-전기-실적3',c.실적3);setM('m-전기-실적5',c.실적5);
     setN('m-부채비율',c.부채비율);setN('m-유동비율',c.유동비율);
-    setC('m-전기-부채비율만점',c.부채만점);setC('m-전기-유동비율만점',c.유동만점);
+    setSel('m-전기-부채비율만점',c.부채만점);setSel('m-전기-유동비율만점',c.유동만점);
     fv('m-전기-공사업등록일',c.공사업등록일||'');
     setM('m-통신-시평액',c.통신_시평액);setM('m-통신-실적3',c.통신_실적3);setM('m-통신-실적5',c.통신_실적5);
-    setC('m-통신-부채비율만점',c.통신_부채만점);setC('m-통신-유동비율만점',c.통신_유동만점);
+    setSel('m-통신-부채비율만점',c.통신_부채만점);setSel('m-통신-유동비율만점',c.통신_유동만점);
     fv('m-통신-공사업등록일',c.통신_공사업등록일||'');
     setM('m-소방-시평액',c.소방_시평액);setM('m-소방-실적3',c.소방_실적3);setM('m-소방-실적5',c.소방_실적5);
-    setC('m-소방-부채비율만점',c.소방_부채만점);setC('m-소방-유동비율만점',c.소방_유동만점);
+    setSel('m-소방-부채비율만점',c.소방_부채만점);setSel('m-소방-유동비율만점',c.소방_유동만점);
     fv('m-소방-공사업등록일',c.소방_공사업등록일||'');
     if($('#m-부채비율'))$('#m-부채비율').dispatchEvent(new Event('input'));
     if($('#m-유동비율'))$('#m-유동비율').dispatchEvent(new Event('input'));
@@ -4465,14 +4485,14 @@ function openCompanyModal(idx){
       개별최대지분율:(function(){var v=$('#m-개별최대지분율').value.trim();return v===''?null:Number(v);})(),
       부채비율:_readSingleRatio('부채비율'),
       유동비율:_readSingleRatio('유동비율'),
-      부채만점:!!($('#m-전기-부채비율만점')&&$('#m-전기-부채비율만점').checked),
-      유동만점:!!($('#m-전기-유동비율만점')&&$('#m-전기-유동비율만점').checked),
+      부채만점:($('#m-전기-부채비율만점')&&$('#m-전기-부채비율만점').value)||'',
+      유동만점:($('#m-전기-유동비율만점')&&$('#m-전기-유동비율만점').value)||'',
       공사업등록일:$('#m-전기-공사업등록일').value.trim(),
       통신_시평액:readMoney($('#m-통신-시평액'))||0,통신_실적5:readMoney($('#m-통신-실적5'))||0,통신_실적3:readMoney($('#m-통신-실적3'))||0,
-      통신_부채만점:!!($('#m-통신-부채비율만점')&&$('#m-통신-부채비율만점').checked),통신_유동만점:!!($('#m-통신-유동비율만점')&&$('#m-통신-유동비율만점').checked),
+      통신_부채만점:($('#m-통신-부채비율만점')&&$('#m-통신-부채비율만점').value)||'',통신_유동만점:($('#m-통신-유동비율만점')&&$('#m-통신-유동비율만점').value)||'',
       통신_공사업등록일:$('#m-통신-공사업등록일').value.trim(),
       소방_시평액:readMoney($('#m-소방-시평액'))||0,소방_실적5:readMoney($('#m-소방-실적5'))||0,소방_실적3:readMoney($('#m-소방-실적3'))||0,
-      소방_부채만점:!!($('#m-소방-부채비율만점')&&$('#m-소방-부채비율만점').checked),소방_유동만점:!!($('#m-소방-유동비율만점')&&$('#m-소방-유동비율만점').checked),
+      소방_부채만점:($('#m-소방-부채비율만점')&&$('#m-소방-부채비율만점').value)||'',소방_유동만점:($('#m-소방-유동비율만점')&&$('#m-소방-유동비율만점').value)||'',
       소방_공사업등록일:$('#m-소방-공사업등록일').value.trim(),
       groups:readGroupPickerValues('m'),
       전기_우선협정:($('#m-전기-우선협정')&&$('#m-전기-우선협정').value.trim())||'',통신_우선협정:($('#m-통신-우선협정')&&$('#m-통신-우선협정').value.trim())||'',소방_우선협정:($('#m-소방-우선협정')&&$('#m-소방-우선협정').value.trim())||''
@@ -8779,12 +8799,15 @@ function lhEconFromDB(dbEntry, 별표) {
   var avgU = Number(state.bid.업계평균유동비율) || 0;
   var noAvg = (!avgD || !avgU);
 
+  var _fDl=econForcedGrade(dbEntry.부채만점),_fUl=econForcedGrade(dbEntry.유동만점);
+  // LH 별표3(A공사)만 부채구간이 다름(100/130/160/190) — 강제등급 대표값도 별도로 매핑.
+  var LH3_FORCE_DEBT_RATIO={A:0,B:115,C:145,D:175,E:200};
   var rD, rU;
-  if (dbEntry.부채만점) { rD = 0; }          // 부채비율 만점 → 0% (최상)
+  if (_fDl) { rD = (별표===3)?(LH3_FORCE_DEBT_RATIO[_fDl]!=null?LH3_FORCE_DEBT_RATIO[_fDl]:0):econForcedDebtRatio(_fDl); }
   else if (avgD && dbEntry.부채비율 != null) { rD = (Number(dbEntry.부채비율) / avgD) * 100; }
   else { rD = null; }
 
-  if (dbEntry.유동만점) { rU = 9999; }       // 유동비율 만점 → ∞ (최상)
+  if (_fUl) { rU = econForcedLiqRatio(_fUl); }
   else if (avgU && dbEntry.유동비율 != null) { rU = (Number(dbEntry.유동비율) / avgU) * 100; }
   else { rU = null; }
 
