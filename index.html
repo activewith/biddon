@@ -338,6 +338,10 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
           <select id="in-공종" style="width:150px;background:#f5f3ff;color:#5b21b6;font-weight:700;border-color:#c4b5fd">
             <option value="전기">전기</option><option value="통신">통신</option><option value="소방">소방</option><option value="복합(전기+통신)">복합(통신+전기)</option><option value="복합(전기+소방)">복합(소방+전기)</option>
           </select></div>
+        <div class="field" id="field-기준월">
+          <label>기준월 <span class="star-tip" style="color:#0891b2" data-tip="일자리가점(A/B조건)·신용평가·안전보건 등 월/만료 단위로 자동 변하는 값을 판정할 기준월. 협정마감일이 아니라 보통 공고 개시월. 탭을 열 때 이번 달로 자동 채워지며, 다른 달 공고면 직접 수정">★</span></label>
+          <input type="month" id="in-기준월" style="width:130px;background:#ecfeff;border-color:#67e8f9">
+        </div>
         <div class="field" id="field-db기준" style="display:none">
           <label>업체DB 적용기준 <span style="font-size:10px;color:#dc2626" title="8/1 재무데이터 초기화 전환기간(~8/31) 한정 표시. 조합 계산에만 적용되며 업체DB 목록화면은 항상 현재 값을 표시">★ 전환기간</span></label>
           <select id="in-db기준" style="width:130px;background:#fef2f2;color:#991b1b;font-weight:700;border-color:#fca5a5">
@@ -592,16 +596,15 @@ function funcSuffixText(row){
 }
 // 일자리창출 A조건 유효월 수동선택 UI는 폐지(2026-07-28)되어 pass-through로 축소했었으나,
 // 2026-08-06 사용자 요청으로 "현재월" 표시를 다시 추가함 — 예: "창성 70(+1.5_8월)".
-// 2026-08-27 정정: "오늘 날짜"가 아니라 공고의 기준일(state.bid._기준일, 탭에 실제 공고 데이터가
-// 처음 들어온 시점)의 월을 표시하도록 변경 — 협정마감일이 다음 달로 넘어가는 공고를 그 이후에
-// 열어봐도 표시가 "오늘 기준"으로 틀어지지 않게 함(신인도/감점 재계산 기준월과 항상 일치시킴).
-// _기준일이 없는 옛 탭(이 수정 이전에 만들어진 탭)은 기존과 동일하게 오늘 날짜로 표시(하위호환).
+// 2026-08-27 정정(사용자 지적, 2회 수정): "오늘 날짜"도, 탭 생성일도 정답이 아니다 — 공고 기준월은
+// #in-기준월(state.bid._기준월, YYYY-MM)로 사용자가 직접 확인/수정하는 값이며 이 태그도 그 값을 그대로
+// 표시한다(신인도/감점 재계산 기준월 bidRefYM()과 항상 동일 소스). 비어있는 옛 탭만 오늘 날짜로 표시(하위호환).
 const jobAMonthTag=function(dbEntry,appliedScore,suffix){
   if(!suffix)return suffix||'';
   var mm=new Date().getMonth()+1;
-  if(state&&state.bid&&state.bid._기준일){
-    var _d=new Date(String(state.bid._기준일)+'T00:00:00');
-    if(!isNaN(_d.getTime()))mm=_d.getMonth()+1;
+  if(state&&state.bid&&state.bid._기준월){
+    var _p=String(state.bid._기준월).split('-');
+    if(_p.length===2){var _mn=parseInt(_p[1],10);if(!isNaN(_mn))mm=_mn;}
   }
   return suffix.replace(/\)/,'_'+mm+'월)');
 };
@@ -664,10 +667,14 @@ function defaultBidObj(){
   return {시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
        지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,
        업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',
-       // 2026-08-27 추가: 이 공고 탭의 "기준일"(YYYY-MM-DD). 협정마감일이 아니라 공고 개시 시점 근사치 —
-       // addBidScreen()이 새 탭 생성 시 즉시 stamp하거나, 공고문분석 결과를 처음 반영하는 시점에 lazy stamp함.
-       // 일자리가점/신용평가/안전보건 히스토리 재계산(bidRefDate) 및 한줄요약·조합결과TXT의 월 표시(jobAMonthTag) 기준.
-       _기준일:null};
+       // 2026-08-27 추가(같은 날 재정정): 이 공고 탭의 "기준월"(YYYY-MM, #in-기준월 input[type=month]).
+       // 협정마감일도, 탭 생성일도 정답이 아니다 — 둘 다 "공고 개시월"과 어긋날 수 있다고 사용자가 직접
+       // 정정함(예: 8/31 개시·9/9 마감 공고를 9월에 처음 탭으로 만들면 마감일·탭생성일 둘 다 9월이 되어
+       // 틀림). 자동추정을 포기하고 사용자가 직접 확인/수정하는 값으로 전환 — restoreBidInputsFromState()가
+       // 탭을 열 때 비어있으면 이번 달로 1회 채워두고(최소한의 기본값), 이후 #in-기준월에서 언제든 수동
+       // 수정 가능. 일자리가점/신용평가/안전보건 히스토리 재계산(bidRefDate)과 한줄요약·조합결과TXT의
+       // 월 표시(jobAMonthTag)가 모두 이 값 하나를 공통 기준으로 삼는다.
+       _기준월:''};
 }
 function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null,강제할당:false};});}
 
@@ -2573,20 +2580,27 @@ function _restoreLegacyDBOverrides(restore){
 // "그 공고가 실제 진행되던 시점" 기준이 아니라 앱을 여는 시점(오늘) 기준으로 계산하면 틀린다.
 // 재무데이터(dbLegacySnapshot/withLegacyDBIfNeeded)와 동일하게, 값이 바뀌기 직전에 스냅샷을 남기고
 // "조합 계산" 진입 시점에만 공고 기준월/만료일 기준으로 일시 치환한다(내부 계산 로직은 무수정).
-// 주의(2026-08-27 정정): 기준일은 협정마감일(=응찰서류 제출 마감일)이 아니라 "공고 개시 시점"이어야
-// 한다 — 신인도/경영상태 등은 공고 마감일이 아니라 공고가 진행되던 시점 기준으로 유효해야 하기 때문.
-// 이 앱은 공고문에서 공고 게시일 자체를 추출하지 않으므로, 대신 "이 탭에 실제 공고 데이터가 처음
-// 들어온 시점"(_기준일 — addBidScreen()의 탭 생성 시점, 또는 공고문분석 최초 반영 시점)을 근사치로
-// 쓴다. 협정마감일 기준으로 하면(예: 8월 말 공고·9월 초 마감) 마감월(9월)로 잘못 판정된다.
-function bidRefDate(){
-  var s=state.bid&&state.bid._기준일;
-  if(!s)return null;
-  var d=new Date(String(s)+'T00:00:00');
-  return isNaN(d.getTime())?null:d;
-}
+// 주의(2026-08-27, 사용자가 2차례 정정): 기준월은 협정마감일(=응찰서류 제출 마감일)도, 탭이 처음
+// 만들어진 날짜도 아니다 — 둘 다 실제 공고 개시월과 어긋날 수 있음(예: 8/31 개시·9/9 마감 공고를
+// 9월에야 탭으로 만들면 마감일·탭생성일 둘 다 9월이 되어 틀림). 이 앱은 공고문에서 공고 게시일 자체를
+// 추출하지 않고, 자동추정으로는 정확도를 보장할 수 없다고 판단해 자동추정을 포기함 — 대신
+// state.bid._기준월(YYYY-MM, #in-기준월 input[type=month])을 사용자가 직접 확인/수정하는 값으로 둔다.
+// restoreBidInputsFromState()가 탭을 열 때 비어있으면 이번 달로 1회 채워두고(최소 기본값), 이후 언제든
+// #in-기준월에서 수동 수정 가능.
 function bidRefYM(){
-  var d=bidRefDate();
-  return d?currentYM(d):null;
+  var s=state.bid&&state.bid._기준월;
+  return s?String(s):null;
+}
+function bidRefDate(){
+  // 월 단위 값이라 정확한 날짜는 모름 — 그 달 1일을 대표값으로 사용(신용평가/안전보건 만료일 비교용).
+  var ym=bidRefYM();
+  if(!ym)return null;
+  var p=ym.split('-');
+  if(p.length!==2)return null;
+  var y=parseInt(p[0],10),m=parseInt(p[1],10);
+  if(isNaN(y)||isNaN(m))return null;
+  var d=new Date(y,m-1,1);
+  return isNaN(d.getTime())?null:d;
 }
 // 일자리가점: 공고 마감월이 이번 달이면(=아직 자동해제 전이므로 live가 곧 정답) 치환 불필요.
 // 과거 달이면 그 달 스냅샷(state.jobScoreHistory)이 있는 업체만 그 값으로 일시 치환.
@@ -3148,9 +3162,10 @@ function getOneLineSummary(b, c, hideLHNote) {
     if(_ymdP.length===3){var _mm=parseInt(_ymdP[1],10);var _dd=parseInt(_ymdP[2],10);if(!isNaN(_mm)&&!isNaN(_dd))마감str='('+_mm+'/'+_dd+'마감)';}
   }
   // 2026-08-06: 메세지/요약 맨 앞에 표시 시점의 월 표기, 2026-08-11: 협정마감일 병기.
-  // 2026-08-27 정정: "오늘"이 아니라 공고 기준일(b._기준일)의 월 — jobAMonthTag와 동일 기준(하위호환: 없으면 오늘).
+  // 2026-08-27 정정(2차): "오늘"도 탭생성일도 아니라 #in-기준월(b._기준월)에 사용자가 직접 확인/수정한
+  // 값 — jobAMonthTag/bidRefYM과 동일 소스(비어있는 옛 탭만 하위호환으로 오늘 표시).
   var _refMM=new Date().getMonth()+1;
-  if(b._기준일){var _d=new Date(String(b._기준일)+'T00:00:00');if(!isNaN(_d.getTime()))_refMM=_d.getMonth()+1;}
+  if(b._기준월){var _p=String(b._기준월).split('-');if(_p.length===2){var _mn=parseInt(_p[1],10);if(!isNaN(_mn))_refMM=_mn;}}
   parts.push(_refMM+'월'+마감str);
   var 공종=b.공종||'전기';
   if(공종!=='전기')parts.push(displayGongjong(공종));
@@ -6169,9 +6184,6 @@ function showPdfResultModal(found,preview){
   $('#m-apply-pdf').onclick=function(){
     if(applyBtn.disabled)return;
     _syncManualIntoFound();
-    // 2026-08-27 추가: 이 탭에 실제 공고 데이터가 처음 반영되는 시점 = 기준일(lazy stamp, 이미 있으면 유지).
-    // addBidScreen()에서 놓친 경우(예: 최초 기본 탭을 그대로 재사용)의 보완책.
-    if(!state.bid._기준일)state.bid._기준일=new Date().toISOString().slice(0,10);
     if(found.공사명){
       state.bid.공고명=found.공사명;
       // 화면 탭 이름을 '공고명 앞6글자'로 자동 개명(탭 hover 시 풀네임 title은 renderBidScreenTabs가 별도로 계속 붙여줌)
@@ -7654,6 +7666,15 @@ function bind(){
       save();refreshBidStats();refreshCombos();
     });
   })();
+  // 2026-08-27 추가: 기준월 — 일자리가점/신용평가/안전보건 히스토리 재계산(bidRefYM/bidRefDate) 및
+  // 한줄요약·조합결과TXT의 월 표시(jobAMonthTag)가 모두 이 값을 참조하므로, 바뀌면 재계산이 필요하다.
+  (function(){var _rm=$('#in-기준월');if(!_rm)return;
+    _rm.addEventListener('change',function(){
+      state.bid._기준월=this.value||currentYM(new Date());
+      this.value=state.bid._기준월;
+      save();refreshBidStats();refreshCombos();
+    });
+  })();
   $('#in-구성업체수').addEventListener('change',function(){
     var v=$('#in-구성업체수').value;
     var n=v===''?2:Math.max(1,Math.min(MAX_SLOTS,Math.round(Number(v))||2));
@@ -7800,7 +7821,8 @@ function bind(){
   $('#btn-reset-bid').addEventListener('click',function(){
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후'});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
+    (function(){var _rm=$('#in-기준월');if(_rm)_rm.value=state.bid._기준월;})(); // 2026-08-27: 공고 초기화 시 기준월도 이번 달로 리셋(재확인 필요)
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
     if($('#in-기본지분율'))$('#in-기본지분율').value=65;
@@ -9836,6 +9858,11 @@ function syncActiveBidScreen(){
 }
 function restoreBidInputsFromState(){
   var b=state.bid;
+  // 2026-08-27: 기준월이 비어있으면(신규 탭, 또는 이 수정 이전에 만들어진 옛 탭) 이번 달로 1회 채워
+  // 최소한의 기본값을 준다 — 자동추정은 부정확할 수 있으므로(마감일·탭생성일 모두 실패 사례가 있었음)
+  // 사용자가 #in-기준월에서 직접 확인/수정하는 것을 전제로 한 기본값일 뿐이다.
+  if(!b._기준월)b._기준월=currentYM(new Date());
+  var _rm=$('#in-기준월');if(_rm)_rm.value=b._기준월;
   b.공종=normGongjong(b.공종)||'전기';
   var _ge=$('#in-공종');if(_ge)_ge.value=b.공종;
   syncAvgRatios(b.공종);
@@ -9970,7 +9997,8 @@ function nextBidScreenName(){
 function addBidScreen(){
   syncActiveBidScreen();
   var nb=defaultBidObj();
-  nb._기준일=new Date().toISOString().slice(0,10); // 2026-08-27: 탭이 실제로 만들어진 시점 = 기준일
+  // 2026-08-27: 기준월(_기준월)은 여기서 stamp하지 않음 — switchBidScreen()이 부르는
+  // restoreBidInputsFromState()가 탭이 화면에 표시될 때 비어있으면 채워줌(한 곳에서만 처리).
   var newScreen={name:nextBidScreenName(),bid:nb,combos:defaultCombos()};
   // ── 2026-07-31: '+' 버튼이 가장 왼쪽에 고정되므로, 새 탭도 배열 맨 앞(unshift)에 추가해
   //    '+' 버튼 바로 오른쪽(=최신 탭이 가장 왼쪽)에 오도록 함. 기존 탭들은 자동으로 오른쪽으로 밀림.
