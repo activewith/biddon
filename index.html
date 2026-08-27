@@ -592,11 +592,17 @@ function funcSuffixText(row){
 }
 // 일자리창출 A조건 유효월 수동선택 UI는 폐지(2026-07-28)되어 pass-through로 축소했었으나,
 // 2026-08-06 사용자 요청으로 "현재월" 표시를 다시 추가함 — 예: "창성 70(+1.5_8월)".
-// 신인도/감점 판정 로직(자동해제 등)과는 무관하게, 조합결과TXT·확정메세지에 표시되는 순간의
-// 월(오늘 날짜 기준)을 단순히 괄호 안 숫자 뒤에 붙이는 표시 전용 처리.
+// 2026-08-27 정정: "오늘 날짜"가 아니라 공고의 기준일(state.bid._기준일, 탭에 실제 공고 데이터가
+// 처음 들어온 시점)의 월을 표시하도록 변경 — 협정마감일이 다음 달로 넘어가는 공고를 그 이후에
+// 열어봐도 표시가 "오늘 기준"으로 틀어지지 않게 함(신인도/감점 재계산 기준월과 항상 일치시킴).
+// _기준일이 없는 옛 탭(이 수정 이전에 만들어진 탭)은 기존과 동일하게 오늘 날짜로 표시(하위호환).
 const jobAMonthTag=function(dbEntry,appliedScore,suffix){
   if(!suffix)return suffix||'';
   var mm=new Date().getMonth()+1;
+  if(state&&state.bid&&state.bid._기준일){
+    var _d=new Date(String(state.bid._기준일)+'T00:00:00');
+    if(!isNaN(_d.getTime()))mm=_d.getMonth()+1;
+  }
   return suffix.replace(/\)/,'_'+mm+'월)');
 };
 const NFC=function(s){return String(s||'').trim().normalize('NFC');}; // 지역 등 한글 문자열 비교 시 NFC/NFD 정규화 차이로 인한 불일치 방지
@@ -657,7 +663,11 @@ function emptyCombo(){
 function defaultBidObj(){
   return {시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
        지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,
-       업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후'};
+       업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',
+       // 2026-08-27 추가: 이 공고 탭의 "기준일"(YYYY-MM-DD). 협정마감일이 아니라 공고 개시 시점 근사치 —
+       // addBidScreen()이 새 탭 생성 시 즉시 stamp하거나, 공고문분석 결과를 처음 반영하는 시점에 lazy stamp함.
+       // 일자리가점/신용평가/안전보건 히스토리 재계산(bidRefDate) 및 한줄요약·조합결과TXT의 월 표시(jobAMonthTag) 기준.
+       _기준일:null};
 }
 function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null,강제할당:false};});}
 
@@ -703,7 +713,13 @@ const state={
   _legacySnapshotDeleted:false,  // 사용자가 9/1 이후 명시적으로 완전삭제했는지(true면 다시 심지 않음)
   // 2026-08-14: 외부앱(설정>외부앱) 등록 데이터. 예전엔 별도 localStorage 키(jodal_extapps_v1)에만 저장돼
   // Gist 동기화 대상(state)에서 빠져있었음 — state에 포함시켜 db/조합처럼 ☁ Push/Pull로 다른 기기에도 전달되도록 함.
-  extApps:{1:{name:'',html:'',updated:''},2:{name:'',html:'',updated:''}}
+  extApps:{1:{name:'',html:'',updated:''},2:{name:'',html:'',updated:''}},
+  // 2026-08-27 추가: 일자리창출 A/B조건(매월·매년 자동해제)·신용평가·안전보건시스템(만료 자동삭제)이
+  // "오늘" 기준으로 실행돼, 공고 협정마감일이 지난 달/만료일 이전인 공고를 그 이후에 열면 잘못 계산되는
+  // 문제를 막기 위한 히스토리 보관용. runExpiryMaintenance()가 값이 바뀌기 직전에 채우고,
+  // withLegacyDBIfNeeded()가 "조합 계산" 진입 시점에만 공고 마감월/만료일 기준으로 일시 치환한다.
+  jobScoreHistory:{},          // {"YYYY-MM":{업체키:일자리가점}} — 매월 1일 A조건 해제 직전 값(월 1개만 보관, 오래된 달은 자동 정리)
+  expiryFieldHistory:{신용평가:{},안전보건시스템:{}} // {필드:{업체키:{value,expiry}}} — 만료로 필드가 지워지기 직전 값+만료일
 };
 
 
@@ -782,6 +798,8 @@ function gistApplyData(obj){
   if(obj._legacySnapshotDeleted!==undefined)state._legacySnapshotDeleted=obj._legacySnapshotDeleted;
   if(obj.avgLegacySnapshot!==undefined)state.avgLegacySnapshot=obj.avgLegacySnapshot;
   if(obj.avgLegacySnapshotMeta!==undefined)state.avgLegacySnapshotMeta=obj.avgLegacySnapshotMeta;
+  if(obj.jobScoreHistory&&typeof obj.jobScoreHistory==='object')state.jobScoreHistory=obj.jobScoreHistory;
+  if(obj.expiryFieldHistory&&typeof obj.expiryFieldHistory==='object')state.expiryFieldHistory=obj.expiryFieldHistory;
   if(obj.combos&&obj.combos.length>0){
     obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
     state.combos=obj.combos;
@@ -1271,6 +1289,8 @@ function restoreStateFromBackupObj(obj){
   if(obj._legacySnapshotDeleted!==undefined)state._legacySnapshotDeleted=obj._legacySnapshotDeleted;
   if(obj.avgLegacySnapshot!==undefined)state.avgLegacySnapshot=obj.avgLegacySnapshot;
   if(obj.avgLegacySnapshotMeta!==undefined)state.avgLegacySnapshotMeta=obj.avgLegacySnapshotMeta;
+  if(obj.jobScoreHistory&&typeof obj.jobScoreHistory==='object')state.jobScoreHistory=obj.jobScoreHistory;
+  if(obj.expiryFieldHistory&&typeof obj.expiryFieldHistory==='object')state.expiryFieldHistory=obj.expiryFieldHistory;
   if(obj.combos&&obj.combos.length>0){
     obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
     state.combos=obj.combos;
@@ -1352,6 +1372,8 @@ function load(){
     if(obj._legacySnapshotDeleted!==undefined)state._legacySnapshotDeleted=obj._legacySnapshotDeleted;
     if(obj.avgLegacySnapshot!==undefined)state.avgLegacySnapshot=obj.avgLegacySnapshot;
     if(obj.avgLegacySnapshotMeta!==undefined)state.avgLegacySnapshotMeta=obj.avgLegacySnapshotMeta;
+    if(obj.jobScoreHistory&&typeof obj.jobScoreHistory==='object')state.jobScoreHistory=obj.jobScoreHistory;
+    if(obj.expiryFieldHistory&&typeof obj.expiryFieldHistory==='object')state.expiryFieldHistory=obj.expiryFieldHistory;
     // 업체 데이터에 있는 그룹명이 state.groups에서 누락된 경우 자동 복구
     (function(){
       var gSet=new Set(state.groups);
@@ -2546,14 +2568,85 @@ function _restoreLegacyDBOverrides(restore){
     Object.keys(r.before).forEach(function(f){r.c[f]=r.before[f];});
   });
 }
-// 콤보 계산/렌더링 관련 함수를 감싸서, 실행 도중에만 갱신 전(레거시) 재무값으로 일시 치환했다가
-// 끝나면 즉시 원상복구한다. calcSlot/getCompPerfData/calcEconScore 등 내부 계산 로직은 전혀 수정하지
-// 않고 그대로 두어(state.db를 그대로 조회하므로) 실수 위험을 최소화하는 방식.
-// DB목록화면·업체수정모달 등 이 헬퍼를 쓰지 않는 코드는 항상 현재(갱신후) 값을 그대로 본다.
+// ── 일자리가점(A/B조건 자동해제)·신용평가/안전보건(만료 자동삭제) 히스토리 기반 재계산 (2026-08-27 추가) ──
+// runExpiryMaintenance()의 (b)(c)(d)(e)는 모두 "오늘" 기준으로 DB값을 자동 변경/삭제하는데, 공고를
+// "그 공고가 실제 진행되던 시점" 기준이 아니라 앱을 여는 시점(오늘) 기준으로 계산하면 틀린다.
+// 재무데이터(dbLegacySnapshot/withLegacyDBIfNeeded)와 동일하게, 값이 바뀌기 직전에 스냅샷을 남기고
+// "조합 계산" 진입 시점에만 공고 기준월/만료일 기준으로 일시 치환한다(내부 계산 로직은 무수정).
+// 주의(2026-08-27 정정): 기준일은 협정마감일(=응찰서류 제출 마감일)이 아니라 "공고 개시 시점"이어야
+// 한다 — 신인도/경영상태 등은 공고 마감일이 아니라 공고가 진행되던 시점 기준으로 유효해야 하기 때문.
+// 이 앱은 공고문에서 공고 게시일 자체를 추출하지 않으므로, 대신 "이 탭에 실제 공고 데이터가 처음
+// 들어온 시점"(_기준일 — addBidScreen()의 탭 생성 시점, 또는 공고문분석 최초 반영 시점)을 근사치로
+// 쓴다. 협정마감일 기준으로 하면(예: 8월 말 공고·9월 초 마감) 마감월(9월)로 잘못 판정된다.
+function bidRefDate(){
+  var s=state.bid&&state.bid._기준일;
+  if(!s)return null;
+  var d=new Date(String(s)+'T00:00:00');
+  return isNaN(d.getTime())?null:d;
+}
+function bidRefYM(){
+  var d=bidRefDate();
+  return d?currentYM(d):null;
+}
+// 일자리가점: 공고 마감월이 이번 달이면(=아직 자동해제 전이므로 live가 곧 정답) 치환 불필요.
+// 과거 달이면 그 달 스냅샷(state.jobScoreHistory)이 있는 업체만 그 값으로 일시 치환.
+function _applyJobScoreHistoryOverrides(){
+  var ry=bidRefYM();
+  if(!ry||ry===currentYM(new Date()))return null;
+  var h=state.jobScoreHistory&&state.jobScoreHistory[ry];
+  if(!h)return null; // 이 기능 배포 이전 달 등 스냅샷이 없으면 live로 최선 대응(기존과 동일한 동작)
+  var restore=[];
+  state.db.forEach(function(c){
+    var key=legacyKeyOf(c);
+    if(!(key in h))return;
+    restore.push({c:c,before:c.일자리가점});
+    c.일자리가점=h[key];
+  });
+  return restore;
+}
+function _restoreJobScoreHistoryOverrides(restore){
+  if(!restore)return;
+  restore.forEach(function(r){r.c.일자리가점=r.before;});
+}
+// 신용평가/안전보건시스템: live에 이미 값이 있으면(재입력됨) 항상 live 우선. 비어있고, 공고 마감일이
+// "실제 만료일" 이전이면(=마감 시점엔 아직 유효했음) 지워지기 직전 값으로 일시 치환.
+function _applyExpiryFieldHistoryOverrides(){
+  var rd=bidRefDate();
+  if(!rd)return null;
+  var restore=[];
+  ['신용평가','안전보건시스템'].forEach(function(field){
+    var h=state.expiryFieldHistory&&state.expiryFieldHistory[field];
+    if(!h)return;
+    state.db.forEach(function(c){
+      if(c[field])return;
+      var rec=h[legacyKeyOf(c)];
+      if(!rec||!rec.expiry)return;
+      if(rd>new Date(rec.expiry))return; // 마감일 기준으로도 이미 실제 만료 → live(빈값)가 맞음
+      restore.push({c:c,field:field,before:c[field]});
+      c[field]=rec.value;
+    });
+  });
+  return restore.length?restore:null;
+}
+function _restoreExpiryFieldHistoryOverrides(restore){
+  if(!restore)return;
+  restore.forEach(function(r){r.c[r.field]=r.before;});
+}
+// 콤보 계산/렌더링 관련 함수를 감싸서, 실행 도중에만 갱신 전(레거시) 재무값·과거 일자리가점·
+// 만료 전 신용평가/안전보건 값으로 일시 치환했다가 끝나면 즉시 원상복구한다. calcSlot/getCompPerfData/
+// calcEconScore 등 내부 계산 로직은 전혀 수정하지 않고 그대로 두어(state.db를 그대로 조회하므로)
+// 실수 위험을 최소화하는 방식. DB목록화면·업체수정모달 등 이 헬퍼를 쓰지 않는 코드는 항상 현재 값을 본다.
 function withLegacyDBIfNeeded(fn){
-  if(activeDbModeForCalc()!=='legacy')return fn();
-  var restore=_applyLegacyDBOverrides();
-  try{return fn();}finally{_restoreLegacyDBOverrides(restore);}
+  var legacyActive=activeDbModeForCalc()==='legacy';
+  var restoreLegacy=legacyActive?_applyLegacyDBOverrides():null;
+  var restoreJob=_applyJobScoreHistoryOverrides();
+  var restoreExp=_applyExpiryFieldHistoryOverrides();
+  try{return fn();}
+  finally{
+    _restoreExpiryFieldHistoryOverrides(restoreExp);
+    _restoreJobScoreHistoryOverrides(restoreJob);
+    if(legacyActive)_restoreLegacyDBOverrides(restoreLegacy);
+  }
 }
 // 9/1 0시 이후 최초 접속 시 스냅샷 완전 삭제 여부 확인(거부 시 다음 접속 때 재확인 — 8/1 재무초기화
 // 확인창과 동일한 패턴). load()/gistApplyData()/restoreStateFromBackupObj() 뒤에 호출되는
@@ -2586,6 +2679,27 @@ function runExpiryMaintenance(){
   var bY=jobBCycleYear(today);
   var pastGrace=isPastJobBGrace(today,bY);
   var ym=currentYM(today);
+  // (0-1) 2026-08-27 추가: 아래 (b)(c)가 일자리가점을 자동 변경하기 전에, 지금 막 지나간 달(prevYM)의
+  // 값을 스냅샷으로 남긴다. 협정마감일이 그 달에 속하는 공고는 withLegacyDBIfNeeded 경유 계산 시
+  // (_applyJobScoreHistoryOverrides) 이 값을 대신 사용해 월이 바뀐 뒤에도 당시 기준으로 재계산된다.
+  // 월 단위 스냅샷이라 4/15 B조건 자동해제처럼 월 "중간"에 발생하는 변경은 그 달 전체에 한 값만
+  // 적용되는 한계가 있음(같은 달 안에서 4/15 이전/이후 마감 공고를 구분하지 못함).
+  (function(){
+    var prevYM=(state.settings&&state.settings._A조건초기화월)||ym;
+    if(prevYM===ym)return;
+    if(!state.jobScoreHistory)state.jobScoreHistory={};
+    if(!state.jobScoreHistory[prevYM]){
+      var _snap={};
+      state.db.forEach(function(c){_snap[legacyKeyOf(c)]=Number(c.일자리가점||0);});
+      state.jobScoreHistory[prevYM]=_snap;
+      changed=true;
+    }
+    // 페이로드 크기 관리(2026-08-27): 최근 6개월치만 보관, 오래된 달은 자동 정리
+    var _keep=6,_toNum=function(k){var p=k.split('-');return Number(p[0])*12+Number(p[1]);},_latest=_toNum(ym);
+    Object.keys(state.jobScoreHistory).forEach(function(k){
+      if(_latest-_toNum(k)>=_keep){delete state.jobScoreHistory[k];changed=true;}
+    });
+  })();
   // (a) 매년 8/1: 시평액/3년실적/5년실적(전기·통신·소방)·부채비율·유동비율 0으로 초기화
   // ── 2026-07-31: 자동 실행하지 않고 사용자 확인(2단계 confirm) 후에만 실행하도록 변경.
   // ── 2026-08-01: 초기화 기준일(8/1) 바로 전날(7/31) 등록·수정된 업체는 방금 갱신한 경영상태확인서 등
@@ -2629,13 +2743,24 @@ function runExpiryMaintenance(){
   state.db.forEach(function(c){
     if(!c.신용평가)return;
     var cr=parseCreditRating(c.신용평가);
-    if(cr&&cr.expiry&&cr.expiry<today){c.신용평가='';changed=true;}
+    if(cr&&cr.expiry&&cr.expiry<today){
+      // 2026-08-27 추가: 지우기 직전 값+만료일 보관 — 마감일이 만료일 이전인 공고는 이 값으로 재계산
+      if(!state.expiryFieldHistory)state.expiryFieldHistory={신용평가:{},안전보건시스템:{}};
+      if(!state.expiryFieldHistory.신용평가)state.expiryFieldHistory.신용평가={};
+      state.expiryFieldHistory.신용평가[legacyKeyOf(c)]={value:c.신용평가,expiry:cr.expiry.toISOString()};
+      c.신용평가='';changed=true;
+    }
   });
   // (e) 안전보건시스템 유효기간 경과 시 필드 자동 삭제 (만료임박 알림은 유지)
   state.db.forEach(function(c){
     if(!c.안전보건시스템)return;
     var ps=parseSafetySystem(c.안전보건시스템);
-    if(ps&&ps.expiry&&ps.expiry<today){c.안전보건시스템='';changed=true;}
+    if(ps&&ps.expiry&&ps.expiry<today){
+      if(!state.expiryFieldHistory)state.expiryFieldHistory={신용평가:{},안전보건시스템:{}};
+      if(!state.expiryFieldHistory.안전보건시스템)state.expiryFieldHistory.안전보건시스템={};
+      state.expiryFieldHistory.안전보건시스템[legacyKeyOf(c)]={value:c.안전보건시스템,expiry:ps.expiry.toISOString()};
+      c.안전보건시스템='';changed=true;
+    }
   });
   // (f) 9/1 0시 이후: 갱신전(7/30) 스냅샷 보관기한 종료 — 확인 후 완전 삭제(거부 시 다음 접속 때 재확인)
   if(checkLegacySnapshotExpiry())changed=true;
@@ -3022,7 +3147,11 @@ function getOneLineSummary(b, c, hideLHNote) {
     var _ymdP=String(b.협정마감일_YMD).split('-');
     if(_ymdP.length===3){var _mm=parseInt(_ymdP[1],10);var _dd=parseInt(_ymdP[2],10);if(!isNaN(_mm)&&!isNaN(_dd))마감str='('+_mm+'/'+_dd+'마감)';}
   }
-  parts.push((new Date().getMonth()+1)+'월'+마감str); // 2026-08-06: 메세지/요약 맨 앞에 표시 시점의 월 표기, 2026-08-11: 협정마감일 병기
+  // 2026-08-06: 메세지/요약 맨 앞에 표시 시점의 월 표기, 2026-08-11: 협정마감일 병기.
+  // 2026-08-27 정정: "오늘"이 아니라 공고 기준일(b._기준일)의 월 — jobAMonthTag와 동일 기준(하위호환: 없으면 오늘).
+  var _refMM=new Date().getMonth()+1;
+  if(b._기준일){var _d=new Date(String(b._기준일)+'T00:00:00');if(!isNaN(_d.getTime()))_refMM=_d.getMonth()+1;}
+  parts.push(_refMM+'월'+마감str);
   var 공종=b.공종||'전기';
   if(공종!=='전기')parts.push(displayGongjong(공종));
   parts.push(기준,지역);
@@ -6040,6 +6169,9 @@ function showPdfResultModal(found,preview){
   $('#m-apply-pdf').onclick=function(){
     if(applyBtn.disabled)return;
     _syncManualIntoFound();
+    // 2026-08-27 추가: 이 탭에 실제 공고 데이터가 처음 반영되는 시점 = 기준일(lazy stamp, 이미 있으면 유지).
+    // addBidScreen()에서 놓친 경우(예: 최초 기본 탭을 그대로 재사용)의 보완책.
+    if(!state.bid._기준일)state.bid._기준일=new Date().toISOString().slice(0,10);
     if(found.공사명){
       state.bid.공고명=found.공사명;
       // 화면 탭 이름을 '공고명 앞6글자'로 자동 개명(탭 hover 시 풀네임 title은 renderBidScreenTabs가 별도로 계속 붙여줌)
@@ -9838,6 +9970,7 @@ function nextBidScreenName(){
 function addBidScreen(){
   syncActiveBidScreen();
   var nb=defaultBidObj();
+  nb._기준일=new Date().toISOString().slice(0,10); // 2026-08-27: 탭이 실제로 만들어진 시점 = 기준일
   var newScreen={name:nextBidScreenName(),bid:nb,combos:defaultCombos()};
   // ── 2026-07-31: '+' 버튼이 가장 왼쪽에 고정되므로, 새 탭도 배열 맨 앞(unshift)에 추가해
   //    '+' 버튼 바로 오른쪽(=최신 탭이 가장 왼쪽)에 오도록 함. 기존 탭들은 자동으로 오른쪽으로 밀림.
