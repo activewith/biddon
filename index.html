@@ -67,9 +67,9 @@ tr.hover:hover{background:#f8fafc}
 .badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600}
 .b-ok{background:#16a34a!important;color:#fff!important}
 .b-bad{background:#dc2626!important;color:#fff!important}
-/* LH 우선순위2(실적/시평/순신인도 미충족 → 95점제 점수판정으로 적격) 전용 배지: 초록이 아닌 밝은 오렌지 점멸. 2026-08-28 추가 */
-@keyframes blinkOkScore{0%,49%{background:#f97316;color:#fff}50%,100%{background:#ffedd5;color:#9a3412}}
-.b-ok-score{animation:blinkOkScore .7s steps(1,end) infinite;border:1px solid #ea580c}
+/* LH 우선순위2(실적/시평/순신인도 미충족 → 95점제 점수판정으로 적격) 전용 배지: 초록이 아닌 보라 점멸(점수계산 버튼과 동일 색 #7c3aed). 2026-08-28 추가, 2026-08-28 오렌지→보라 변경 */
+@keyframes blinkOkScore{0%,49%{background:#7c3aed;color:#fff}50%,100%{background:#ede9fe;color:#5b21b6}}
+.b-ok-score{animation:blinkOkScore .7s steps(1,end) infinite;border:1px solid #6d28d9}
 
 
 .hidden{display:none!important}
@@ -121,7 +121,7 @@ tr.hover:hover{background:#f8fafc}
 .form-grid input,.form-grid select{padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:inherit}
 .ok-text{color:var(--ok);font-weight:700}
 .bad-text{color:var(--bad);font-weight:700}
-.score-text{color:#ea580c;font-weight:700}
+.score-text{color:#7c3aed;font-weight:700}
 .pct.isrec{color:#1d4ed8!important;border-color:#93c5fd!important;background:#eff6ff!important}
 .type-지역{background:#dbeafe;color:#1d4ed8;font-weight:700}
 .type-실적{background:#fef9c3;color:#854d0e;font-weight:700}
@@ -3465,7 +3465,7 @@ function calcSlot(combo,calc){
     // ── LH 우선순위 판정 (2026-08-28 변경) ────────────────────────────────
     // 1순위: 실적제한/시평제한/순신인도를 먼저 확인해 셋 다 충족하면 그대로 적격.
     // 2순위: 하나라도 부족하면 기존 LH 점수제(95점 만점)로 재판정 — 이 경우 적격이어도
-    // 배지는 초록이 아닌 밝은 오렌지 점멸로 표시하고(LH점수모드), 부족했던 항목(LH부족목록)과
+    // 배지는 초록이 아닌 보라 점멸(점수계산 버튼과 동일 색)로 표시하고(LH점수모드), 부족했던 항목(LH부족목록)과
     // 최종 점수(lh총점)를 확정메세지·조합결과TXT에 함께 표기한다.
     var lh실적OK=합산실적>calc.E6;
     var lh시평OK=(calc.E3==null)?true:(합산시평>calc.E3);
