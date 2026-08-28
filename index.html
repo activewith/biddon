@@ -6794,8 +6794,12 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           :'<span class="badge b-bad" data-stat="status">'+result.적격사유+'</span>'));
     var rowsHtml=result.ROW.map(function(r,si){return renderSlotRow(ci,si,r,comboCalc,!!combo.강제할당);}).join('');
     var _시평표시=result.합산시평;
-        var 시평제한대비=(comboCalc.E3==null)?'미적용':'<span data-stat="합산시평2">'+FMT_NUM(Math.round(_시평표시))+'</span>'+' / '+FMT_NUM(comboCalc.E3);
-    var 분담시평대비=(comboCalc.분담시평==null)?'미적용':'<span data-stat="분담시평합산">'+FMT_NUM(Math.round(result.분담시평합산||0))+'</span> / '+FMT_NUM(comboCalc.분담시평);
+    // 1순위 적격기준(실적/시평/분담시평) 미달 시 숫자를 적색으로 강조 — calcSlot의 실적OK/시평OK/분담시평미달 판정식(합산값>제한값)과 동일 기준
+    var _실적미달=!comboCalc.isKEPCO&&comboCalc.E6>0&&result.합산실적<=comboCalc.E6;
+    var _시평미달=!comboCalc.isKEPCO&&comboCalc.E3!=null&&_시평표시<=comboCalc.E3;
+    var _분담시평미달=result.used>0&&comboCalc.분담시평!=null&&comboCalc.분담시평>0&&(result.분담시평합산||0)<=comboCalc.분담시평;
+        var 시평제한대비=(comboCalc.E3==null)?'미적용':'<span data-stat="합산시평2" class="'+(_시평미달?'bad-text':'')+'">'+FMT_NUM(Math.round(_시평표시))+'</span>'+' / '+FMT_NUM(comboCalc.E3);
+    var 분담시평대비=(comboCalc.분담시평==null)?'미적용':'<span data-stat="분담시평합산" class="'+(_분담시평미달?'bad-text':'')+'">'+FMT_NUM(Math.round(result.분담시평합산||0))+'</span> / '+FMT_NUM(comboCalc.분담시평);
     var slotFull=combo.slots.length>=MAX_SLOTS;
     // 사정률 표시값 (0% 기준으로 고정)
     var _sjDisp=combo.사정률D7!=null?+((combo.사정률D7-1)*100).toFixed(3):'';
@@ -6854,7 +6858,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
       '<div class="combo-foot">'+
         '<div class="item"><span class="k">'+(comboCalc.isKEPCO?'실적비율':'적격여부')+'</span><span class="v '+(comboCalc.isKEPCO?'':(result.적격?(result.LH점수모드?'score-text':'ok-text'):'bad-text'))+'" data-stat="적격사유">'+(comboCalc.isKEPCO?result.적격사유:(result.적격?(result.LH점수모드?result.적격사유:'OK'):result.적격사유))+'</span></div>'+
         '<div data-scorefoot="'+ci+'" style="display:contents">'+scoreFootHtml+'</div>'+
-        (comboCalc.isKEPCO&&comboCalc.한전분담E6?'':'<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>')+
+        (comboCalc.isKEPCO&&comboCalc.한전분담E6?'':'<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2" class="'+(_실적미달?'bad-text':'')+'">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>')+
         (comboCalc.isKEPCO?'':'<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>')+
         (comboCalc.분담시평!=null?('<div class="item"><span class="k">분담시평 대비</span><span class="v">'+분담시평대비+'</span></div>'):'')+
         '<div class="item"><span class="k">순 신인도</span><span class="v" data-stat="순신인도2">'+FMT_REP(result.순신인도)+'</span></div>'+
@@ -6906,6 +6910,13 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
   set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(result.합산시평)));
   set('순신인도2',FMT_REP(result.순신인도));
   set('분담시평합산',FMT_NUM(Math.round(result.분담시평합산||0)));
+  // 1순위 적격기준(실적/시평/분담시평) 미달 시 숫자를 적색으로 강조 — 초기 렌더(_실적미달 등)와 동일 기준식
+  var _실적미달2=!comboCalc.isKEPCO&&comboCalc.E6>0&&result.합산실적<=comboCalc.E6;
+  var _시평미달2=!comboCalc.isKEPCO&&comboCalc.E3!=null&&result.합산시평<=comboCalc.E3;
+  var _분담시평미달2=result.used>0&&comboCalc.분담시평!=null&&comboCalc.분담시평>0&&(result.분담시평합산||0)<=comboCalc.분담시평;
+  var _es2=card.querySelector('[data-stat="합산실적2"]');if(_es2)_es2.className=_실적미달2?'bad-text':'';
+  var _js2=card.querySelector('[data-stat="합산시평2"]');if(_js2)_js2.className=_시평미달2?'bad-text':'';
+  var _bs2=card.querySelector('[data-stat="분담시평합산"]');if(_bs2)_bs2.className=_분담시평미달2?'bad-text':'';
   var sf=card.querySelector('[data-scorefoot]');
   if(sf)sf.innerHTML=buildScoreFootHtml(calc,result);  // LH/철도 점수 상세(Func×지분율 합산 등)도 실시간 반영
   result.ROW.forEach(function(r,si){
