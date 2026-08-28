@@ -9536,7 +9536,10 @@ function refreshDbFixedSelect(){
 }
 function updateBidNameLabel(){
   var el=document.getElementById('o-공고명-label');
-  if(el)el.textContent=state.bid.공고명?('— '+state.bid.공고명):'';
+  if(!el)return;
+  var nm=state.bid.공고명||'';
+  var no=state.bid.공고번호||'';
+  el.textContent=nm?('— '+nm+(no?' ('+no+')':'')):'';
 }
 function switchBidScreen(idx){
   if(idx<0||idx>=state.bidScreens.length)return;
