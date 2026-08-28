@@ -67,6 +67,9 @@ tr.hover:hover{background:#f8fafc}
 .badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600}
 .b-ok{background:#16a34a!important;color:#fff!important}
 .b-bad{background:#dc2626!important;color:#fff!important}
+/* LH 우선순위2(실적/시평/순신인도 미충족 → 95점제 점수판정으로 적격) 전용 배지: 초록이 아닌 밝은 오렌지 점멸. 2026-08-28 추가 */
+@keyframes blinkOkScore{0%,49%{background:#f97316;color:#fff}50%,100%{background:#ffedd5;color:#9a3412}}
+.b-ok-score{animation:blinkOkScore .7s steps(1,end) infinite;border:1px solid #ea580c}
 
 
 .hidden{display:none!important}
@@ -118,6 +121,7 @@ tr.hover:hover{background:#f8fafc}
 .form-grid input,.form-grid select{padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:inherit}
 .ok-text{color:var(--ok);font-weight:700}
 .bad-text{color:var(--bad);font-weight:700}
+.score-text{color:#ea580c;font-weight:700}
 .pct.isrec{color:#1d4ed8!important;border-color:#93c5fd!important;background:#eff6ff!important}
 .type-지역{background:#dbeafe;color:#1d4ed8;font-weight:700}
 .type-실적{background:#fef9c3;color:#854d0e;font-weight:700}
@@ -586,6 +590,9 @@ const FMT_REP=function(x){return TRIM3(ROUND3(x));};
 const TRIMDEC=function(x,d){d=(d==null)?2:d;var f=Math.pow(10,d);var r=Math.round((Number(x)||0)*f)/f;if(Object.is(r,-0))r=0;var s=r.toFixed(d);if(s.indexOf('.')>=0)s=s.replace(/0+$/,'').replace(/\.$/,'');return s;};
 // 큰 금액을 억 단위로 단순화 표시(예: 10,359,437,000 → "103.6억"). 소수 1자리, 말단 0 생략. 2026-08-26 추가.
 const FMT_EOK=function(n){if(n==null||n===''||isNaN(n))return '-';return TRIMDEC(Number(n)/1e8,1)+'억';};
+// LH 우선순위2(점수판정) 표시용: 실제 달성값(합산실적/합산시평)을 억 단위 내림으로 표시 — 요구값(기준)은
+// 넉넉히 올림 표시하는 FMT_EOK/_eokTrim과 반대로, 실제보다 부풀려 보이지 않도록 내림 처리. 2026-08-28 추가.
+const _EOK_FLOOR=function(krw){var v=Math.floor((Number(krw)||0)/10000000)/10;var s=v.toFixed(1);return s.slice(-2)==='.0'?s.slice(0,-2):s;};
 // 레거시 공종 값(소방/전기+통신/전기+소방) → 복합(전기+분담)으로 통합. 2026-07-28 공종 옵션 단순화(전기/통신/복합(전기+분담)).
 const normGongjong=function(g){return(g==='전기+통신'||g==='전기+소방')?'복합(전기+분담)':g;}; // 소방은 단독 옵션 유지(2026-07-28 정정)
 // 확정/조합결과TXT의 Func 표기: 철도기술점수(FuncNumeric)는 [기술_값], 그 외 수동입력값은 [값]. 2026-07-28 추가.
@@ -3191,7 +3198,7 @@ function getOneLineSummary(b, c, hideLHNote) {
 // 확정 메세지용 "적격 요약" 체크리스트 (지자체 30억 미만은 제외, 그 외는 모두 삽입)
 // damLabel: 해당 조합의 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티"→"창호")가 있으면
 // "복합(전기+분담)" 표기의 "분담"을 이 라벨로 치환해서 보여주기 위한 값 (2026-07-29)
-function getEligibilityChecklist(b, c, damLabel, forceScoreInfo) {
+function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
   if(b.적격기준==='한전') return '';
   if(b.적격기준==='지자체' && !(c.E5>=LIMIT_30) && !(c.E3!=null&&c.E3>0)) return '';
   var 의무=(b.지역의무지분!=null&&b.지역의무지분!=='')?'의무 '+Number(b.지역의무지분)+'%':'';
@@ -3203,13 +3210,26 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo) {
     var s=v.toFixed(1);
     return s.slice(-2)==='.0'?s.slice(0,-2):s;
   }
+  // LH 우선순위2(점수판정) 표시용: 실제 달성값은 내림(_eokTrim의 올림과 반대) 표시 — 요구값(기준)은 넉넉하게,
+  // 달성값(합산실적/합산시평)은 실제보다 부풀려 보이지 않게 하기 위함. 2026-08-28 추가.
+  function _eokFloor(krw){
+    var v=Math.floor(krw/10000000)/10;
+    var s=v.toFixed(1);
+    return s.slice(-2)==='.0'?s.slice(0,-2):s;
+  }
+  var lhGap부족=(lhGapInfo&&lhGapInfo.부족목록)||[];
   var 시평parts=[];
-  if(c.E3!=null&&c.E3>0)시평parts.push('시평 '+_eokTrim(c.E3)+'억');
+  if(c.E3!=null&&c.E3>0){
+    var _시평항목='시평 '+_eokTrim(c.E3)+'억';
+    if(lhGap부족.indexOf('시평')!==-1)_시평항목+=' (합산'+_eokFloor(lhGapInfo.합산시평)+'억)';
+    시평parts.push(_시평항목);
+  }
   if(c.분담시평!=null&&c.분담시평>0)시평parts.push('분담시평'+_eokTrim(c.분담시평)+'억');
   var 시평str=시평parts.join(' / ');
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
   var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정)':'');
   var 실적str='실적 '+(c.E6>0?_eokTrim(c.E6):'0')+'억'+실적기준sfx;
+  if(lhGap부족.indexOf('실적')!==-1)실적str+=' (합산'+_eokFloor(lhGapInfo.합산실적)+'억)';
   var lines=[];
   var item1=[];
   if(의무)item1.push(의무);
@@ -3217,6 +3237,7 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo) {
   lines.push(item1.join(', '));
   if(시평str)lines.push(시평str);
   lines.push(실적str);
+  if(lhGap부족.indexOf('순신인도')!==-1)lines.push('순신인도 '+TRIM3(lhGapInfo.순신인도));
   if(b.적격기준==='철도공단'){
     var _rtChk=railTechGradeTable(c.E5);
     if(_rtChk&&_rtChk.rows&&_rtChk.rows[0])lines.push('기술 '+_rtChk.rows[0].min+'점');
@@ -3227,6 +3248,8 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo) {
   var 공종=b.공종||'전기';
   if(공종==='복합(전기+분담)'&&damLabel)공종='복합(전기+'+damLabel+')';
   if(공종!=='전기')lines.push(displayGongjong(공종));
+  // 2026-08-28: LH 1순위(실적/시평/순신인도) 미충족으로 2순위 점수판정(95점제)이 적용된 경우 — 최종 적격여부와 점수를 마지막 줄에 명시
+  if(lhGapInfo&&lhGapInfo.총점!=null)lines.push((lhGapInfo.적격?'적격':'부적격')+'95점 ('+lhGapInfo.총점.toFixed(2)+'점)');
   // 2026-08-06: LH 강제할당 적용 시 — 지분율 합 100% 요건을 명목상 대체한 근거로 실제 점수계산 결과를 명시
   if(forceScoreInfo&&forceScoreInfo.총점!=null)lines.push('점수계산 '+forceScoreInfo.총점.toFixed(2)+'('+(forceScoreInfo.적격?'적격':'부적격')+')');
   return '- 적격 -\n'+lines.map(function(l,i){return (i+1)+'. '+l;}).join('\n');
@@ -3439,15 +3462,28 @@ function calcSlot(combo,calc){
   else if(분담누락)적격사유=필요분담grp?(필요분담grp+'업체 미등록 ('+displayGongjong(calc.공종)+'은 '+필요분담grp+' 슬롯 1개 이상 필요)'):'분담업체 미등록 (복합(전기+분담)은 분담 슬롯 1개 이상 필요)';
   else if(분담시평미달)적격사유='분담 시평 부족 (합산 '+FMT_NUM(Math.round(분담시평합산))+' / 제한 '+FMT_NUM(calc.분담시평)+')';
   else if(calc.isLH){
-    // ── LH 시평제한 선행 체크 (지분율 가중 합산) ──────────────────────
-    // 2026-08-18: 입찰참가자격(지분율 무관 단순합산)과 적격심사(지분율 가중)는 별개 개념.
-    // 사용자 확인 후 이 게이트는 적격심사 기준에 맞춰 지분율 가중 합산(합산시평)으로 변경.
-    // 참고: 합산시평_raw(지분율 미적용 단순합산)는 계속 계산되어 result에 남아있음 — 별도 입찰참가자격
-    // 확인용으로 필요시 재사용 가능(현재는 이 게이트에서 참조하지 않음).
-    if(calc.E3!=null&&합산시평<=calc.E3){
-      적격사유='시평 부족 (합산 '+FMT_NUM(Math.round(합산시평))+' / 제한 '+FMT_NUM(calc.E3)+')';
-    } else {
-    // ── LH 점수 기반 적격 판정 ─────────────────────────────────────
+    // ── LH 우선순위 판정 (2026-08-28 변경) ────────────────────────────────
+    // 1순위: 실적제한/시평제한/순신인도를 먼저 확인해 셋 다 충족하면 그대로 적격.
+    // 2순위: 하나라도 부족하면 기존 LH 점수제(95점 만점)로 재판정 — 이 경우 적격이어도
+    // 배지는 초록이 아닌 밝은 오렌지 점멸로 표시하고(LH점수모드), 부족했던 항목(LH부족목록)과
+    // 최종 점수(lh총점)를 확정메세지·조합결과TXT에 함께 표기한다.
+    var lh실적OK=합산실적>calc.E6;
+    var lh시평OK=(calc.E3==null)?true:(합산시평>calc.E3);
+    var lh신인도OK=순신인도>=0;
+    // 실적·시평은 충족하는데 순신인도만 부족한 경우, 감점업체 신용등급이 재무비율보다
+    // 유리하면 대체 후 재판정(①경영상태비율 우선 → 부족일 때만 신용등급 대체, 기존 구제 패턴과 동일)
+    if(lh실적OK&&lh시평OK&&!lh신인도OK){
+      var _rescueLH1=_tryCreditRescue();
+      if(_rescueLH1){
+        if(_rescueLH1.순신인도>=0){감점환산=_rescueLH1.감점환산;순신인도=_rescueLH1.순신인도;lh신인도OK=true;}
+        else{_revertCreditRescue(_rescueLH1.applied);}
+      }
+    }
+    var LH부족목록=[];
+    if(!lh실적OK)LH부족목록.push('실적');
+    if(!lh시평OK)LH부족목록.push('시평');
+    if(!lh신인도OK)LH부족목록.push('순신인도');
+    // ── LH 점수 산정 (1순위 통과 여부와 무관하게 항상 계산 — "LH 점수 상세" 패널 표시 유지용) ──
     var lh실적점수=calc.E6>0?Math.min(Math.floor((합산실적/calc.E6)*13*1000)/1000,13):0;
     var lh품질=Math.floor((calc.품질평가점수||0)*1000)/1000;
     var lh시공경험=Math.min(Math.floor((lh실적점수+lh품질)*1000)/1000,15);
@@ -3460,23 +3496,30 @@ function calcSlot(combo,calc){
     var 투찰금액2=A값2?(예정가격2-A값2)*calc.H7+A값2:예정가격2*calc.H7;
     var lh가격=lhCalcPriceScore(투찰금액2,예정가격2,A값2,calc.E5>=5000000000);
     var lh총점=lh시공경험+lh경영상태+lh신인도+lh하도급+lh자재인력+lh가격;
-    적격=lh총점>=95;
-    // ② 경영상태비율만으로 부적격일 때, 감점업체 신용등급이 유리하면 대체 후 재판정
-    if(!적격){
+    var lh점수적격=lh총점>=95;
+    // ② 경영상태비율만으로 점수 미달일 때, 감점업체 신용등급이 유리하면 대체 후 재판정
+    if(!lh점수적격){
       var _rescueLH=_tryCreditRescue();
       if(_rescueLH){
         var lh신인도2=Math.max(-3,Math.min(1.5,_rescueLH.순신인도));
         var lh총점2=lh시공경험+lh경영상태+lh신인도2+lh하도급+lh자재인력+lh가격;
         if(lh총점2>=95){
-          감점환산=_rescueLH.감점환산;순신인도=_rescueLH.순신인도;lh신인도=lh신인도2;lh총점=lh총점2;적격=true;
+          감점환산=_rescueLH.감점환산;순신인도=_rescueLH.순신인도;lh신인도=lh신인도2;lh총점=lh총점2;lh점수적격=true;
         } else {
           _revertCreditRescue(_rescueLH.applied);
         }
       }
     }
-    적격사유=적격?'적격 ('+lh총점.toFixed(2)+'점)':'부적격 ('+lh총점.toFixed(2)+'점 / 95점 미달)';
-    lh데이터={lh시공경험:lh시공경험,lh실적점수:lh실적점수,lh품질:lh품질,lh경영상태:lh경영상태,lh신인도:lh신인도,lh하도급:lh하도급,lh자재인력:lh자재인력,lh가격:lh가격,lh총점:lh총점,lh경영만점:lh경영만점};
-    } // end LH 시평 else
+    if(LH부족목록.length===0){
+      적격=true;적격사유='적격';
+    } else if(lh점수적격){
+      적격=true;
+      적격사유='적격 ('+LH부족목록.join('·')+' 부족 · '+lh총점.toFixed(2)+'점)';
+    } else {
+      적격=false;
+      적격사유='부적격 ('+lh총점.toFixed(2)+'점 / 95점 미달, '+LH부족목록.join('·')+' 부족)';
+    }
+    lh데이터={lh시공경험:lh시공경험,lh실적점수:lh실적점수,lh품질:lh품질,lh경영상태:lh경영상태,lh신인도:lh신인도,lh하도급:lh하도급,lh자재인력:lh자재인력,lh가격:lh가격,lh총점:lh총점,lh경영만점:lh경영만점,LH점수모드:(LH부족목록.length>0&&적격),LH부족목록:LH부족목록};
   } else if(calc.isRail&&railScoreTier(calc.E5)){
     // ── 철도공단 100점 배점제 적격 판정 (별표3 전기·정보통신공사, 추정가격 3억~100억 구간) ──
     // 2.시공계획적정성은 사용자 요청에 따라 항상 만점 고정. 3억 미만/100억 이상은 이 분기에 들어오지 않고
@@ -6464,6 +6507,17 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       }
       return nm+' '+TRIMDEC(Number(row.지분율)||0)+snSuffix+funcSuffixText(row);
     }).join(' : ');
+    // 2026-08-28: LH 1순위(실적/시평/순신인도) 미충족으로 2순위 점수판정(95점제)이 적용된 조합은
+    // 부족했던 항목의 실제 달성값과 최종 점수를 조합 라인 끝에 [부족항목값 / 점수점]로 병기.
+    if(c.isLH&&r.LH점수모드){
+      var _lhGapParts=(r.LH부족목록||[]).map(function(k){
+        if(k==='실적')return '실적'+_EOK_FLOOR(r.합산실적)+'억';
+        if(k==='시평')return '시평'+_EOK_FLOOR(r.합산시평)+'억';
+        if(k==='순신인도')return '순신인도'+TRIM3(r.순신인도);
+        return k;
+      });
+      line+=' ['+_lhGapParts.join(' · ')+' / '+r.lh총점.toFixed(2)+'점]';
+    }
     comboLines.push(line);
   });
   // 4. 최대지분율 — 지역(grp==='지역') 업체만, 고유, 정수
@@ -7169,7 +7223,9 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     var status=comboCalc.isKEPCO
       ?'<span class="badge" data-stat="status" style="background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc">'+result.적격사유+'</span>'
       :(result.적격
-        ?'<span class="badge b-ok" data-stat="status">적격</span>'
+        ?(result.LH점수모드
+          ?'<span class="badge b-ok-score" data-stat="status" title="'+esc(result.적격사유)+'">적격</span>'
+          :'<span class="badge b-ok" data-stat="status">적격</span>')
         :(forceActive
           ?'<span class="badge" data-stat="status" style="background:#fed7aa;color:#9a3412;border:1px solid #fdba74">'+result.적격사유+' · 강제할당</span>'
           :'<span class="badge b-bad" data-stat="status">'+result.적격사유+'</span>'));
@@ -7233,7 +7289,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         '</table>'+
       '</div>'+
       '<div class="combo-foot">'+
-        '<div class="item"><span class="k">'+(comboCalc.isKEPCO?'실적비율':'적격여부')+'</span><span class="v '+(comboCalc.isKEPCO?'':(result.적격?'ok-text':'bad-text'))+'" data-stat="적격사유">'+(comboCalc.isKEPCO?result.적격사유:(result.적격?'OK':result.적격사유))+'</span></div>'+
+        '<div class="item"><span class="k">'+(comboCalc.isKEPCO?'실적비율':'적격여부')+'</span><span class="v '+(comboCalc.isKEPCO?'':(result.적격?(result.LH점수모드?'score-text':'ok-text'):'bad-text'))+'" data-stat="적격사유">'+(comboCalc.isKEPCO?result.적격사유:(result.적격?(result.LH점수모드?result.적격사유:'OK'):result.적격사유))+'</span></div>'+
         '<div data-scorefoot="'+ci+'" style="display:contents">'+scoreFootHtml+'</div>'+
         (comboCalc.isKEPCO&&comboCalc.한전분담E6?'':'<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>')+
         (comboCalc.isKEPCO?'':'<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>')+
@@ -7266,7 +7322,8 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
   var se=card.querySelector('[data-stat="status"]');
   if(se){
     if(comboCalc.isKEPCO){se.textContent=result.적격사유;se.className='badge';se.style.cssText='background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc';}
-    else if(result.적격){se.textContent='적격';se.className='badge b-ok';se.removeAttribute('style');}
+    else if(result.적격&&result.LH점수모드){se.textContent='적격';se.className='badge b-ok-score';se.title=result.적격사유;se.removeAttribute('style');}
+    else if(result.적격){se.textContent='적격';se.className='badge b-ok';se.removeAttribute('style');se.removeAttribute('title');}
     else if(forceActive){se.textContent=result.적격사유+' · 강제할당';se.className='badge';se.style.cssText='background:#fed7aa;color:#9a3412;border:1px solid #fdba74';}
     else{se.textContent=result.적격사유;se.className='badge b-bad';se.removeAttribute('style');}
     se.dataset.stat='status';
@@ -7282,7 +7339,7 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
     faBtn.textContent='강제할당'+(combo.강제할당?' ON':'');
   }
   var ae=card.querySelector('[data-stat="적격사유"]');
-  if(ae){ae.textContent=comboCalc.isKEPCO?result.적격사유:(result.적격?'OK':result.적격사유);ae.className=comboCalc.isKEPCO?'v':'v '+(result.적격?'ok-text':'bad-text');}
+  if(ae){ae.textContent=comboCalc.isKEPCO?result.적격사유:(result.적격?(result.LH점수모드?result.적격사유:'OK'):result.적격사유);ae.className=comboCalc.isKEPCO?'v':'v '+(result.적격?(result.LH점수모드?'score-text':'ok-text'):'bad-text');}
   set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(result.합산시평)));
   set('순신인도2',FMT_REP(result.순신인도));
   set('분담시평합산',FMT_NUM(Math.round(result.분담시평합산||0)));
@@ -9311,7 +9368,8 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
     return _m?_m[1]:_nm;
   }).filter(Boolean);
   var _damLabel=_damLabels.length?_damLabels.join('+'):null;
-  var _elig=getEligibilityChecklist(state.bid,_globalCalc,_damLabel,_forceRows.length?_result.lh원점수:null);
+  var _lhGapInfo=(_globalCalc.isLH&&_result.LH점수모드)?{부족목록:_result.LH부족목록,합산실적:_result.합산실적,합산시평:_result.합산시평,순신인도:_result.순신인도,총점:_result.lh총점,적격:_result.적격}:null;
+  var _elig=getEligibilityChecklist(state.bid,_globalCalc,_damLabel,_forceRows.length?_result.lh원점수:null,_lhGapInfo);
   if(_elig)result+='\n\n'+_elig;
   var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:420px;max-width:96vw;padding:0;overflow:hidden">'+
