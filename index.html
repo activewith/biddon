@@ -1219,9 +1219,19 @@ async function saveOfflineHtmlSnapshot(dirHandle){
     await ws.close();
   }catch(e){console.warn('offline html snapshot skipped',e);}
 }
+// Blob을 즉시 브라우저 기본 다운로드로 내려받게 트리거하는 공용 헬퍼(폴더 권한 불필요).
+function _triggerBlobDownload(blob,fname){
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download=fname;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},4000);
+}
 // 2026-08-31: 백업 폴더 지정(File System Access API, 크롬/엣지 전용) 없이도 브라우저 기본 다운로드로
 // 즉시 현재 상태를 파일로 받는 버튼. doBackupNow()와 달리 폴더 권한이 필요 없어 모든 브라우저(사파리·파폭 포함)에서
 // 동작하며, 오프라인 응급 대비용으로 그때그때 수동으로 챙겨두는 용도(자동 반복 저장은 아님).
+// json.gz 다운로드에 이어 현재 배포본(index.html) 사본도 순차로 다운로드해서, 데이터+실행파일을 한 번에 챙길 수 있게 함
+// (gzip은 zip과 달리 파일 하나만 압축하는 형식이라 두 파일을 한 압축파일에 못 담음 — 그래서 파일 2개를 따로따로 내려받는 방식).
 async function downloadStateAsJsonNow(){
   try{
     syncActiveBidScreen();
@@ -1232,12 +1242,20 @@ async function downloadStateAsJsonNow(){
     var _canGzip=(typeof CompressionStream!=='undefined');
     var fname='입찰적격도구_백업_'+stamp+(_canGzip?'.json.gz':'.json');
     var blob=_canGzip?new Blob([await gzipCompress(_json)],{type:'application/gzip'}):new Blob([_json],{type:'application/json'});
-    var url=URL.createObjectURL(blob);
-    var a=document.createElement('a');
-    a.href=url;a.download=fname;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    setTimeout(function(){URL.revokeObjectURL(url);},4000);
-    toast('다운로드 완료: '+fname,'ok');
+    _triggerBlobDownload(blob,fname);
+    // index.html은 http(s)로 열었을 때만 자기 자신을 다시 fetch해서 받을 수 있음(file://로 직접 연 경우는 스킵).
+    var _htmlOk=/^https?:$/.test(location.protocol);
+    if(_htmlOk){
+      setTimeout(async function(){ // 두 다운로드가 같은 클릭(사용자 제스처) 안에서 바로 겹치면 브라우저가 두 번째 다운로드를 막는 경우가 있어 약간의 간격을 둠
+        try{
+          var res=await fetch(location.href,{cache:'no-store'});
+          if(!res.ok)return;
+          var html=await res.text();
+          _triggerBlobDownload(new Blob([html],{type:'text/html'}),'입찰적격도구_오프라인실행용.html');
+        }catch(e){console.warn('offline html download skipped',e);}
+      },600);
+    }
+    toast('다운로드 완료: '+fname+(_htmlOk?' + index.html':''),'ok');
   }catch(e){console.warn('download failed',e);toast('다운로드 실패: '+(e.message||e),'err');}
 }
 async function doBackupNow(silent,allowRequest,source){
@@ -7928,7 +7946,7 @@ function bind(){
             '</div>'+
             '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">'+
               '<button type="button" class="btn btn-sm btn-ghost" id="bkp-download-now" style="border-color:#0369a1;color:#0369a1">⬇ 지금 다운로드(폴더 미지정)</button>'+
-              '<span style="font-size:11px;color:#9ca3af">위 폴더 지정 없이, 브라우저 기본 다운로드 폴더로 즉시 저장(모든 브라우저 지원) — 오프라인 응급용으로 그때그때 챙겨둘 때</span>'+
+              '<span style="font-size:11px;color:#9ca3af">위 폴더 지정 없이, 데이터(json.gz)와 현재 index.html을 순차로 다운로드 폴더에 저장(모든 브라우저 지원) — 오프라인 응급용으로 그때그때 챙겨둘 때. 브라우저가 "여러 파일 다운로드"를 물어보면 허용해주세요</span>'+
             '</div>'+
             '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">'+
               (currentRole()==='super'?(
