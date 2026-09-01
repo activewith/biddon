@@ -378,7 +378,13 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
           <span class="badge type-실적">실적</span> = 실적업체 플래그 &nbsp;
           <span class="badge type-자사">자사</span> = 자사 플래그
         </span>
-        <button class="btn btn-ghost btn-sm" id="btn-clear-combos" style="margin-left:auto">전체 조합 비우기</button>
+        <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:auto" title="체크 시 조합결과TXT의 모든 조합 우측에 실적 합산액을 표시">
+          <input type="checkbox" id="chk-표시실적합">실적합
+        </label>
+        <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="체크 시 조합결과TXT의 모든 조합 우측에 시평 합산액을 표시">
+          <input type="checkbox" id="chk-표시시평합">시평합
+        </label>
+        <button class="btn btn-ghost btn-sm" id="btn-clear-combos">전체 조합 비우기</button>
         <button class="btn btn-sm" id="btn-export-xlsx">조합결과TXT</button>
       </h2>
       <div class="combos" id="combos"></div>
@@ -664,12 +670,12 @@ function emptySlot(){return {업체명:'',신인도:0,감점:0,실적:0,시평�
 function emptyCombo(){
   var n=2;
   try{if(state&&state.bid)n=Math.max(1,Math.min(MAX_SLOTS,Number(state.bid.구성업체수)||2));}catch(e){}
-  return {slots:Array.from({length:n},emptySlot),사정률D7:null,강제할당:false};
+  return {slots:Array.from({length:n},emptySlot),사정률D7:null,강제할당:false,표시실적합:false,표시시평합:false};
 }
 
 function defaultBidObj(){
   return {시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-       지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,
+       지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,표시실적합:false,표시시평합:false,
        업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',협정메세지알람on:false,협정메세지알람일시:'',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',
        // 2026-08-27 추가(같은 날 재정정): 이 공고 탭의 "기준월"(YYYY-MM, #in-기준월 input[type=month]).
        // 협정마감일도, 탭 생성일도 정답이 아니다 — 둘 다 "공고 개시월"과 어긋날 수 있다고 사용자가 직접
@@ -680,7 +686,7 @@ function defaultBidObj(){
        // 월 표시(jobAMonthTag)가 모두 이 값 하나를 공통 기준으로 삼는다.
        _기준월:''};
 }
-function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null,강제할당:false};});}
+function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null,강제할당:false,표시실적합:false,표시시평합:false};});}
 
 var _initBid=defaultBidObj();
 var _initCombos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
@@ -3308,7 +3314,7 @@ function getOneLineSummary(b, c, hideLHNote) {
 // 확정 메세지용 "적격 요약" 체크리스트 (지자체 30억 미만은 제외, 그 외는 모두 삽입)
 // damLabel: 해당 조합의 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티"→"창호")가 있으면
 // "복합(전기+분담)" 표기의 "분담"을 이 라벨로 치환해서 보여주기 위한 값 (2026-07-29)
-function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
+function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo, sajeongOverride) {
   if(b.적격기준==='한전') return '';
   if(b.적격기준==='지자체' && !(c.E5>=LIMIT_30) && !(c.E3!=null&&c.E3>0)) return '';
   var 의무=(b.지역의무지분!=null&&b.지역의무지분!=='')?'의무 '+Number(b.지역의무지분)+'%':'';
@@ -3362,6 +3368,8 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
   if(lhGapInfo&&lhGapInfo.총점!=null)lines.push((lhGapInfo.적격?'적격':'부적격')+'95점 ('+lhGapInfo.총점.toFixed(2)+'점)');
   // 2026-08-06: LH 강제할당 적용 시 — 지분율 합 100% 요건을 명목상 대체한 근거로 실제 점수계산 결과를 명시
   if(forceScoreInfo&&forceScoreInfo.총점!=null)lines.push('점수계산 '+forceScoreInfo.총점.toFixed(2)+'('+(forceScoreInfo.적격?'적격':'부적격')+')');
+  // 이 조합만 공고 기본 사정률과 다른 사정률을 적용 중이면 — 투찰금액도 기본값과 달라지므로 별도 안내를 마지막 줄에 추가
+  if(sajeongOverride)lines.push('투찰 금액은 보내드립니다.');
   return '- 적격 -\n'+lines.map(function(l,i){return (i+1)+'. '+l;}).join('\n');
 }
 
@@ -6201,6 +6209,20 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       });
       line+=' ['+_lhGapParts.join(' · ')+' / '+r.lh총점.toFixed(2)+'점]';
     }
+    // 조합별 사정률(D7)이 공고 기본 사정률과 다르면(개별 override) — 그 값으로 "N% 미만 투찰" 안내를 병기
+    if(combo.사정률D7!=null&&Math.abs(combo.사정률D7-c.D7)>1e-9){
+      var _sjNoteVal=+((combo.사정률D7-1)*100).toFixed(3);
+      line+=' ['+_sjNoteVal+' 미만 투찰]';
+    }
+    // 실적합/시평합 표시 — 전체표시 체크(b.표시실적합/표시시평합) 또는 이 조합만의 개별 체크(combo.표시실적합/표시시평합) 중 하나라도 켜져 있으면 표시
+    var _showJeoksum=!!(b.표시실적합||combo.표시실적합);
+    var _showSipyung=!c.isKEPCO&&!!(b.표시시평합||combo.표시시평합);
+    if(_showJeoksum||_showSipyung){
+      var _sumParts=[];
+      if(_showJeoksum)_sumParts.push('실적합 '+_EOK_FLOOR(r.합산실적)+'억');
+      if(_showSipyung)_sumParts.push('시평합 '+_EOK_FLOOR(r.합산시평)+'억');
+      line+=' ['+_sumParts.join(' · ')+']';
+    }
     comboLines.push(line);
   });
   // 4. 최대지분율 — 지역(grp==='지역') 업체만, 고유, 정수
@@ -6943,6 +6965,12 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           ' value="'+_sjDisp+'" placeholder="'+_sjPlaceholder+'"'+
           ' style="width:56px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;'+_sjOverrideStyle+'">%'+
         '</span>'+
+        '<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 실적 합산액을 표시(전체표시와 무관하게 적용)">'+
+          '<input type="checkbox" class="combo-jeoksum-chk" data-ci="'+ci+'"'+(combo.표시실적합?' checked':'')+'>실적합'+
+        '</label>'+
+        (comboCalc.isKEPCO?'':'<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 시평 합산액을 표시(전체표시와 무관하게 적용)">'+
+          '<input type="checkbox" class="combo-sipyung-chk" data-ci="'+ci+'"'+(combo.표시시평합?' checked':'')+'>시평합'+
+        '</label>')+
       '</div>'+
       '<div class="combo-actions-row">'+
         '<span class="need-txt">필요값 : <b data-stat="필요값">'+esc(buildNeedHtml(comboCalc,result))+'</b></span>'+
@@ -7431,9 +7459,16 @@ function bind(){
     });
     save();refreshCombos();
   });
+  // 실적합/시평합 전체표시 체크박스 — 조합결과TXT에서 모든 조합에 실적/시평 합산액을 표시할지 여부(공고 탭별 저장)
+  (function(){
+    var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합');
+    if(_cj)_cj.addEventListener('change',function(){state.bid.표시실적합=this.checked;save();});
+    if(_cs)_cs.addEventListener('change',function(){state.bid.표시시평합=this.checked;save();});
+  })();
 
   // 저장된 값을 inputs에 복원
   var b=state.bid;
+  (function(){var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합');if(_cj)_cj.checked=!!b.표시실적합;if(_cs)_cs.checked=!!b.표시시평합;})();
   (function(){b.공종=normGongjong(b.공종)||'전기';var _ge=$('#in-공종');if(_ge)_ge.value=b.공종;syncAvgRatios(b.공종);var _lge=$('#o-공종-label');if(_lge)_lge.textContent=b.공종;})();
   refreshDbFixedSelect();
   if(b.시평제한!=null)$('#in-시평제한').value=FMT_NUM(b.시평제한);
@@ -7655,6 +7690,13 @@ function bind(){
   });
   $('#combos').addEventListener('change',function(e){
     var t=e.target;
+    // 조합별 실적합/시평합 개별표시 체크박스 — 이 조합에서만 조합결과TXT에 합산액을 표시(전체표시 체크와는 OR 조건)
+    if(t.classList.contains('combo-jeoksum-chk')){
+      state.combos[Number(t.dataset.ci)].표시실적합=t.checked;save();return;
+    }
+    if(t.classList.contains('combo-sipyung-chk')){
+      state.combos[Number(t.dataset.ci)].표시시평합=t.checked;save();return;
+    }
     // 조합별 사정률 입력 처리
     if(t.classList.contains('combo-sajeong-input')){
       var csi=Number(t.dataset.ci);
@@ -9117,7 +9159,9 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
   }).filter(Boolean);
   var _damLabel=_damLabels.length?_damLabels.join('+'):null;
   var _lhGapInfo=(_globalCalc.isLH&&_result.LH점수모드)?{부족목록:_result.LH부족목록,합산실적:_result.합산실적,합산시평:_result.합산시평,순신인도:_result.순신인도,총점:_result.lh총점,적격:_result.적격}:null;
-  var _elig=getEligibilityChecklist(state.bid,_globalCalc,_damLabel,_forceRows.length?_result.lh원점수:null,_lhGapInfo);
+  // 이 조합에 공고 기본 사정률과 다른 개별 사정률(combo.사정률D7)이 적용 중인지 — 다르면 확정메세지에 투찰금액 별도안내 추가
+  var _sjOverrideActive=combo.사정률D7!=null&&Math.abs(combo.사정률D7-_globalCalc.D7)>1e-9;
+  var _elig=getEligibilityChecklist(state.bid,_globalCalc,_damLabel,_forceRows.length?_result.lh원점수:null,_lhGapInfo,_sjOverrideActive);
   if(_elig)result+='\n\n'+_elig;
   var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:420px;max-width:96vw;padding:0;overflow:hidden">'+
@@ -9698,6 +9742,8 @@ function restoreBidInputsFromState(){
   applyRegionSelects(b.지역선택);
   var _bp=$('#in-기본지분율');if(_bp)_bp.value=Number(b.기본지분율)||65;
   var _n=$('#in-구성업체수');if(_n)_n.value=Math.max(1,Math.min(MAX_SLOTS,Number(b.구성업체수)||2));
+  var _cj=$('#chk-표시실적합');if(_cj)_cj.checked=!!b.표시실적합;
+  var _cs=$('#chk-표시시평합');if(_cs)_cs.checked=!!b.표시시평합;
   refreshCompanyAvgDisplay();
   updateBidNameLabel();
   refreshDbFixedSelect();
