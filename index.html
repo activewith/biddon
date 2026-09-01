@@ -6109,30 +6109,10 @@ function sortComboRowsForDisplay(rows,nameFn){
 }
 function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   var b=state.bid; var c=calcBid();
-  // 1. 헤더 + 메모(협정메세지). 2026-09-01 버그수정: 메모칸에 내용을 넣으면 자동헤더(공고명/공고번호/추정가격/마감일)가
-  // 통째로 사라지고 메모 내용만 남던 문제 — 메모는 "참고용 추가 내용"이지 헤더를 대체하는 게 아니므로,
-  // <구성현황> 태그를 직접 넣어 헤더를 커스텀 관리하던 레거시 케이스가 아닌 한 헤더는 항상 표시하고 메모는 그 아래에 덧붙인다.
-  var _rawMemo=state.bid.협정메세지||'';
-  var _hasTagT=_rawMemo.indexOf('<구성현황>')!==-1;
-  var msgLines=_rawMemo.split('\n');
-  msgLines=msgLines.filter(function(l){return l.trim()!=='<구성현황>';});
-  var _jtIdx=msgLines.findIndex(function(l){return l.trim()==='협정 부탁 드립니다.';});
-  if(_jtIdx>=0){
-    var _cut=_jtIdx;
-    while(_cut>0&&msgLines[_cut-1].trim()==='')_cut--;
-    msgLines=msgLines.slice(0,_cut);
-  }
-  while(msgLines.length>0&&msgLines[msgLines.length-1].trim()==='')msgLines.pop();
-  var msgBody=msgLines.join('\n').trim();
-  var _headerT=buildBidMsgHeader(b);
-  var msgText;
-  if(_hasTagT){
-    // 레거시: <구성현황> 태그를 직접 넣어 커스텀 헤더를 관리하던 경우 — 기존 방식(태그 앞부분이 곧 헤더) 그대로 유지
-    msgText=msgBody||_headerT;
-  }else{
-    msgText=_headerT;
-    if(msgBody)msgText=(msgText?msgText+'\n\n':'')+msgBody;
-  }
+  // 1. 헤더. 2026-09-01 버그수정: 메모칸(협정메세지)에 내용을 넣으면 자동헤더(공고명/공고번호/추정가격/마감일)가
+  // 통째로 사라지고 메모 내용만 남던 문제 발견 → 이후 "헤더+메모 병기"로 고쳤으나, 메모는 유저 개인 참고용일 뿐
+  // 조합결과TXT/확정메세지 어디에도 노출되면 안 된다는 요청에 따라 메모는 완전히 배제하고 헤더만 사용한다.
+  var msgText=buildBidMsgHeader(b);
   // 2. 한줄요약
   var summary=getOneLineSummary(b, c, true);
   // 3. 조합결과: calcSlot 활용 → 지분율 내림차순 정렬 + 순신인도 표시
@@ -7870,7 +7850,7 @@ function bind(){
             '</div>'+
           '</div>'+
           '<textarea id="m-jeong-edit" rows="8" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #c4b5fd;border-radius:4px;font-family:monospace;resize:vertical;line-height:1.6;box-sizing:border-box">'+esc(msg)+'</textarea>'+
-          '<div style="font-size:10px;color:#9ca3af;margin-top:3px">확정메세지·조합결과TXT에는 공고명/공고번호/추정가격/마감일이 항상 자동으로 표시되고, 여기 적은 내용은 참고용으로 그 아래에 추가됩니다.</div>'+
+          '<div style="font-size:10px;color:#9ca3af;margin-top:3px">이 메모는 나만 보는 참고용입니다. 확정메세지·조합결과TXT에는 표시되지 않으며, 그쪽에는 공고명/공고번호/추정가격/마감일이 항상 자동으로 표시됩니다.</div>'+
           '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px">'+
             '<button class="btn" id="m-jeong-copy" style="background:#7c3aed;padding:3px 10px;font-size:12px">📋 복사</button>'+
             '<button class="btn btn-ghost" id="m-jeong-save" style="padding:3px 10px;font-size:12px">저장</button>'+
@@ -9138,20 +9118,11 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
     }
     return s.업체명+' '+TRIMDEC(Number(s.지분율)||0)+'%'+netStr+funcSuffixText(s)+(bizno?'\n('+bizno+')':'');
   }).join('\n');
-  var msg=state.bid.협정메세지||'';
   var TAG='<구성현황>';
   // 2026-09-01 버그수정: 메모칸(협정메세지)에 내용을 넣으면 자동헤더(공고명/공고번호/추정가격/마감일)가
-  // 통째로 사라지고 메모 내용만 남던 문제 — 메모는 "참고용 추가 내용"이지 헤더를 대체하는 게 아니므로,
-  // <구성현황> 태그를 직접 넣어 헤더를 커스텀 관리하던 레거시 케이스가 아닌 한 헤더는 항상 표시하고 메모는 그 아래에 덧붙인다.
-  var _hdr=buildBidMsgHeader(state.bid);
-  if(msg.indexOf(TAG)!==-1){
-    // 레거시: 태그 앞부분이 곧 헤더 — 비어있을 때만 자동헤더 삽입(기존 방식 유지)
-    var _headerPart=msg.substring(0,msg.indexOf(TAG)).trim();
-    if(!_headerPart&&_hdr)msg=_hdr+'\n'+msg.substring(msg.indexOf(TAG));
-  }else{
-    var _memoBody=msg.trim();
-    msg=_hdr+(_memoBody?('\n\n'+_memoBody):'');
-  }
+  // 통째로 사라지고 메모 내용만 남던 문제 발견 → 이후 "헤더+메모 병기"로 고쳤으나, 메모는 유저 개인 참고용일 뿐
+  // 조합결과TXT/확정메세지 어디에도 노출되면 안 된다는 요청에 따라 메모(state.bid.협정메세지)는 완전히 배제하고 헤더만 사용한다.
+  var msg=buildBidMsgHeader(state.bid);
   var result;
   if(msg.indexOf(TAG)!==-1){
     var tagEnd=msg.indexOf(TAG)+TAG.length;
