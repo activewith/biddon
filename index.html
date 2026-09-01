@@ -3314,7 +3314,7 @@ function getOneLineSummary(b, c, hideLHNote) {
 // 확정 메세지용 "적격 요약" 체크리스트 (지자체 30억 미만은 제외, 그 외는 모두 삽입)
 // damLabel: 해당 조합의 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티"→"창호")가 있으면
 // "복합(전기+분담)" 표기의 "분담"을 이 라벨로 치환해서 보여주기 위한 값 (2026-07-29)
-function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo, sajeongOverride) {
+function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
   if(b.적격기준==='한전') return '';
   if(b.적격기준==='지자체' && !(c.E5>=LIMIT_30) && !(c.E3!=null&&c.E3>0)) return '';
   var 의무=(b.지역의무지분!=null&&b.지역의무지분!=='')?'의무 '+Number(b.지역의무지분)+'%':'';
@@ -3368,8 +3368,6 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo, saje
   if(lhGapInfo&&lhGapInfo.총점!=null)lines.push((lhGapInfo.적격?'적격':'부적격')+'95점 ('+lhGapInfo.총점.toFixed(2)+'점)');
   // 2026-08-06: LH 강제할당 적용 시 — 지분율 합 100% 요건을 명목상 대체한 근거로 실제 점수계산 결과를 명시
   if(forceScoreInfo&&forceScoreInfo.총점!=null)lines.push('점수계산 '+forceScoreInfo.총점.toFixed(2)+'('+(forceScoreInfo.적격?'적격':'부적격')+')');
-  // 이 조합만 공고 기본 사정률과 다른 사정률을 적용 중이면 — 투찰금액도 기본값과 달라지므로 별도 안내를 마지막 줄에 추가
-  if(sajeongOverride)lines.push('투찰 금액은 보내드립니다.');
   return '- 적격 -\n'+lines.map(function(l,i){return (i+1)+'. '+l;}).join('\n');
 }
 
@@ -6221,7 +6219,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       var _sumParts=[];
       if(_showJeoksum)_sumParts.push('실적합 '+_EOK_FLOOR(r.합산실적)+'억');
       if(_showSipyung)_sumParts.push('시평합 '+_EOK_FLOOR(r.합산시평)+'억');
-      line+=' ['+_sumParts.join(' · ')+']';
+      line+=' ['+_sumParts.join('_')+']';
     }
     comboLines.push(line);
   });
@@ -9159,9 +9157,7 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
   }).filter(Boolean);
   var _damLabel=_damLabels.length?_damLabels.join('+'):null;
   var _lhGapInfo=(_globalCalc.isLH&&_result.LH점수모드)?{부족목록:_result.LH부족목록,합산실적:_result.합산실적,합산시평:_result.합산시평,순신인도:_result.순신인도,총점:_result.lh총점,적격:_result.적격}:null;
-  // 이 조합에 공고 기본 사정률과 다른 개별 사정률(combo.사정률D7)이 적용 중인지 — 다르면 확정메세지에 투찰금액 별도안내 추가
-  var _sjOverrideActive=combo.사정률D7!=null&&Math.abs(combo.사정률D7-_globalCalc.D7)>1e-9;
-  var _elig=getEligibilityChecklist(state.bid,_globalCalc,_damLabel,_forceRows.length?_result.lh원점수:null,_lhGapInfo,_sjOverrideActive);
+  var _elig=getEligibilityChecklist(state.bid,_globalCalc,_damLabel,_forceRows.length?_result.lh원점수:null,_lhGapInfo);
   if(_elig)result+='\n\n'+_elig;
   var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:420px;max-width:96vw;padding:0;overflow:hidden">'+
