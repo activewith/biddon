@@ -6608,7 +6608,14 @@ function getVisibleDbCompanies(){
     var _byGrp={}; activeGrps.forEach(function(g){_byGrp[g]=[];});
     out.forEach(function(o){_byGrp[o.grp].push(o.c);});
     var _regrouped=[];
-    activeGrps.forEach(function(g){_regrouped=_regrouped.concat(_byGrp[g]);});
+    var _segs=[]; // {group,count} — 그룹별 구간 정보. 화면의 "그룹: A (N개)" 구분행을 xlsx export에서도 재현하기 위해 결과 배열에 붙여 반환.
+    activeGrps.forEach(function(g){
+      var list=_byGrp[g];
+      if(!list.length)return;
+      _segs.push({group:g,count:list.length});
+      _regrouped=_regrouped.concat(list);
+    });
+    _regrouped._groupSegments=_segs;
     return _regrouped;
   }
   return out.map(function(o){return o.c;});
@@ -6665,7 +6672,7 @@ function buildJobScoreGroups(companies){
   });
 }
 var JOBSCORE_HEADERS=['상호','사업자등록번호','공사업','시공능력공시액','3년실적','5년실적','부채비율(%)','유동비율(%)','신용평가(만료일)','안전보건경영시스템(ISO)','급여가점','일자리가점'];
-function exportJobScoreXlsx(groups,monthLabel){
+function exportJobScoreXlsx(groups,monthLabel,groupSegments){
   if(typeof ExcelJS==='undefined'){toast('엑셀 생성 라이브러리(ExcelJS) 로드 실패 — 네트워크를 확인하세요','err');return;}
   var wb=new ExcelJS.Workbook();
   var ws=wb.addWorksheet('신인도가점');
@@ -6685,8 +6692,27 @@ function exportJobScoreXlsx(groups,monthLabel){
     cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF3F4F6'}};
   });
   headerRow.height=20;
+  // 그룹 다중선택(2개 이상) 시 DB관리 화면과 동일하게 "그룹: A (N개)" 구분행을 그룹 시작 위치마다 삽입.
+  var _groupStartAt={}; // groups 배열 인덱스 → {group,count}
+  var _dividerRows=[];
+  if(groupSegments&&groupSegments.length){
+    var _gi=0;
+    groupSegments.forEach(function(seg){_groupStartAt[_gi]=seg;_gi+=seg.count;});
+  }
   var r=3;
-  groups.forEach(function(g){
+  groups.forEach(function(g,gIdx){
+    if(_groupStartAt[gIdx]){
+      var seg=_groupStartAt[gIdx];
+      ws.mergeCells(r,1,r,JOBSCORE_HEADERS.length);
+      var hdrCell=ws.getCell(r,1);
+      hdrCell.value='그룹: '+seg.group+' ('+seg.count+'개)';
+      hdrCell.font={bold:true,color:{argb:'FF1D4ED8'}};
+      hdrCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEFF6FF'}};
+      hdrCell.alignment={horizontal:'left',vertical:'middle'};
+      ws.getRow(r).height=18;
+      _dividerRows.push(r);
+      r++;
+    }
     var n=g.rows.length;
     var startRow=r;
     g.rows.forEach(function(tr){
@@ -6729,6 +6755,12 @@ function exportJobScoreXlsx(groups,monthLabel){
       ws.getCell(rr,cc).border={top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
     }
   }
+  // 구분행은 위쪽 경계선을 화면(border-top:2px solid #bfdbfe)과 맞춰 더 두껍게 표시
+  _dividerRows.forEach(function(dr){
+    for(var cc2=1;cc2<=JOBSCORE_HEADERS.length;cc2++){
+      ws.getCell(dr,cc2).border={top:{style:'medium',color:{argb:'FFBFDBFE'}},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
+    }
+  });
   ws.views=[{state:'frozen',ySplit:2}];
   wb.xlsx.writeBuffer().then(function(buf){
     var blob=new Blob([buf],{type:'application/octet-stream'});
@@ -6745,7 +6777,7 @@ function generateJobScoreReport(){
   if(!companies.length){toast('표시할 업체가 없습니다 (검색/필터 조건을 확인하세요)','err');return;}
   var groups=buildJobScoreGroups(companies);
   var monthLabel=(new Date().getMonth()+1)+'월';
-  exportJobScoreXlsx(groups,monthLabel);
+  exportJobScoreXlsx(groups,monthLabel,companies._groupSegments);
   toast('신인도가점표 xlsx 저장 완료 ('+groups.length+'개 업체)','ok');
 }
 
@@ -9125,7 +9157,19 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
   });
   if(!slots.length){toast('슬롯에 업체가 없습니다','bad');return;}
   // 2026-08-06: LH는 신인도(가점/감점)가 점수계산 필수 요소이므로 감점업체가 없어도 항상 (+/-N) 표기
-  var hasDed=slots.some(function(s){return (Number(s.감점)||0)>0;})||(_globalCalc.isLH&&combo.강제할당);
+  // 2026-09-02: hasDed(확정메세지 전체에 가점/감점 표시 여부)는 각 업체의 "유리한 조건 하나"(경영비율 감점
+  // vs 신용등급 참고 감점 중 더 작은 값)를 기준으로 판단한다. 신용등급으로 감점이 없어지는 업체뿐이면
+  // 조합 전체에서 표시할 감점이 없는 것으로 보고, 다른 업체의 가점(예: 신인도 가점)도 표시하지 않는다.
+  // (조합결과TXT의 hasDed는 그대로 raw 감점 기준 유지 — 사용자 요청, 확정메세지에만 적용)
+  var hasDed=slots.some(function(s){
+    var raw=Number(s.감점)||0;
+    if(raw<=0)return false;
+    if(s.creditApplied)return true; // 이미 신용등급으로 대체 적용된 감점(raw 자체가 유리한 값)
+    var _dbHD=state.db.find(function(x){return x.업체명===s.업체명;});
+    var _cgHD=creditRefForRow(_dbHD,_comboCalc);
+    var eff=(_cgHD&&_cgHD.deduction<raw)?_cgHD.deduction:raw;
+    return eff>0;
+  })||(_globalCalc.isLH&&combo.강제할당);
   // 2026-08-06: LH 강제할당 — Func칸에 명목 지분율을 입력한 업체의 표시를 "명목 지분율%[실제 지분율]"로 치환
   var _forceRows=getForceAllocRows(combo,_result);
   var _forceMap={};_forceRows.forEach(function(fr){_forceMap[fr.slotIdx]=fr;});
