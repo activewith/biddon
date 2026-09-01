@@ -495,9 +495,7 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
       </div>
       <div class="toolbar" id="db-group-toolbar" style="flex-wrap:wrap;gap:6px;align-items:center;min-height:30px">
         <span style="font-size:12px;color:#6b7280">그룹 보기:</span>
-        <select id="db-group-filter" style="display:none">
-          <option value="">전체</option>
-        </select>
+        <select id="db-group-filter" multiple style="display:none"></select>
         <div id="db-group-filter-wrap" style="position:relative;display:inline-block">
           <button type="button" id="db-group-filter-btn" style="padding:3px 10px;border:1px solid #e3e6ec;border-radius:4px;font-size:12px;font-family:inherit;background:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;min-width:150px;justify-content:space-between">
             <span id="db-group-filter-label">전체 (0개 그룹)</span><span style="color:#9ca3af;font-size:10px">▼</span>
@@ -505,6 +503,10 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
           <div id="db-group-filter-panel" style="display:none;position:absolute;z-index:200;background:#fff;border:1px solid #d1d5db;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:6px 0;min-width:220px;left:0;top:calc(100% + 2px)">
             <div style="padding:5px 8px;border-bottom:1px solid #e5e7eb">
               <input id="db-group-filter-search" type="text" placeholder="🔍 그룹 검색..." autocomplete="off" style="width:100%;font-size:12px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;box-sizing:border-box">
+            </div>
+            <div style="padding:4px 8px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:#9ca3af">체크한 그룹을 모두 합쳐서 표시(다중 선택)</span>
+              <button type="button" id="db-group-filter-clear" style="font-size:11px;color:#dc2626;background:none;border:none;cursor:pointer;padding:0">전체해제</button>
             </div>
             <div id="db-group-filter-list" style="max-height:260px;overflow-y:auto"></div>
           </div>
@@ -4053,40 +4055,55 @@ function dbGamHTML(c,공종override){
 }
 
 // ████ SECTION: 그룹관리 (refreshGroupToolbar/addGroup) ████
-window._dbActiveGroup = null; // 현재 활성 그룹 필터 (null=전체)
-
+// 그룹 보기 필터는 다중선택(#db-group-filter, multiple select)이 실제 값 보관소. 빈 선택=전체.
+function _dbGroupFilterValues(){
+  var sel=document.getElementById('db-group-filter');
+  return sel?Array.from(sel.selectedOptions).map(function(o){return o.value;}):[];
+}
+function _dbGroupFilterSetValues(vals){
+  var sel=document.getElementById('db-group-filter');
+  if(!sel)return;
+  Array.prototype.forEach.call(sel.options,function(o){o.selected=vals.indexOf(o.value)>=0;});
+}
 function refreshGroupToolbar(){
   // 그룹 보기 select 동기화 (실제 값 저장용 — 화면에는 숨기고 검색 가능한 커스텀 드롭다운을 대신 노출)
   var gfSel = document.getElementById('db-group-filter');
   if(gfSel){
-    var curVal = gfSel.value;
-    gfSel.innerHTML = '<option value="">전체 ('+state.groups.length+'개 그룹)</option>';
+    var curVals = _dbGroupFilterValues();
+    gfSel.innerHTML = '';
     state.groups.forEach(function(g){
-      var cnt=state.db.filter(function(x){return x.groups&&x.groups.indexOf(g)>=0;}).length;
       var opt = document.createElement('option');
-      opt.value = g; opt.textContent = g+' ('+cnt+'개)';
-      if(g===curVal) opt.selected=true;
+      opt.value = g; opt.textContent = g;
+      if(curVals.indexOf(g)>=0) opt.selected=true;
       gfSel.appendChild(opt);
     });
   }
   refreshGroupFilterSearchUI();
 }
-// 그룹 보기: 검색 가능한 커스텀 드롭다운(리스트/라벨) 렌더링. #db-group-filter(hidden select)가 실제 선택값을 보관.
+// 그룹 보기: 검색 가능한 커스텀 드롭다운(체크박스 다중선택) 렌더링. #db-group-filter(hidden multiple select)가 실제 선택값을 보관.
 function refreshGroupFilterSearchUI(){
   var gfSel=document.getElementById('db-group-filter');
   var listEl=document.getElementById('db-group-filter-list');
   var lblEl=document.getElementById('db-group-filter-label');
   if(!gfSel||!listEl)return;
-  var curVal=gfSel.value||'';
-  var rows=[{v:'',label:'전체 ('+state.groups.length+'개 그룹)'}].concat(state.groups.map(function(g){
+  var selVals=_dbGroupFilterValues();
+  var rows=state.groups.map(function(g){
     var cnt=state.db.filter(function(x){return x.groups&&x.groups.indexOf(g)>=0;}).length;
     return{v:g,label:g+' ('+cnt+'개)'};
-  }));
+  });
   listEl.innerHTML=rows.map(function(r){
-    var sel=r.v===curVal;
-    return '<div class="db-grpflt-row" data-v="'+esc(r.v)+'" data-label="'+esc(r.label)+'" style="padding:5px 14px;cursor:pointer;font-size:13px;background:'+(sel?'#eff6ff':'#fff')+';color:'+(sel?'#1d4ed8':'#374151')+';font-weight:'+(sel?'700':'400')+'">'+esc(r.label)+'</div>';
+    var sel=selVals.indexOf(r.v)>=0;
+    return '<label class="db-grpflt-row" data-v="'+esc(r.v)+'" data-label="'+esc(r.label)+'" style="display:flex;align-items:center;gap:6px;padding:5px 14px;cursor:pointer;font-size:13px;background:'+(sel?'#eff6ff':'#fff')+';color:'+(sel?'#1d4ed8':'#374151')+';font-weight:'+(sel?'700':'400')+'">'+
+      '<input type="checkbox" class="db-grpflt-chk" data-v="'+esc(r.v)+'"'+(sel?' checked':'')+'>'+
+      '<span>'+esc(r.label)+'</span>'+
+    '</label>';
   }).join('');
-  if(lblEl){var curRow=rows.find(function(r){return r.v===curVal;});lblEl.textContent=curRow?curRow.label:'전체';}
+  if(lblEl){
+    lblEl.removeAttribute('title');
+    if(selVals.length===0)lblEl.textContent='전체 ('+state.groups.length+'개 그룹)';
+    else if(selVals.length===1)lblEl.textContent=selVals[0];
+    else{lblEl.textContent=selVals.length+'개 그룹 선택';lblEl.title=selVals.join(', ');}
+  }
 }
 
 // 업체가 실제 참여하는 공종(전기/통신/소방) 판정 + 대표종목(우선순위 전기>통신>소방) 산출.
@@ -4127,7 +4144,7 @@ function refreshDB(){
   var onlyExpiring=$('#btn-exp-alert').classList.contains('active');
   var fE=$('#db-filter-전기').checked,fT=$('#db-filter-통신').checked,fS=$('#db-filter-소방').checked;
   var only시평없음=$('#db-filter-시평없음').checked;
-  var grpFilterEl=document.getElementById('db-group-filter');var activeGrp=grpFilterEl?grpFilterEl.value:''; // ''=전체
+  var activeGrps=_dbGroupFilterValues(); // []=전체, 1개 이상이면 해당 그룹 중 하나라도 속하면 표시(OR)
   var entries=state.db.map(function(c,i){return{c:c,i:i};});
   if(dbSort.key){
     var sk=dbSort.key;
@@ -4160,7 +4177,7 @@ function refreshDB(){
         if(!fS&&_ti.hasS)return;
       }
     }
-    if(activeGrp&&!(c.groups&&c.groups.indexOf(activeGrp)>=0))return;
+    if(activeGrps.length&&!(c.groups&&c.groups.some(function(g){return activeGrps.indexOf(g)>=0;})))return;
     if(search){var hay=(c.업체명+' '+(c.사업자번호||'')).toLowerCase();if(!hay.includes(search))return;}
     shown++;
     // 대표종목(우선순위 전기>통신>소방) 데이터로 실적/시평/부채유동/공사업등록일 표시
@@ -4434,11 +4451,14 @@ function bindGroupPicker(prefix){
       if(state.groups.indexOf(newName)>=0&&newName!==g){toast('이미 같은 이름의 그룹이 있습니다','bad');inp.focus();return;}
       var gi=state.groups.indexOf(g);if(gi>=0)state.groups[gi]=newName;
       state.db.forEach(function(c){if(c.groups){var ci=c.groups.indexOf(g);if(ci>=0)c.groups[ci]=newName;}});
-      if(window._dbActiveGroup===g)window._dbActiveGroup=newName;
+      // 그룹 보기(DB필터) 다중선택 중 이 그룹이 포함돼 있었다면 새 이름으로 유지
+      var _gf=typeof _dbGroupFilterValues==='function'?_dbGroupFilterValues():[];
+      var _gfi=_gf.indexOf(g);if(_gfi>=0)_gf[_gfi]=newName;
       save();toast('"'+g+'" → "'+newName+'" 변경','ok');
       rebuildList();updateGrpLabel();
-      try{refreshDB();}catch(e2){}
       try{refreshGroupToolbar();}catch(e2){}
+      try{_dbGroupFilterSetValues(_gf);refreshGroupFilterSearchUI();}catch(e2){}
+      try{refreshDB();}catch(e2){}
     }
     function doCancel(){row.removeChild(wrap);leftSpan.style.display='';rightSpan.style.display='';}
     btnSave.addEventListener('click',function(e){e.stopPropagation();doSave();});
@@ -4470,11 +4490,14 @@ function bindGroupPicker(prefix){
         if(!confirm('"'+g+'" 그룹을 삭제할까요?\n(업체의 그룹 지정은 해제되지만 업체 자체는 삭제되지 않습니다)'))return;
         var gi=state.groups.indexOf(g);if(gi>=0)state.groups.splice(gi,1);
         state.db.forEach(function(c){if(c.groups){var ci=c.groups.indexOf(g);if(ci>=0)c.groups.splice(ci,1);}});
-        if(window._dbActiveGroup===g)window._dbActiveGroup=null;
+        // 그룹 보기(DB필터) 다중선택 중 이 그룹이 포함돼 있었다면 제거
+        var _gf=typeof _dbGroupFilterValues==='function'?_dbGroupFilterValues():[];
+        var _gfi=_gf.indexOf(g);if(_gfi>=0)_gf.splice(_gfi,1);
         save();toast('"'+g+'" 그룹 삭제','ok');
         rebuildList();updateGrpLabel();
-        try{refreshDB();}catch(e2){}
         try{refreshGroupToolbar();}catch(e2){}
+        try{_dbGroupFilterSetValues(_gf);refreshGroupFilterSearchUI();}catch(e2){}
+        try{refreshDB();}catch(e2){}
       });
     });
   }
@@ -6519,7 +6542,7 @@ function getVisibleDbCompanies(){
   var onlyExpiring=$('#btn-exp-alert').classList.contains('active');
   var fE=$('#db-filter-전기').checked,fT=$('#db-filter-통신').checked,fS=$('#db-filter-소방').checked;
   var only시평없음=$('#db-filter-시평없음').checked;
-  var grpFilterEl=document.getElementById('db-group-filter');var activeGrp=grpFilterEl?grpFilterEl.value:'';
+  var activeGrps=_dbGroupFilterValues(); // []=전체, 1개 이상이면 해당 그룹 중 하나라도 속하면 표시(OR)
   var entries=state.db.map(function(c,i){return{c:c,i:i};});
   if(dbSort.key){
     var sk=dbSort.key;
@@ -6549,7 +6572,7 @@ function getVisibleDbCompanies(){
         if(!fS&&_ti.hasS)return;
       }
     }
-    if(activeGrp&&!(c.groups&&c.groups.indexOf(activeGrp)>=0))return;
+    if(activeGrps.length&&!(c.groups&&c.groups.some(function(g){return activeGrps.indexOf(g)>=0;})))return;
     if(search){var hay=(c.업체명+' '+(c.사업자번호||'')).toLowerCase();if(!hay.includes(search))return;}
     out.push(c);
   });
@@ -8520,13 +8543,14 @@ function bind(){
   })();
 
   // DB 탭 이벤트
-  // 그룹 보기 select (필터, 값 저장용 — 실제 UI는 검색 가능한 커스텀 드롭다운)
-  document.getElementById('db-group-filter').addEventListener('change',function(){refreshDB();});
+  // 그룹 보기 select (필터, 값 저장용 — 실제 UI는 검색 가능한 체크박스 다중선택 드롭다운)
+  document.getElementById('db-group-filter').addEventListener('change',function(){refreshGroupFilterSearchUI();refreshDB();});
   (function(){
     var btn=document.getElementById('db-group-filter-btn');
     var panel=document.getElementById('db-group-filter-panel');
     var search=document.getElementById('db-group-filter-search');
     var list=document.getElementById('db-group-filter-list');
+    var clearBtn=document.getElementById('db-group-filter-clear');
     var hiddenSel=document.getElementById('db-group-filter');
     if(!btn||!panel||!list||!hiddenSel)return;
     btn.addEventListener('click',function(e){
@@ -8540,19 +8564,25 @@ function bind(){
       var kw=(search.value||'').trim().toLowerCase();
       list.querySelectorAll('.db-grpflt-row').forEach(function(row){
         var lbl=(row.dataset.label||'').toLowerCase();
-        row.style.display=(!kw||lbl.indexOf(kw)>=0)?'block':'none';
+        row.style.display=(!kw||lbl.indexOf(kw)>=0)?'flex':'none';
       });
     }
     search.addEventListener('input',applyGrpFltSearch);
     search.addEventListener('click',function(e){e.stopPropagation();});
     search.addEventListener('keydown',function(e){e.stopPropagation();});
-    list.addEventListener('click',function(e){
-      var row=e.target.closest('.db-grpflt-row');
-      if(!row)return;
-      hiddenSel.value=row.dataset.v;
+    // 그룹 행 체크박스 토글 — 패널을 닫지 않고 여러 그룹을 연속으로 체크/해제 가능(다중선택)
+    list.addEventListener('change',function(e){
+      var chk=e.target.closest('.db-grpflt-chk');
+      if(!chk)return;
+      var v=chk.dataset.v;
+      var opt=Array.prototype.filter.call(hiddenSel.options,function(o){return o.value===v;})[0];
+      if(opt)opt.selected=chk.checked;
       hiddenSel.dispatchEvent(new Event('change'));
-      refreshGroupFilterSearchUI();
-      panel.style.display='none';
+    });
+    if(clearBtn)clearBtn.addEventListener('click',function(e){
+      e.stopPropagation();
+      Array.prototype.forEach.call(hiddenSel.options,function(o){o.selected=false;});
+      hiddenSel.dispatchEvent(new Event('change'));
     });
     document.addEventListener('click',function(){panel.style.display='none';});
   })();
