@@ -4160,6 +4160,7 @@ function refreshDB(){
   updateDbSortHeaders();
   var tbody=$('#db-table tbody');tbody.innerHTML='';
   var shown=0;
+  var rowsOut=[]; // {tr,grp} — 그룹 다중선택(activeGrps.length>1) 시 그룹별로 재배열해서 렌더링하기 위한 중간 버퍼
   entries.forEach(function(entry){var c=entry.c;var idx=entry.i;
     if(region&&c.지역!==region)return;
     if(onlyPerf&&!c.is실적)return;
@@ -4177,7 +4178,12 @@ function refreshDB(){
         if(!fS&&_ti.hasS)return;
       }
     }
-    if(activeGrps.length&&!(c.groups&&c.groups.some(function(g){return activeGrps.indexOf(g)>=0;})))return;
+    // 선택된 그룹 중 이 업체가 실제로 속한 첫 번째 그룹(activeGrps 순서 기준) — 다중선택 시 그룹별 재배열에 사용
+    var _grpMatch=null;
+    if(activeGrps.length){
+      for(var _gi=0;_gi<activeGrps.length;_gi++){if(c.groups&&c.groups.indexOf(activeGrps[_gi])>=0){_grpMatch=activeGrps[_gi];break;}}
+      if(!_grpMatch)return;
+    }
     if(search){var hay=(c.업체명+' '+(c.사업자번호||'')).toLowerCase();if(!hay.includes(search))return;}
     shown++;
     // 대표종목(우선순위 전기>통신>소방) 데이터로 실적/시평/부채유동/공사업등록일 표시
@@ -4230,8 +4236,25 @@ function refreshDB(){
       '</td>'+
       '<td class="c"><button class="btn btn-sm btn-ghost db-edit-btn" data-edit="'+idx+'">수정</button> '+
       '<button class="btn btn-sm btn-bad db-del-btn" data-del="'+idx+'">삭제</button></td>';
-    tbody.appendChild(tr);
+    rowsOut.push({tr:tr,grp:_grpMatch});
   });
+  // 그룹 다중선택(2개 이상 체크)일 때는 정렬 결과를 무시하고 그룹별로 묶어서 표시 — 그룹 안에서는 기존 정렬(dbSort/기본정렬) 순서 유지.
+  // 업체가 여러 선택 그룹에 겹쳐 속해 있으면 activeGrps 순서상 먼저 나오는 그룹 아래에 한 번만 표시된다.
+  if(activeGrps.length>1){
+    var _byGrp={}; activeGrps.forEach(function(g){_byGrp[g]=[];});
+    rowsOut.forEach(function(ro){_byGrp[ro.grp].push(ro.tr);});
+    var _colCount=document.querySelectorAll('#db-table thead th').length||17;
+    activeGrps.forEach(function(g){
+      var list=_byGrp[g];
+      if(!list.length)return;
+      var hdr=document.createElement('tr');
+      hdr.innerHTML='<td colspan="'+_colCount+'" style="background:#eff6ff;color:#1d4ed8;font-weight:700;font-size:12px;padding:5px 12px;border-top:2px solid #bfdbfe">그룹: '+esc(g)+' ('+list.length+'개)</td>';
+      tbody.appendChild(hdr);
+      list.forEach(function(tr){tbody.appendChild(tr);});
+    });
+  }else{
+    rowsOut.forEach(function(ro){tbody.appendChild(ro.tr);});
+  }
   // "지역" 헤더 자리에 현재 화면(필터 적용)에 표시된 업체 수를 카운트 표시 (각 행의 지역값 자체는 그대로 유지)
   var thRegion=document.getElementById('db-th-지역');if(thRegion)thRegion.textContent=shown;
   var dbRegs=Array.from(new Set(state.db.map(function(c){return c.지역;}).filter(Boolean))).sort();
@@ -6572,11 +6595,23 @@ function getVisibleDbCompanies(){
         if(!fS&&_ti.hasS)return;
       }
     }
-    if(activeGrps.length&&!(c.groups&&c.groups.some(function(g){return activeGrps.indexOf(g)>=0;})))return;
+    var _grpMatch=null;
+    if(activeGrps.length){
+      for(var _gi=0;_gi<activeGrps.length;_gi++){if(c.groups&&c.groups.indexOf(activeGrps[_gi])>=0){_grpMatch=activeGrps[_gi];break;}}
+      if(!_grpMatch)return;
+    }
     if(search){var hay=(c.업체명+' '+(c.사업자번호||'')).toLowerCase();if(!hay.includes(search))return;}
-    out.push(c);
+    out.push({c:c,grp:_grpMatch});
   });
-  return out;
+  // 그룹 다중선택 시 화면(refreshDB)과 동일하게 그룹별로 묶어서 반환 — 신인도가점표 xlsx도 그룹별로 정렬되어 나오도록.
+  if(activeGrps.length>1){
+    var _byGrp={}; activeGrps.forEach(function(g){_byGrp[g]=[];});
+    out.forEach(function(o){_byGrp[o.grp].push(o.c);});
+    var _regrouped=[];
+    activeGrps.forEach(function(g){_regrouped=_regrouped.concat(_byGrp[g]);});
+    return _regrouped;
+  }
+  return out.map(function(o){return o.c;});
 }
 function _jobScoreCreditStr(c){
   var raw=(c.신용평가||'').trim();
