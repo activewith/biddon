@@ -2063,6 +2063,8 @@ function railScoreTier(E5){
   return null;
 }
 // 입찰가격평가 평점 (별표3 3.입찰가격평가): ratio=예상투찰금액/예정가격
+// 2026-09-02: 예비가격을 알 수 없는 사전 판정에서는 이 공식 대신 tier.가격cap점수로 보수적 고정하기로
+// 변경(calcSlot 철도 분기·railSoloScore 둘 다 호출부 삭제) — 함수 자체는 참고용으로 남겨둠(현재 미사용).
 function railPriceScore(tier,ratio){
   if(!tier||ratio==null||isNaN(ratio))return 0;
   if(ratio>=tier.가격cap비율)return tier.가격cap점수;
@@ -2095,8 +2097,10 @@ function railSoloScore(c,calc){
   var rail신인도점수=Math.max(-tier.신인도한도,Math.min(tier.신인도한도,순신인도));
   var rail시공계획점수=tier.시공계획; // 항상 만점 고정(기존 조합 계산과 동일 가정)
   var 투찰금액=calc.A값?(calc.예정가격-calc.A값)*calc.H7+calc.A값:calc.예정가격*calc.H7;
-  var rail가격비율=calc.예정가격>0?(투찰금액/calc.예정가격):null;
-  var rail가격점수=railPriceScore(tier,rail가격비율);
+  var rail가격비율=calc.예정가격>0?(투찰금액/calc.예정가격):null; // 참고용으로만 계산·보관(점수에는 미반영)
+  // 2026-09-02(사용자 확정): 예비가격을 알 수 없는 사전 판정 단계에서는 가격점수를 예상 투찰률로
+  // 낙관 계산하지 않고, 구간별 캡값(50억~100억=45 / 10억~50억·3억~10억=65)으로 보수적으로 고정한다.
+  var rail가격점수=tier.가격cap점수;
   var total=rail실적점수+rail기술점수+rail경영상태점수+rail신인도점수+rail시공계획점수+rail가격점수;
   return {total:total,ok:total>=95,기술점수:rail기술점수,기술매칭:!!rtEntry};
 }
@@ -3661,8 +3665,12 @@ function calcSlot(combo,calc){
       var rail시공계획점수=railTier.시공계획; // 사용자 요청: 항상 만점 고정 처리
       var 예정가격3=calc.예정가격,A값3=calc.A값;
       var 투찰금액3=A값3?(예정가격3-A값3)*calc.H7+A값3:예정가격3*calc.H7;
-      var rail가격비율=예정가격3>0?(투찰금액3/예정가격3):null;
-      var rail가격점수=railPriceScore(railTier,rail가격비율);
+      var rail가격비율=예정가격3>0?(투찰금액3/예정가격3):null; // 참고용으로만 계산·보관(점수에는 미반영)
+      // 2026-09-02(사용자 확정): 예비가격을 알 수 없는 사전 판정 단계에서는 가격점수를 예상 투찰률(H7)
+      // 기반 공식으로 낙관 계산하지 않고, 구간별 캡값(railScoreTier의 가격cap점수 — 50억~100억=45 /
+      // 10억~50억·3억~10억=65)으로 보수적으로 고정한다. 실제 예비가격에 따라 이보다 낮게 나올 수도 있으므로
+      // "이 캡값 기준으로도 95점을 넘는가"만 확인하는 보수적 사전판정임에 유의.
+      var rail가격점수=railTier.가격cap점수;
       var rail총점=rail실적점수+rail기술점수+rail경영상태점수+rail신인도점수+rail시공계획점수+rail가격점수;
       적격=rail총점>=95;
       // 부적격일 때, 감점업체 신용등급이 재무비율보다 유리하면 대체 후 재판정 (LH와 동일 패턴)
@@ -6957,7 +6965,7 @@ function buildScoreFootHtml(calc,result){
   if(calc.isRail&&result.rail총점!=null){
     var _rtScore=result.기술점수합계||0;
     html+='<div class="item" style="grid-column:1/-1"><span class="k">철도 점수 상세 ('+esc(result.rail티어명||'')+')</span><span class="v" style="font-size:11px">'+
-      '실적 '+result.rail실적점수.toFixed(2)+'pt | 기술 '+result.rail기술점수.toFixed(1)+'pt'+(result.rail기술등급?'('+result.rail기술등급+'등급, 합산 '+_rtScore.toFixed(3)+')':'(합산 '+_rtScore.toFixed(3)+', 미달)')+' | 경영 '+result.rail경영상태점수.toFixed(2)+'pt | 신인도 '+(result.rail신인도점수>=0?'+':'')+TRIM3(result.rail신인도점수)+'pt | 시공계획 '+result.rail시공계획점수.toFixed(1)+'pt(만점고정) | 가격 '+result.rail가격점수.toFixed(2)+'pt'+(result.rail가격비율!=null?'('+(result.rail가격비율*100).toFixed(2)+'%)':'')+' = <b>'+result.rail총점.toFixed(2)+'pt</b> / 95pt'+
+      '실적 '+result.rail실적점수.toFixed(2)+'pt | 기술 '+result.rail기술점수.toFixed(1)+'pt'+(result.rail기술등급?'('+result.rail기술등급+'등급, 합산 '+_rtScore.toFixed(3)+')':'(합산 '+_rtScore.toFixed(3)+', 미달)')+' | 경영 '+result.rail경영상태점수.toFixed(2)+'pt | 신인도 '+(result.rail신인도점수>=0?'+':'')+TRIM3(result.rail신인도점수)+'pt | 시공계획 '+result.rail시공계획점수.toFixed(1)+'pt(만점고정) | 가격 '+result.rail가격점수.toFixed(2)+'pt(보수적 고정'+(result.rail가격비율!=null?', 참고비율 '+(result.rail가격비율*100).toFixed(2)+'%':'')+')'+' = <b>'+result.rail총점.toFixed(2)+'pt</b> / 95pt'+
       '</span></div>';
   } else if(calc.isRail&&!railScoreTier(calc.E5)){
     var _rtScore2=result.기술점수합계||0;
