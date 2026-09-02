@@ -669,6 +669,14 @@ function fallbackCopy(text, successToastMsg) {
 }
 
 function emptySlot(){return {업체명:'',신인도:0,감점:0,실적:0,시평액:0,지분율:0,isRec:false,grp:'지역',개별최대지분율:null};}
+// 2026-09-02: "자사" 유형 select 옵션을 삭제(자사 업체는 실적/필요 유형 드롭다운 상단 고정칸에서 항상 노출하는
+// 방식으로 대체)하면서, 과거에 grp:'자사'로 저장된 기존 슬롯 데이터가 있으면 화면(유형 select)과 실제 값이
+// 어긋나 보이는 문제를 막기 위해 로드 시점에 '실적'으로 정규화한다. combos/kepcoCombos/bidScreens 각 경로
+// 로드 지점에서 호출.
+function normalizeSlotGrp(slots){
+  if(!slots)return;
+  slots.forEach(function(s){if(s&&s.grp==='자사')s.grp='실적';});
+}
 function emptyCombo(){
   var n=2;
   try{if(state&&state.bid)n=Math.max(1,Math.min(MAX_SLOTS,Number(state.bid.구성업체수)||2));}catch(e){}
@@ -1432,7 +1440,7 @@ function load(){
     if(obj.groups)state.groups=obj.groups;
     if(obj.bid)Object.assign(state.bid,obj.bid);
     if(obj.kepcoBid)Object.assign(state.kepcoBid,obj.kepcoBid);
-    if(Array.isArray(obj.kepcoCombos)&&obj.kepcoCombos.length>0)state.kepcoCombos=obj.kepcoCombos;
+    if(Array.isArray(obj.kepcoCombos)&&obj.kepcoCombos.length>0){state.kepcoCombos=obj.kepcoCombos;state.kepcoCombos.forEach(function(c){normalizeSlotGrp(c&&c.slots);});}
     if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
     if(obj.settings&&obj.settings.기초배율!=null&&!isNaN(obj.settings.기초배율)&&Number(obj.settings.기초배율)>0)state.settings.기초배율=Number(obj.settings.기초배율);
     if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
@@ -1459,7 +1467,7 @@ function load(){
       });
     })();
     if(obj.combos&&obj.combos.length>0){
-      obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
+      obj.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);normalizeSlotGrp(c.slots);});
       state.combos=obj.combos;
       state.combos=state.combos.filter(function(combo,idx){
         if(idx<DEFAULT_COMBOS)return true;
@@ -3924,6 +3932,21 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
     }
     return '';
   }
+  // 2026-09-02: "자사" 유형 select 삭제에 맞춰, 실적/필요 유형 드롭다운 맨 위에 자사 업체 고정칸을 둔다.
+  // - 실적: 자사(is자사) 업체는 실적 충족 여부와 무관하게 전부 표시(사용자가 직접 판단하도록 필터링하지 않음).
+  // - 필요: 자사 업체 중에서도 '필요' 유형과 동일한 적격 필터(공종/최소지분율/남은 필요실적·시평 충족)를 통과한
+  //   업체만 표시 — list가 이미 그 필터를 통과한 목록이므로 여기서는 is자사로만 한 번 더 거른다.
+  var pinnedNames=new Set();
+  if(grp==='실적'||grp==='필요'){
+    var pinnedList=(grp==='실적')?state.db.filter(function(c){return c.is자사;}):list.filter(function(c){return c.is자사;});
+    if(pinnedList.length>0){
+      html+='<optgroup label="⭐ 자사">';
+      pinnedList.forEach(function(c){html+=makeOpt(c);pinnedNames.add(c.업체명);});
+      html+='</optgroup>';
+    }
+    // 아래 일반 목록(그룹별/전체)에서는 위 고정칸에 이미 나온 업체를 중복 표시하지 않음
+    if(pinnedNames.size>0)list=list.filter(function(c){return !pinnedNames.has(c.업체명);});
+  }
   // 그룹별 optgroup 렌더링
   var groups=state.groups&&state.groups.length>0?state.groups:[];
   if(groups.length>0){
@@ -3945,6 +3968,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
     html+=list.map(makeOpt).join('');
   }
   var renderedNames=new Set(list.map(function(c){return c.업체명;}));
+  pinnedNames.forEach(function(n){renderedNames.add(n);});
   // ── 공고문 분석(자동 필터링)으로 검출되지 않은 동일 지역 나머지 업체를 하단에 수동 선택용으로 노출 ──
   if(grp==='지역'){
     var _지역들Full=getRegionList();
@@ -6857,7 +6881,6 @@ function renderSlotRow(ci,si,r,calc,forceAllocOn){
   var typeSelHtml=
     '<select class="grp-sel" data-grp="'+ci+'-'+si+'" style="flex:0 0 52px;width:52px;font-size:11px;padding:2px 3px;border:1px solid '+bd+';border-radius:3px;font-family:inherit;font-weight:700;background:'+bg+'">'+
       '<option value="지역" '+(grp==='지역'?'selected':'')+'>지역</option>'+
-      '<option value="자사" '+(grp==='자사'?'selected':'')+'>자사</option>'+
       '<option value="실적" '+(grp==='실적'?'selected':'')+'>실적</option>'+
       '<option value="필요" '+(grp==='필요'?'selected':'')+' title="이 슬롯이 채워야 할 필요값(실적/시평/지분율)을 단독으로 충족하는 업체만 표시">필요</option>'+
       '<option value="검색" '+(grp==='검색'?'selected':'')+'>검색</option>'+
@@ -9716,7 +9739,7 @@ function normalizeBidScreens(screens){
     if(!scr.combos||!scr.combos.length){
       scr.combos=defaultCombos();
     }else{
-      scr.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);});
+      scr.combos.forEach(function(c){if(c.slots&&c.slots.length>MAX_SLOTS)c.slots=c.slots.slice(0,MAX_SLOTS);normalizeSlotGrp(c.slots);});
       scr.combos=scr.combos.filter(function(combo,idx){
         if(idx<DEFAULT_COMBOS)return true;
         return combo.slots&&combo.slots.some(function(s){return(s.업체명||'').trim()!=='';});
