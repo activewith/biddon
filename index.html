@@ -9173,9 +9173,19 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
   // 2026-08-06: LH 강제할당 — Func칸에 명목 지분율을 입력한 업체의 표시를 "명목 지분율%[실제 지분율]"로 치환
   var _forceRows=getForceAllocRows(combo,_result);
   var _forceMap={};_forceRows.forEach(function(fr){_forceMap[fr.slotIdx]=fr;});
-  var compLines=slots.map(function(s){
+  var compLines=slots.map(function(s,_ci9176){
     var dbEntry=state.db.find(function(x){return x.업체명===s.업체명;});
     var bizno=dbEntry&&dbEntry.사업자번호?dbEntry.사업자번호:'';
+    // 2026-09-02(사용자 확정): 확정메세지 사업자번호 표기 규칙.
+    // - 한전: 기존과 동일(대표사·구성사 모두 사업자번호 표기, 아래 isKEPCO 분기에서 별도 처리).
+    // - LH: 구성사(대표사 제외)의 사업자번호만 삭제, 대표사는 유지.
+    // - 그 외(LH·한전 제외 전 기관): 대표사의 사업자번호만 삭제, 구성사는 유지.
+    // 대표사 판정은 sortComboRowsForDisplay가 이미 slots[0]에 배치한 순서(대표사=최대지분율 업체가 맨 앞)를 그대로 사용.
+    if(!_globalCalc.isKEPCO){
+      var _isRep9176=(_ci9176===0);
+      if(_globalCalc.isLH){if(!_isRep9176)bizno='';}
+      else{if(_isRep9176)bizno='';}
+    }
     // 한전(한국전력공사): 신인도 표기 없이 업체명+Func(업종 등 수동입력값)만, 사업자번호·계좌정보를 각각 별도 줄로 표시(적격판정 없음)
     // 2026-08-13: 지분율(%) 표시를 폐지하고 Func 입력값으로 대체 — 다른 기관과 동일한 funcSuffixText 규칙(수동입력값은 대괄호 표기) 적용
     if(_globalCalc.isKEPCO){
