@@ -540,10 +540,12 @@ const SCHEMA_VERSION=14;
 const MAX_SLOTS=5;
 const DEFAULT_COMBOS=3;
 
-const LIMIT_30=3000000000;
-const LIMIT_50=5000000000;
-const LIMIT_100=10000000000;
-const LIMIT_10=1000000000;
+// 2026-09-04: const→var로 변경(적격기준모듈 다운로드/업로드 기능이 이 4개 구간 금액을 실행 중에
+// 덮어쓸 수 있어야 해서 재할당 가능해야 함 — 값 자체는 그대로, 재할당 가능 여부만 바뀜).
+var LIMIT_30=3000000000;
+var LIMIT_50=5000000000;
+var LIMIT_100=10000000000;
+var LIMIT_10=1000000000;
 
 const FLOOR1=function(x){return Math.floor((Number(x)||0)*100)/100;}; // 지분율 등 %: 소수 2째 자리에서 내림(2026-07-28: 표시정밀도 1→2자리 상향)
 const FLOOR3=function(x){return Math.floor((Number(x)||0)*1000)/1000;};
@@ -682,7 +684,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{}},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligTables:null,eligTablesUpdated:null},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -775,6 +777,7 @@ function gistApplyData(obj){
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
+  if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
   ensureDefaultAccounts();
@@ -1324,6 +1327,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
+  if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
   if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
@@ -1406,6 +1410,7 @@ function load(){
     if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
     if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
+  if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||null;applyEligTablesFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
     if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
     if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
@@ -1822,20 +1827,28 @@ function safetyDisplayStr(system){
   }
   return name+dateStr+(ps.valid?'':' ⚠만료');
 }
-// 안전보건경영시스템 가점 (별표6 50억↑: KOSHA-MS=+1.0/ISO-45001=+0.8, 별표7A 10~50억: KOSHA-MS=+2.0/ISO-45001=+1.6)
-// LH별표2(50억~100억): KOSHA-MS·ISO-45001 모두 +1 / LH별표3(10~50억): 안전보건 항목 삭제(0)
+// 안전보건경영시스템 가점표 (기관·구간별 KOSHA-MS/ISO-45001 가점) — 2026-09-04: if/else 하드코딩을
+// 데이터 테이블로 분리(적격기준모듈 다운로드/업로드로 편집 가능하게 하기 위함, 값·동작은 기존과 완전히 동일).
+// _default는 type이 위 어느 키에도 없을 때 쓰는 기본값(기존 코드의 마지막 else, 조달청 별표7A용).
+var SAFETY_BONUS_TABLE={
+  '6':{KOSHA:1.0,ISO:0.8}, // 별표6(50억↑)
+  'DoRo6':{KOSHA:0.3,ISO:0.3}, // 도로공사 50억+: KOSHA/ISO 1점×30%=0.3
+  'DoRo7A':{KOSHA:1.0,ISO:1.0}, // 도로공사 50억미만: KOSHA/ISO 모두 +1.0
+  'KW6':{KOSHA:0.5,ISO:0.5}, // 수자원공사 50억+: 공사사전심사기준 별표3 항목(1.0)×100분의50
+  'KW7A':{KOSHA:1.0,ISO:1.0}, // 수자원공사 10~50억(별표4): KOSHA-MS·ISO-45001 공통 +1.0
+  'LH6':{KOSHA:1.0,ISO:1.0}, // LH 별표2(50억~100억): KOSHA-MS·ISO-45001 모두 +1
+  'LH7A':{KOSHA:0,ISO:0}, // LH 별표3(10~50억): 안전보건 항목 삭제
+  '철도6':{KOSHA:0,ISO:0}, // 철도공단(국가철도공단) 붙임7에는 KOSHA-MS·ISO-45001 안전인증 가점 항목이 없음(2026-08-07 확인)
+  '철도7A':{KOSHA:0,ISO:0},
+  '_default':{KOSHA:2.0,ISO:1.6} // 별표7A(조달청) — type이 위 키에 없을 때
+};
 function calcSafetyBonus(system,type){
   var ps=parseSafetySystem(system);
   if(!ps.valid||!ps.type)return 0;
-  if(type==='6'){return ps.type==='KOSHA-MS'?1.0:ps.type==='ISO-45001'?0.8:0;}
-  if(type==='DoRo6'){return ps.type==='KOSHA-MS'?0.3:ps.type==='ISO-45001'?0.3:0;} // 도로공사 50억+: KOSHA/ISO 1점×30%=0.3
-  if(type==='DoRo7A'){return ps.type==='KOSHA-MS'?1.0:ps.type==='ISO-45001'?1.0:0;} // 도로공사 50억미만: KOSHA/ISO 모두 +1.0
-  if(type==='KW6'){return (ps.type==='KOSHA-MS'||ps.type==='ISO-45001')?0.5:0;} // 수자원공사 50억+: 공사사전심사기준 별표3 항목(1.0)×100분의50
-  if(type==='KW7A'){return (ps.type==='KOSHA-MS'||ps.type==='ISO-45001')?1.0:0;} // 수자원공사 10~50억(별표4): KOSHA-MS·ISO-45001 공통 +1.0
-  if(type==='LH6'){return 1.0;} // LH 별표2(50억~100억): KOSHA-MS·ISO-45001 모두 +1
-  if(type==='LH7A'){return 0;} // LH 별표3(10~50억): 안전보건 항목 삭제
-  if(type==='철도6'||type==='철도7A'){return 0;} // 철도공단(국가철도공단) 붙임7에는 KOSHA-MS·ISO-45001 안전인증 가점 항목이 없음(2026-08-07 확인) — 신인도는 일자리창출(A+B)만 적용
-  return ps.type==='KOSHA-MS'?2.0:ps.type==='ISO-45001'?1.6:0; // 별표7A
+  var row=SAFETY_BONUS_TABLE[type]||SAFETY_BONUS_TABLE['_default'];
+  if(ps.type==='KOSHA-MS')return row.KOSHA;
+  if(ps.type==='ISO-45001')return row.ISO;
+  return 0;
 }
 // ── 2026-07-27: 경영상태 배점표를 함수 내 if/else 대신 데이터 테이블로 분리.
 //    각 함수의 시그니처·반환값·호출부는 기존과 완전히 동일 — 순수 내부 구현 교체(외부 동작 변경 없음).
@@ -2024,23 +2037,30 @@ function updateGongjongOptions(적격기준){
 // 가정: (1) 낙찰방법은 1.1(B)(적격심사 경쟁입찰) 기준으로 처리 — 이 도구는 1.1(A) 최저가낙찰 여부를 판별할 수 없음.
 //       (2) "설계금액"은 추정가격(E5)으로 근사.
 //       2.시공계획적정성은 사용자 요청에 따라 항상 만점(고정) 처리.
+// 철도공단 100점 배점제 구간표 — 2026-09-04: if/else 하드코딩을 데이터 테이블로 분리
+// (적격기준모듈 다운로드/업로드로 편집 가능하게 하기 위함, 값·판정순서·반환형태는 기존과 완전히 동일).
+// min/max는 [min,max) 반구간(min 이상 ~ max 미만)이며, 배열 순서대로 첫 매치를 사용(기존 if/else 순서와 동일).
+var RAIL_SCORE_TIERS=[
+  {tier:'T1',label:'추정가격 100억 미만 ~ 50억 이상',min:LIMIT_50,max:LIMIT_100,
+    실적배점:10,실적N:2,기술배점:5,경영배점:15,신인도한도:0.9,시공계획:20,
+    가격배점:50,가격계수:2,가격cap비율:0.925,가격cap점수:45},
+  {tier:'T2',label:'추정가격 50억 미만 ~ 10억 이상',min:1000000000,max:LIMIT_50,
+    실적배점:10,실적N:1,기술배점:5,경영배점:15,신인도한도:0.5,시공계획:20,
+    가격배점:70,가격계수:4,가격cap비율:0.9125,가격cap점수:65},
+  {tier:'T3',label:'추정가격 10억 미만 ~ 3억 이상',min:300000000,max:1000000000,
+    실적배점:10,실적N:0.5,기술배점:5,경영배점:15,신인도한도:0.5,시공계획:20,
+    가격배점:70,가격계수:20,가격cap비율:0.9025,가격cap점수:65}
+];
 function railScoreTier(E5){
   var v=Number(E5);
   if(!v||isNaN(v))return null;
-  if(v>=LIMIT_50&&v<LIMIT_100){
-    return{tier:'T1',label:'추정가격 100억 미만 ~ 50억 이상',
-      실적배점:10,실적N:2,기술배점:5,경영배점:15,신인도한도:0.9,시공계획:20,
-      가격배점:50,가격계수:2,가격cap비율:0.925,가격cap점수:45};
-  }
-  if(v>=1000000000&&v<LIMIT_50){
-    return{tier:'T2',label:'추정가격 50억 미만 ~ 10억 이상',
-      실적배점:10,실적N:1,기술배점:5,경영배점:15,신인도한도:0.5,시공계획:20,
-      가격배점:70,가격계수:4,가격cap비율:0.9125,가격cap점수:65};
-  }
-  if(v>=300000000&&v<1000000000){
-    return{tier:'T3',label:'추정가격 10억 미만 ~ 3억 이상',
-      실적배점:10,실적N:0.5,기술배점:5,경영배점:15,신인도한도:0.5,시공계획:20,
-      가격배점:70,가격계수:20,가격cap비율:0.9025,가격cap점수:65};
+  for(var i=0;i<RAIL_SCORE_TIERS.length;i++){
+    var t=RAIL_SCORE_TIERS[i];
+    if(v>=t.min&&v<t.max){
+      return{tier:t.tier,label:t.label,
+        실적배점:t.실적배점,실적N:t.실적N,기술배점:t.기술배점,경영배점:t.경영배점,신인도한도:t.신인도한도,시공계획:t.시공계획,
+        가격배점:t.가격배점,가격계수:t.가격계수,가격cap비율:t.가격cap비율,가격cap점수:t.가격cap점수};
+    }
   }
   return null;
 }
@@ -2827,19 +2847,22 @@ const 적격기준_한전 = {
 // 전부 정상이었으므로 실제 적격판정 결과에는 영향이 없었고, 드롭다운에 보이는 참고용 숫자만 부정확했다.
 // 이번에 모듈 호출로 통일하면서 이 사본도 같이 정상화됨 — 즉 이 리팩터로 도로공사 50억+ 드롭다운 라벨의
 // 표시값이 바뀐다(더 작아짐, 올바른 방향으로).
+// 일자리창출 가점 축소비율(50억+ 구간만 적용, 50억 미만은 축소 없음) — 2026-09-04: 하드코딩된 0.3/0.5를
+// 데이터 테이블로 분리(적격기준모듈 다운로드/업로드로 편집 가능하게 하기 위함, 값은 기존과 동일).
+var JOB_BONUS_RATIO_TABLE={도로공사:0.3,수자원공사:0.5};
 const 적격기준_도로공사 = {
   srType: function(is50억){ return is50억?'DoRo6':'DoRo7A'; },
-  // 50억+(DoRo6)만 raw×0.3으로 축소, 50억 미만(DoRo7A)은 raw 그대로(축소 없음) — calcSafetyBonus 주석의
+  // 50억+(DoRo6)만 raw×비율로 축소, 50억 미만(DoRo7A)은 raw 그대로(축소 없음) — calcSafetyBonus 주석의
   // "도로공사 50억+: KOSHA/ISO 1점×30%=0.3 / 50억미만: KOSHA/ISO 모두 +1.0"과 같은 축소 패턴.
-  jobBonusRatio: function(raw,is50억){ return is50억?Math.round(raw*0.3*100)/100:raw; },
+  jobBonusRatio: function(raw,is50억){ return is50억?Math.round(raw*JOB_BONUS_RATIO_TABLE.도로공사*100)/100:raw; },
   safetyBonus: function(system,is50억){ return calcSafetyBonus(system,this.srType(is50억)); },
   econScore: 적격기준_조달청.econScore,
   judge: 적격기준_조달청.judge
 };
 const 적격기준_수자원공사 = {
   srType: function(is50억){ return is50억?'KW6':'KW7A'; },
-  // 50억+(KW6)만 raw×0.5로 축소, 50억 미만(KW7A)은 raw 그대로.
-  jobBonusRatio: function(raw,is50억){ return is50억?Math.round(raw*0.5*100)/100:raw; },
+  // 50억+(KW6)만 raw×비율로 축소, 50억 미만(KW7A)은 raw 그대로.
+  jobBonusRatio: function(raw,is50억){ return is50억?Math.round(raw*JOB_BONUS_RATIO_TABLE.수자원공사*100)/100:raw; },
   safetyBonus: function(system,is50억){ return calcSafetyBonus(system,this.srType(is50억)); },
   econScore: 적격기준_조달청.econScore,
   judge: 적격기준_조달청.judge
@@ -2870,6 +2893,166 @@ var 적격기준_REGISTRY={
 };
 function resolveEligibilityModule(적격기준){
   return 적격기준_REGISTRY[적격기준]||적격기준_조달청;
+}
+
+// ████ SECTION: 적격기준 숫자표 내보내기/가져오기 ("적격기준모듈") ████
+// 2026-09-04: 설정 > 공고/적격 > 적격UPDATE 서브탭에서 다운로드/업로드하는 대상 정의.
+// 대상은 경영상태 배점표(별표6/7A·LH2/LH3-A공사·철도붙임3/4-A공사)·안전보건 가점표(SAFETY_BONUS_TABLE)·
+// 철도 100점제 구간표(RAIL_SCORE_TIERS)·일자리가점 축소비율(JOB_BONUS_RATIO_TABLE) 등 "표 안의 숫자"뿐이다.
+// 판정 로직(적격기준_LH.judge 같은 함수 코드) 자체는 포함하지 않는다 — 그 함수들이 파일 전역의 다른
+// 함수·상수 수십 개를 그대로 참조하고 있어서, 코드만 따로 떼어 다운로드하면 그 파일 혼자로는 실행할 수
+// 없고, 반대로 업로드해서 코드를 통째로 갈아끼우면 나머지 로직과 안 맞물려 계산이 깨질 위험이 있기
+// 때문(2026-09-04 사용자와 확인한 범위). LIMIT_10/30/50/100(추정가격 구간 경계)은 값을 조금만 잘못
+// 건드려도 기관 전체의 판정 분기가 통째로 틀어질 수 있어 "읽기전용"으로만 내보내고, 업로드로는 절대
+// 바꾸지 않는다(readonly:true).
+var ELIG_TABLE_DEFS=[
+  {key:'LIMIT_10',label:'추정가격 구간 경계(10억) — 읽기전용',varName:'LIMIT_10',readonly:true},
+  {key:'LIMIT_30',label:'추정가격 구간 경계(30억) — 읽기전용',varName:'LIMIT_30',readonly:true},
+  {key:'LIMIT_50',label:'추정가격 구간 경계(50억) — 읽기전용',varName:'LIMIT_50',readonly:true},
+  {key:'LIMIT_100',label:'추정가격 구간 경계(100억) — 읽기전용',varName:'LIMIT_100',readonly:true},
+  {key:'ECON_TABLE_부채6',label:'경영상태 별표6 부채비율(추정가격 50억↑)',varName:'ECON_TABLE_부채6'},
+  {key:'ECON_TABLE_유동6',label:'경영상태 별표6 유동비율(추정가격 50억↑)',varName:'ECON_TABLE_유동6'},
+  {key:'ECON_TABLE_영업6',label:'경영상태 별표6 영업연수(추정가격 50억↑)',varName:'ECON_TABLE_영업6'},
+  {key:'ECON_TABLE_부채7A',label:'경영상태 별표7A 부채비율(추정가격 10~50억)',varName:'ECON_TABLE_부채7A'},
+  {key:'ECON_TABLE_유동7A',label:'경영상태 별표7A 유동비율(추정가격 10~50억)',varName:'ECON_TABLE_유동7A'},
+  {key:'ECON_TABLE_영업7',label:'경영상태 별표7A 영업연수(추정가격 10~50억)',varName:'ECON_TABLE_영업7'},
+  {key:'ECON_TABLE_부채LH2',label:'LH 별표2 부채비율(추정가격 50억↑)',varName:'ECON_TABLE_부채LH2'},
+  {key:'ECON_TABLE_유동LH2',label:'LH 별표2 유동비율(추정가격 50억↑)',varName:'ECON_TABLE_유동LH2'},
+  {key:'ECON_TABLE_영업LH2',label:'LH 별표2 영업연수(추정가격 50억↑)',varName:'ECON_TABLE_영업LH2'},
+  {key:'ECON_TABLE_부채LH3',label:'LH 별표3-A공사 부채비율(추정가격 10~50억)',varName:'ECON_TABLE_부채LH3'},
+  {key:'ECON_TABLE_유동LH3',label:'LH 별표3-A공사 유동비율(추정가격 10~50억)',varName:'ECON_TABLE_유동LH3'},
+  {key:'ECON_TABLE_영업LH3',label:'LH 별표3-A공사 영업연수(추정가격 10~50억)',varName:'ECON_TABLE_영업LH3'},
+  {key:'ECON_TABLE_부채철도1',label:'철도공단 붙임3 부채비율(추정가격 50억↑)',varName:'ECON_TABLE_부채철도1'},
+  {key:'ECON_TABLE_유동철도1',label:'철도공단 붙임3 유동비율(추정가격 50억↑)',varName:'ECON_TABLE_유동철도1'},
+  {key:'ECON_TABLE_영업철도1',label:'철도공단 붙임3 영업연수(추정가격 50억↑)',varName:'ECON_TABLE_영업철도1'},
+  {key:'ECON_TABLE_부채철도2',label:'철도공단 붙임4-A공사 부채비율(추정가격 10~50억)',varName:'ECON_TABLE_부채철도2'},
+  {key:'ECON_TABLE_유동철도2',label:'철도공단 붙임4-A공사 유동비율(추정가격 10~50억)',varName:'ECON_TABLE_유동철도2'},
+  {key:'ECON_TABLE_영업철도2',label:'철도공단 붙임4-A공사 영업연수(추정가격 10~50억)',varName:'ECON_TABLE_영업철도2'},
+  {key:'SAFETY_BONUS_TABLE',label:'안전보건경영시스템 가점(기관·구간별 KOSHA-MS/ISO-45001)',varName:'SAFETY_BONUS_TABLE'},
+  {key:'RAIL_SCORE_TIERS',label:'철도공단 100점 배점제 구간표(붙임3, 추정가격 3억~100억)',varName:'RAIL_SCORE_TIERS'},
+  {key:'JOB_BONUS_RATIO_TABLE',label:'일자리창출가점 축소비율(도로공사/수자원공사, 추정가격 50억↑)',varName:'JOB_BONUS_RATIO_TABLE'}
+];
+// 스크립트 로드 시점(=하드코딩 기본값, 아직 어떤 override도 반영되기 전)의 스냅샷 — "기본값으로 복원" 버튼용.
+var ELIG_TABLE_DEFAULTS=(function(){
+  var snap={};
+  ELIG_TABLE_DEFS.forEach(function(d){snap[d.key]=JSON.parse(JSON.stringify(window[d.varName]));});
+  return snap;
+})();
+function buildEligTablesPackage(){
+  var tables={};
+  ELIG_TABLE_DEFS.forEach(function(d){
+    tables[d.key]=JSON.parse(JSON.stringify(window[d.varName])); // 숫자/문자열/배열/객체만 담긴 순수 데이터라 deep clone 안전
+  });
+  return{
+    _meta:{
+      app:'적격기준모듈',exportedAt:new Date().toISOString(),
+      note:'판정 로직(함수)은 포함하지 않음 — 배점표·구간값 등 숫자 데이터만. LIMIT_*는 읽기전용(참고용으로만 포함, 업로드해도 반영되지 않음).'
+    },
+    tables:tables
+  };
+}
+// 두 값이 "같은 모양"인지 재귀 확인: 숫자는 숫자로, 문자열은 문자열로, 배열은 같은 길이로, 객체는 같은
+// 키 구성으로 대응돼야 함(예: ECON_TABLE_* 행의 g/등급명 같은 문자열 라벨은 자유롭게 바꿔도 되지만,
+// 항목 수나 t/s 같은 숫자 필드 자체가 빠지거나 배열이 객체로 바뀌는 등 구조가 달라지면 거부).
+function _eligValueShapeOk(current,incoming){
+  if(typeof current==='number')return typeof incoming==='number'&&!isNaN(incoming);
+  if(typeof current==='string')return typeof incoming==='string';
+  if(Array.isArray(current)){
+    if(!Array.isArray(incoming)||incoming.length!==current.length)return false;
+    for(var i=0;i<current.length;i++){if(!_eligValueShapeOk(current[i],incoming[i]))return false;}
+    return true;
+  }
+  if(current&&typeof current==='object'){
+    if(!incoming||typeof incoming!=='object')return false;
+    var ck=Object.keys(current).sort().join(',');
+    var ik=Object.keys(incoming).sort().join(',');
+    if(ck!==ik)return false;
+    return Object.keys(current).every(function(k){return _eligValueShapeOk(current[k],incoming[k]);});
+  }
+  return current===incoming;
+}
+// 업로드된 패키지를 실제 실행 중인 변수에 반영(메모리에만, 영구저장은 applyAndPersistEligTables가 담당).
+// 파일에 없는 키는 건드리지 않아 부분 업데이트(표 몇 개만 바꾼 파일)도 그대로 허용한다.
+function applyEligTablesPackage(pkg){
+  var applied=[],skippedShape=[],skippedReadonly=[],unknown=[];
+  if(!pkg||typeof pkg!=='object'||!pkg.tables||typeof pkg.tables!=='object'){
+    return{ok:false,error:'파일 형식을 인식할 수 없습니다(tables 없음)',applied:applied,skippedShape:skippedShape,skippedReadonly:skippedReadonly,unknown:unknown};
+  }
+  var knownKeys={};
+  ELIG_TABLE_DEFS.forEach(function(d){knownKeys[d.key]=d;});
+  Object.keys(pkg.tables).forEach(function(k){ if(!knownKeys[k])unknown.push(k); });
+  ELIG_TABLE_DEFS.forEach(function(d){
+    if(!(d.key in pkg.tables))return; // 이 파일엔 없는 표 — 건드리지 않음
+    if(d.readonly){skippedReadonly.push(d.key);return;}
+    var incoming=pkg.tables[d.key];
+    var current=window[d.varName];
+    if(!_eligValueShapeOk(current,incoming)){skippedShape.push(d.key);return;}
+    window[d.varName]=incoming;
+    applied.push(d.key);
+  });
+  return{ok:true,applied:applied,skippedShape:skippedShape,skippedReadonly:skippedReadonly,unknown:unknown};
+}
+// 적용 + 영구저장(설정에 남겨 다음 접속/새로고침 때도 유지, ☁Gist로 다른 기기에도 전달됨).
+function applyAndPersistEligTables(pkg){
+  var res=applyEligTablesPackage(pkg);
+  if(res.ok&&res.applied.length){
+    if(!state.settings.eligTables)state.settings.eligTables={};
+    res.applied.forEach(function(k){state.settings.eligTables[k]=pkg.tables[k];});
+    state.settings.eligTablesUpdated=new Date().toISOString();
+    save();
+  }
+  return res;
+}
+// 부팅/Pull/백업복원 시 호출 — JS 변수는 새로고침마다 파일에 하드코딩된 기본값으로 돌아가므로,
+// 이전에 저장해둔 override(state.settings.eligTables)가 있으면 그 위에 다시 반영해야 편집이 유지된다.
+function applyEligTablesFromSettings(){
+  var saved=state.settings&&state.settings.eligTables;
+  if(!saved||typeof saved!=='object')return;
+  applyEligTablesPackage({tables:saved});
+}
+// "기본값으로 복원" — 업로드로 잘못된 표를 올렸을 때 되돌리는 안전장치.
+function resetEligTablesToDefault(){
+  applyEligTablesPackage({tables:ELIG_TABLE_DEFAULTS});
+  state.settings.eligTables=null;
+  state.settings.eligTablesUpdated=null;
+  save();
+}
+function eligTablesSaveSupported(){return typeof window.showSaveFilePicker==='function';}
+// 다운로드. pickFolder=true면(그리고 브라우저가 지원하면) 저장 위치를 직접 고르는 대화상자를 띄우고,
+// 미지원 브라우저이거나 pickFolder=false면 일반 다운로드(브라우저 기본 다운로드 폴더)로 대체한다.
+async function downloadEligTablesPackage(pickFolder){
+  try{
+    syncActiveBidScreen();
+    var pkg=buildEligTablesPackage();
+    var json=JSON.stringify(pkg,null,2);
+    var ts=new Date();
+    var pad=function(n){return(n<10?'0':'')+n;};
+    var fname='적격기준모듈_'+ts.getFullYear()+'-'+pad(ts.getMonth()+1)+'-'+pad(ts.getDate())+'.json';
+    if(pickFolder&&eligTablesSaveSupported()){
+      try{
+        var handle=await window.showSaveFilePicker({suggestedName:fname,types:[{description:'JSON',accept:{'application/json':['.json']}}]});
+        var ws=await handle.createWritable();
+        await ws.write(json);
+        await ws.close();
+        toast('저장 완료: '+(handle.name||fname),'ok');
+        return;
+      }catch(e){
+        if(e&&e.name==='AbortError')return; // 사용자가 취소
+        console.warn('폴더 지정 저장 실패, 일반 다운로드로 대체',e);
+      }
+    }
+    var blob=new Blob([json],{type:'application/json'});
+    _triggerBlobDownload(blob,fname);
+    toast('다운로드 완료: '+fname,'ok');
+  }catch(e){console.warn('적격기준모듈 다운로드 실패',e);toast('다운로드 실패: '+(e.message||e),'err');}
+}
+function readEligTablesFile(file,cb){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{ cb(null,JSON.parse(e.target.result)); }catch(err){ cb(err); }
+  };
+  reader.onerror=function(){cb(new Error('파일 읽기 오류'));};
+  reader.readAsText(file);
 }
 
 // 확정메세지/조합결과TXT 참고용 신용등급 병기: 신용등급 대체가 실제 적용되지 않은 업체라도, 신용등급 감점이
@@ -8385,6 +8568,7 @@ function bind(){
             '<button type="button" class="settings-subtabbtn active" data-substab="analyzer">📋 공고문분석</button>'+
             '<button type="button" class="settings-subtabbtn" data-substab="region">🗺️ 지역편집</button>'+
             '<button type="button" class="settings-subtabbtn" data-substab="eligmemo">📝 적격메모</button>'+
+            '<button type="button" class="settings-subtabbtn" data-substab="eligupdate">🔄 적격UPDATE</button>'+
           '</div>'+
           '<div class="settings-subtabpage" data-substabpage="analyzer">'+
             '<div style="margin:10px 16px 12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
@@ -8447,6 +8631,35 @@ function bind(){
             '</div>'+
             '<div style="display:flex;justify-content:flex-end;gap:6px;padding:4px 16px 12px">'+
               '<button class="btn" id="eligmemo-save" style="background:#059669">저장</button>'+
+            '</div>'+
+          '</div>'+
+          '<div class="settings-subtabpage" data-substabpage="eligupdate" style="display:none">'+
+            '<div style="margin:10px 16px 12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
+              '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:6px">🔄 적격기준모듈 UPDATE</div>'+
+              '<div style="font-size:11px;color:#6b7280;line-height:1.6">'+
+                '경영상태 배점표(별표6/7A·LH2/LH3·철도붙임3/4)·안전보건 가점·철도 100점제 구간표·일자리가점 축소비율 등 <b>"표 안의 숫자"만</b> 파일로 내려받고 다시 올릴 수 있습니다.<br>'+
+                '적격/부적격 <b>판정 로직 자체는 바뀌지 않습니다</b>(추정가격 구간 경계 LIMIT_10/30/50/100은 영향이 커서 참고용으로만 내려받고, 업로드해도 바뀌지 않습니다).<br>'+
+                '반영된 값은 <b>이 계정 전체(모든 기기)에 공통 적용</b>되며, 표 순서(구간 경계)가 바뀌면 판정 결과가 달라질 수 있으니 편집 후 실제 공고로 값 검증을 권장합니다.'+
+              '</div>'+
+            '</div>'+
+            '<div style="padding:0 16px 12px;display:flex;flex-direction:column;gap:10px">'+
+              '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+                '<button type="button" class="btn btn-sm" id="eligtbl-dl-btn" style="background:#059669">⬇ 적격기준모듈 다운로드</button>'+
+                '<label style="font-size:11px;color:#374151;display:flex;align-items:center;gap:4px;cursor:pointer">'+
+                  '<input type="checkbox" id="eligtbl-dl-folder" style="cursor:pointer">저장 위치 직접 지정'+
+                '</label>'+
+                '<span style="font-size:10px;color:#9ca3af">(위치 지정은 Chrome/Edge에서만 지원 — 미지원 브라우저는 일반 다운로드로 대체)</span>'+
+              '</div>'+
+              (currentRole()==='super'?(
+              '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:8px;border-top:1px dashed #e5e7eb">'+
+                '<button type="button" class="btn btn-sm" id="eligtbl-upload-btn" style="background:#0891b2">⬆ 적격기준모듈 업로드</button>'+
+                '<input type="file" id="eligtbl-upload-file" accept=".json,application/json" style="display:none">'+
+                '<button type="button" class="btn btn-sm btn-ghost" id="eligtbl-reset-btn" style="color:#dc2626">기본값으로 복원</button>'+
+              '</div>'
+              ):'<div style="font-size:11px;color:#9ca3af;padding-top:8px;border-top:1px dashed #e5e7eb">업로드/복원은 최고관리자 계정에서만 가능합니다.</div>')+
+              '<div id="eligtbl-status" style="font-size:11px;color:#6b7280">'+
+                (state.settings.eligTablesUpdated?('마지막 적용: '+new Date(state.settings.eligTablesUpdated).toLocaleString('ko-KR')):'현재 기본값 사용 중(업로드 이력 없음)')+
+              '</div>'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -8626,6 +8839,46 @@ function bind(){
           save();
           updateEligNoteTooltip(state.bid.적격기준);
           toast('적격메모 저장','ok');
+        };
+      })();
+      // ── 적격UPDATE (공고입력 설정 탭 > 적격UPDATE 서브탭) — 적격기준 숫자표 다운로드/업로드 ──
+      (function(){
+        function refreshEligTblStatus(){
+          var el=document.getElementById('eligtbl-status');
+          if(!el)return;
+          el.textContent=state.settings.eligTablesUpdated?('마지막 적용: '+new Date(state.settings.eligTablesUpdated).toLocaleString('ko-KR')):'현재 기본값 사용 중(업로드 이력 없음)';
+        }
+        var _dlBtn=document.getElementById('eligtbl-dl-btn');
+        if(_dlBtn)_dlBtn.onclick=function(){
+          var folderChk=document.getElementById('eligtbl-dl-folder');
+          downloadEligTablesPackage(!!(folderChk&&folderChk.checked));
+        };
+        var _upBtn=document.getElementById('eligtbl-upload-btn'),_upFile=document.getElementById('eligtbl-upload-file');
+        if(_upBtn&&_upFile){
+          _upBtn.onclick=function(){_upFile.click();};
+          _upFile.onchange=function(){
+            var f=_upFile.files&&_upFile.files[0];
+            _upFile.value='';
+            if(!f)return;
+            readEligTablesFile(f,function(err,pkg){
+              if(err){toast('파일을 읽을 수 없습니다: '+err.message,'err');return;}
+              var res=applyAndPersistEligTables(pkg);
+              if(!res.ok){toast(res.error||'적용 실패','err');return;}
+              var msg='적용됨 '+res.applied.length+'개';
+              if(res.skippedShape.length)msg+=' · 형식불일치 '+res.skippedShape.length+'개 건너뜀';
+              if(res.skippedReadonly.length)msg+=' · 읽기전용 '+res.skippedReadonly.length+'개 무시';
+              if(res.unknown.length)msg+=' · 알수없는 항목 '+res.unknown.length+'개';
+              toast(msg,res.applied.length?'ok':'bad');
+              refreshEligTblStatus();
+            });
+          };
+        }
+        var _rstBtn=document.getElementById('eligtbl-reset-btn');
+        if(_rstBtn)_rstBtn.onclick=function(){
+          if(!confirm('적격기준 숫자표를 전부 기본값으로 되돌릴까요? (업로드로 반영했던 값이 모두 지워집니다)'))return;
+          resetEligTablesToDefault();
+          toast('기본값으로 복원했습니다','ok');
+          refreshEligTblStatus();
         };
       })();
       // 기본지분율 (조합 탭)
@@ -10039,6 +10292,7 @@ function bindLoginUI(){
 // ████ SECTION: BOOT (앱 초기화 진입점) ████
 function boot(){
   load();
+  applyEligTablesFromSettings(); // load()도 자체 호출하지만, 안전하게 한 번 더(멱등)
   ensureDefaultAccounts();
   (function(){var _s=getSession();if(_s)loadBidScreensForUser(_s.id);})();
   renderBidScreenTabs();
