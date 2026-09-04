@@ -21,8 +21,15 @@ header nav button.active{background:var(--primary)}
    동일한 기본 스타일(header nav button/.active)을 그대로 씀 — 별도 색상 규칙 없음 ── */
 /* ── 입찰적격판정 화면 탭바(브라우저 탭 스타일) — 2026-07-31: 헤더에서 분리, 항상 한 줄로 표시되어
    화면 수가 늘어나도 상단 헤더 높이가 변하지 않고, 우측(업체DB관리 등) 버튼이 잘리지 않도록 함.
-   가로 스크롤 대신 flex-shrink로 탭 너비를 줄여 창 너비에 맞춤(크롬/엣지 탭과 동일한 축소 방식) ── */
-#bid-screen-tabs{display:flex;align-items:flex-end;gap:2px;background:#0f172a;padding:5px 8px 0;overflow-x:hidden;white-space:nowrap}
+   flex-shrink로 탭 너비를 최소 50px까지 줄여 창 너비에 맞춤(크롬/엣지 탭과 동일한 축소 방식).
+   2026-09-04: 탭이 많아져 50px까지 줄여도 다 안 들어가면 overflow-x:hidden 때문에 우측 탭이 아예
+   안 보이고 스크롤도 안 되던 문제를 사용자가 지적 — overflow-x:auto로 바꿔 넘치는 만큼만 가로
+   스크롤되게 함(탭이 적을 땐 여전히 스크롤 없이 flex-shrink만으로 꽉 참, 많을 때만 스크롤 등장).
+   마우스 휠(세로 스크롤만 보내는 일반 휠)로도 넘길 수 있게 bind()에 wheel→scrollLeft 변환 리스너 추가. ── */
+#bid-screen-tabs{display:flex;align-items:flex-end;gap:2px;background:#0f172a;padding:5px 8px 0;overflow-x:auto;white-space:nowrap;scrollbar-width:thin;scrollbar-color:#475569 #0f172a}
+#bid-screen-tabs::-webkit-scrollbar{height:6px}
+#bid-screen-tabs::-webkit-scrollbar-thumb{background:#475569;border-radius:3px}
+#bid-screen-tabs::-webkit-scrollbar-track{background:#0f172a}
 #bid-screen-tabs:empty{display:none}
 .bid-screen-tab-wrap{display:inline-flex;align-items:center;flex:0 1 150px;min-width:50px;gap:2px;background:#334155;border-radius:7px 7px 0 0;padding:0 3px 0 10px;height:32px;cursor:pointer;overflow:hidden}
 .bid-screen-tab-wrap.active-wrap{background:var(--bg)}
@@ -2366,16 +2373,14 @@ function calcEconScore(dbEntry,calc){
   var rU=_fU1?econForcedLiqRatio(_fU1):(Number(_pd.유동비율)/avgU)*100;
   if(isNaN(rD)||isNaN(rU))return null;
   var yr=calcYears(_pd.공사업등록일);
-  // ── 지자체 기준 분기 ──────────────────────────────────────────────
+  // ── 지자체는 econScore 시그니처가 다름(E5 대신 jijaTier가 필요) — 그릇(적격모듈)과 별개로 기존 방식 유지 ──
   if(isJija&&jijaTier>0)return 적격기준_지자체.econScore(rD,rU,yr,jijaTier);
-  // ── 철도공단 기준 (붙임3/붙임4-A공사, 조달청과 배점 다름) ──────────
-  var isRail=calc?calc.isRail:false;
-  if(isRail)return 적격기준_철도공단.econScore(rD,rU,yr,E5);
-  // ── LH 기준 (별표2/별표3-A공사, 2026-09-04 이식·정정 — 결과적으로 조달청 별표6/7A와 구간·배점 동일) ──
-  var isLH=calc?calc.isLH:false;
-  if(isLH)return 적격기준_LH.econScore(rD,rU,yr,E5);
-  // ── 조달청 기준 (별표6/7A) ────────────────────────────────────────
-  return 적격기준_조달청.econScore(rD,rU,yr,E5);
+  // ── 그 외 기관(조달청/LH/철도공단/도로공사/수자원공사 등)은 전부 (rD,rU,yr,E5) 시그니처를 공유하므로
+  //    calcBid()가 이미 계산해 둔 calc.적격모듈(그릇, resolveEligibilityModule 참고) 하나로 분기한다 —
+  //    isRail/isLH를 이 함수에서 다시 파생시키지 않음. 해당 모듈에 econScore가 없으면(예: 한전 —
+  //    적격판정 자체를 안 해서 경영상태 점수도 안 씀) 기존 동작 그대로 조달청 별표6/7A로 대체한다.
+  var mod=(calc&&calc.적격모듈&&calc.적격모듈.econScore)?calc.적격모듈:적격기준_조달청;
+  return mod.econScore(rD,rU,yr,E5);
 }
 
 // ████ SECTION: 신용평가 (별표10 파싱/점수/감점) ████
@@ -2807,6 +2812,31 @@ const 적격기준_한전 = {
     return{적격:false,적격사유:적격사유};
   }
 };
+
+// ████ SECTION: 적격기준 그릇(레지스트리) — b.적격기준 문자열 하나로 기관별 모듈을 조회 ████
+// 2026-09-04: 공고문분석/공고입력에서 확정된 "적격기준"(b.적격기준, 지자체·조달청·LH·철도공단·한전·도로공사·
+// 수자원공사 등)은 이미 이 파일 전체에서 유일하게 신뢰하는 원본 값이었지만, calcBid()/calcEconScore()/
+// calcSlot() 세 곳이 각자 isJija/isRail/isLH/isKEPCO 같은 boolean을 따로 다시 계산해 그걸로 if/else를
+// 타는 구조였다("그릇" 부재 — 같은 판단을 여러 곳에서 중복). 이 레지스트리는 그 문자열 → 모듈 매핑을
+// 한 곳에 모아, calcBid()가 계산 즉시 calc.적격모듈 하나에 담아두고(아래 calcBid 수정), calcEconScore/
+// calcSlot이 각자 flag를 다시 파생시키는 대신 이 하나의 참조로 분기하도록 정리한 것.
+// 도로공사/수자원공사는 별도 econScore/judge가 없고 조달청 기준을 그대로 쓰므로 조달청 모듈을 매핑한다
+// (isDoRo/isKW 자체는 이 매핑과 무관한 화면 표시·최대지분율 게이트용 플래그라 별도로 그대로 둠).
+// 지자체는 econScore 시그니처가 다르고(jijaTier 별도 계산 필요) judge()가 없어(조달청 판정을 그대로 씀)
+// 이 레지스트리엔 포함하되, 호출부에서 module별 시그니처 차이는 여전히 개별 처리한다(동작 변경 없음 —
+// 순수 "어느 모듈을 볼지"만 한 곳으로 모았다).
+var 적격기준_REGISTRY={
+  '지자체':적격기준_지자체,
+  '조달청':적격기준_조달청,
+  'LH':적격기준_LH,
+  '철도공단':적격기준_철도공단,
+  '한전':적격기준_한전,
+  '도로공사':적격기준_조달청,
+  '수자원공사':적격기준_조달청
+};
+function resolveEligibilityModule(적격기준){
+  return 적격기준_REGISTRY[적격기준]||적격기준_조달청;
+}
 
 // 확정메세지/조합결과TXT 참고용 신용등급 병기: 신용등급 대체가 실제 적용되지 않은 업체라도, 신용등급 감점이
 // 실제 적용된(경영비율) 감점보다 유리하면 "|등급" 또는 "|등급/-감점"으로 참고 병기한다.
@@ -3520,7 +3550,7 @@ function calcBid(){
     });
   }
   return{E3:E3,분담시평:분담시평,E4_eff:E4_eff,E5:E5,H4:H4,H6:H6,H7:H7,D7:D7,E6:E6,E7:E7,A값:A값,예정가격:예정가격,
-         is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,isKEPCO:isKEPCO,is10억:is10억,한전분담E6:한전분담E6,공종:normGongjong(state.bid.공종)||'전기',
+         is50억:E5>=LIMIT_50,isJija:isJija,jijaTier:jijaTier,use3yr:use3yr,isLH:isLH,lh지분율기준:lh지분율기준,품질평가점수:품질평가점수,isDoRo:isDoRo,isKW:isKW,isRail:isRail,isKEPCO:isKEPCO,is10억:is10억,한전분담E6:한전분담E6,적격기준방식:b.적격기준,적격모듈:resolveEligibilityModule(b.적격기준),공종:normGongjong(state.bid.공종)||'전기',
          auto배수:auto배수,auto투찰률:auto투찰률};
 }
 
@@ -3845,7 +3875,11 @@ function calcSlot(combo,calc){
   else if(지역의무미달)적격사유='지역의무지분 미달 (지역 '+TRIMDEC(지역지분합)+'% / 기준 '+지역의무지분+'%)';
   else if(분담누락)적격사유=필요분담grp?(필요분담grp+'업체 미등록 ('+displayGongjong(calc.공종)+'은 '+필요분담grp+' 슬롯 1개 이상 필요)'):'분담업체 미등록 (복합(전기+분담)은 분담 슬롯 1개 이상 필요)';
   else if(분담시평미달)적격사유='분담 시평 부족 (합산 '+FMT_NUM(Math.round(분담시평합산))+' / 제한 '+FMT_NUM(calc.분담시평)+')';
-  else if(calc.isLH){
+  // ── 2026-09-04: 이하 분기는 calc.isLH/isRail/isKEPCO를 다시 확인하는 대신, calcBid()가 b.적격기준
+  // 하나로부터 미리 골라둔 calc.적격모듈(그릇, resolveEligibilityModule 참고)을 기준으로 판단한다 —
+  // "어느 기관이냐"의 판단 지점을 하나로 모으는 목적일 뿐, 각 모듈의 judge() 인자·판정 로직 자체는
+  // 전혀 건드리지 않았다(기존 동작과 100% 동일).
+  else if(calc.적격모듈===적격기준_LH){
     // ── LH 우선순위 판정 (2026-08-28 변경) ────────────────────────────────
     // 1순위: 실적제한/시평제한/순신인도를 먼저 확인해 셋 다 충족하면 그대로 적격.
     // 2순위: 하나라도 부족하면 기존 LH 점수제(95점 만점)로 재판정 — 이 경우 적격이어도
@@ -3853,13 +3887,13 @@ function calcSlot(combo,calc){
     // 최종 점수(lh총점)를 확정메세지·조합결과TXT에 함께 표기한다. (적격기준_LH.judge 참고)
     var _ljd=적격기준_LH.judge(합산실적,calc.E6,합산시평,calc.E3,순신인도,감점환산,calc.품질평가점수,calc.E5,calc.예정가격,calc.A값,calc.H7,{try:_tryCreditRescue,revert:_revertCreditRescue});
     적격=_ljd.적격;적격사유=_ljd.적격사유;감점환산=_ljd.감점환산;순신인도=_ljd.순신인도;lh데이터=_ljd.lh데이터;
-  } else if(calc.isRail&&railScoreTier(calc.E5)){
+  } else if(calc.적격모듈===적격기준_철도공단&&railScoreTier(calc.E5)){
     // ── 철도공단 100점 배점제 적격 판정 (별표3 전기·정보통신공사, 추정가격 3억~100억 구간) ──
     // 3억 미만/100억 이상은 이 분기에 들어오지 않고 아래 일반(else) 게이트 방식(실적/시평/신인도)으로
     // 처리됨 — railScoreTier()가 null 반환. (적격기준_철도공단.judge 참고)
     var _rjd=적격기준_철도공단.judge(합산시평,calc.E3,합산실적,calc.E5,감점환산,순신인도,신인도환산,기술점수합계,calc.예정가격,calc.A값,calc.H7,{try:_tryCreditRescue,revert:_revertCreditRescue});
     적격=_rjd.적격;적격사유=_rjd.적격사유;감점환산=_rjd.감점환산;순신인도=_rjd.순신인도;railData=_rjd.railData;
-  } else if(calc.isKEPCO){
+  } else if(calc.적격모듈===적격기준_한전){
     // 한전(한국전력공사): 기초금액 대비 5년실적 비율만 계산·표시. 시평/신인도를 포함한 적격·부적격 판정은
     // 하지 않음(2026-08-12 사용자 요청). (적격기준_한전.judge 참고)
     var _kjd=적격기준_한전.judge(합산실적,ROW,calc.한전분담E6,calc.E6);
@@ -3867,7 +3901,8 @@ function calcSlot(combo,calc){
   } else {
     // ② 실적·시평은 충족하는데 경영상태비율(①) 기준 신인도만 부족한 경우, 감점업체 신용등급이
     //    재무비율보다 유리하면 대체 적용 후 재판정. 대체해도 여전히 미달이면 ①로 원복.
-    // (조달청 기본 판정 — 적격기준_조달청.judge 참고. 인천공항/도로공사/수자원공사도 이 판정을 그대로 씀)
+    // (조달청 기본 판정 — 적격기준_조달청.judge 참고. 지자체/인천공항/도로공사/수자원공사 및 3억미만·100억이상
+    //  철도공단도 calc.적격모듈이 여기로 떨어지거나 위 railScoreTier 조건 불충족으로 이 분기를 그대로 씀)
     var _jd=적격기준_조달청.judge(합산실적,calc.E6,합산시평,calc.E3,순신인도,감점환산,{try:_tryCreditRescue,revert:_revertCreditRescue});
     적격=_jd.적격;적격사유=_jd.적격사유;감점환산=_jd.감점환산;순신인도=_jd.순신인도;
   }
@@ -7551,6 +7586,15 @@ function updateBaseMultPlaceholders(){
 // ── 이벤트 바인딩 ────────────────────────────────────
 function bind(){
   updateBaseMultPlaceholders();
+  // 2026-09-04: #bid-screen-tabs가 overflow-x:auto로 바뀌면서, 세로 휠만 보내는 일반 마우스로도
+  // 탭을 넘겨볼 수 있도록 세로 휠 입력을 가로 스크롤로 변환(트랙패드 등 기본적으로 가로 스크롤이
+  // 되는 입력은 deltaX가 이미 있으므로 그대로 두고, deltaY만 있을 때만 변환).
+  (function(){
+    var _tb0=document.getElementById('bid-screen-tabs');
+    if(_tb0)_tb0.addEventListener('wheel',function(e){
+      if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){_tb0.scrollLeft+=e.deltaY;e.preventDefault();}
+    },{passive:false});
+  })();
   document.querySelectorAll('header nav button[data-tab]').forEach(function(btn){
     btn.addEventListener('click',function(){
       var _kbtn0=document.getElementById('btn-nav-kepco');if(_kbtn0)_kbtn0.classList.remove('active');
@@ -9695,7 +9739,13 @@ function searchBidScreens(term){
   }).filter(function(i){return i>=0;});
   renderBidScreenTabs();
   if(bidTabSearchMatches.length===0)toast('일치하는 입찰적격판정 탭이 없습니다','bad');
-  else toast(bidTabSearchMatches.length+'개 탭 일치','ok');
+  else{
+    toast(bidTabSearchMatches.length+'개 탭 일치','ok');
+    // 2026-09-04: 탭바가 overflow-x:auto로 바뀌어 화면 밖으로 스크롤된 탭도 실제로 존재할 수 있으므로,
+    // 첫 일치 탭을 자동으로 스크롤해 보이게 함(강조만 하고 안 보이면 검색 의미가 없어짐).
+    var _firstHit=document.querySelector('#bid-screen-tabs .bid-screen-tab-wrap.search-hit');
+    if(_firstHit)_firstHit.scrollIntoView({behavior:'smooth',block:'nearest',inline:'nearest'});
+  }
 }
 function renderBidScreenTabs(){
   var root=document.getElementById('bid-screen-tabs');
