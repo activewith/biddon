@@ -1866,17 +1866,18 @@ var ECON_TABLE_영업LH2=[{t:5,g:'5년+',s:2.0},{t:3,g:'3~5년',s:1.8},{g:'3년�
 function 부채등급LH2(r){return _econTier(ECON_TABLE_부채LH2,r,'lt');}
 function 유동등급LH2(r){return _econTier(ECON_TABLE_유동LH2,r,'gte');}
 function 영업등급LH2(y){return _econTier(ECON_TABLE_영업LH2,y,'gte');}
-// 별표3 A공사(추정가격 10억~50억 미만): 부채7+유동7+영업1=15점 — 유동·영업기간 구간은 조달청 별표7A와
-// 동일하나, 부채구간만 다름(LH: 100/130/160/190, 조달청 별표7A: 50/75/100/125).
-var ECON_TABLE_부채LH3=[{t:100,g:'A',s:7.0},{t:130,g:'B',s:6.2},{t:160,g:'C',s:5.4},{t:190,g:'D',s:4.6},{g:'E',s:3.8}];
+// 별표3(추정가격 3억~50억)은 업종에 따라 A공사/B공사로 배점표가 나뉜다(부채비율 구간만 다르고 배점 자체는
+// 동일). 이 툴이 다루는 전기·정보통신·소방시설·문화재공사 등은 A공사(10억~50억 미만) — 부채구간 50/75/100/125,
+// 배점 7.0/6.2/5.4/4.6/3.8로 조달청 별표7A와 완전히 동일. B공사(그 외 업종, 3억~50억)는 부채구간이
+// 100/130/160/190로 다르지만, 3억~10억 구간 자체가 이 업무 범위 밖이라 여기서는 다루지 않는다.
+// 2026-09-04 최초 이식 시 별표3 표를 잘못 읽어 B공사 부채구간(100/130/160/190)을 A공사 자리에 넣는 바람에
+// 실제 판정 결과가 틀어지는 버그가 있었음 — 같은 날 사용자가 실사용 중 발견해 A공사 구간(=별표7A와 동일)으로 정정.
+var ECON_TABLE_부채LH3=[{t:50,g:'A',s:7.0},{t:75,g:'B',s:6.2},{t:100,g:'C',s:5.4},{t:125,g:'D',s:4.6},{g:'E',s:3.8}];
 var ECON_TABLE_유동LH3=[{t:150,g:'A',s:7.0},{t:120,g:'B',s:6.2},{t:100,g:'C',s:5.4},{t:70,g:'D',s:4.6},{g:'E',s:3.8}];
 var ECON_TABLE_영업LH3=[{t:3,g:'3년+',s:1.0},{t:1,g:'1~3년',s:0.9},{g:'1년미만',s:0.8}];
 function 부채등급LH3(r){return _econTier(ECON_TABLE_부채LH3,r,'lt');}
 function 유동등급LH3(r){return _econTier(ECON_TABLE_유동LH3,r,'gte');}
 function 영업등급LH3(y){return _econTier(ECON_TABLE_영업LH3,y,'gte');}
-// 별표3 부채비율 강제등급(만점 체크 등) 대표값 — 조달청 표준 강제등급표(50/75/100/125 기준)와는
-// 구간이 달라 별도 매핑이 필요함(구 lhEconFromDB의 LH3_FORCE_DEBT_RATIO 그대로).
-var LH3_FORCE_DEBT_RATIO={A:0,B:115,C:145,D:175,E:200};
 
 // ── 철도공단(국가철도공단) 경영상태 배점표 ────────────────────────────
 // 붙임3/붙임4는 별표6/7A와 값이 유사하지만 반올림 방식이 달라 독립된 표를 그대로 유지함(계수 환산 아님).
@@ -2370,9 +2371,9 @@ function calcEconScore(dbEntry,calc){
   // ── 철도공단 기준 (붙임3/붙임4-A공사, 조달청과 배점 다름) ──────────
   var isRail=calc?calc.isRail:false;
   if(isRail)return 적격기준_철도공단.econScore(rD,rU,yr,E5);
-  // ── LH 기준 (별표2/별표3, 별표3만 조달청과 부채구간 다름 — 2026-09-04) ──
+  // ── LH 기준 (별표2/별표3-A공사, 2026-09-04 이식·정정 — 결과적으로 조달청 별표6/7A와 구간·배점 동일) ──
   var isLH=calc?calc.isLH:false;
-  if(isLH)return 적격기준_LH.econScore(rD,rU,yr,E5,_fD1);
+  if(isLH)return 적격기준_LH.econScore(rD,rU,yr,E5);
   // ── 조달청 기준 (별표6/7A) ────────────────────────────────────────
   return 적격기준_조달청.econScore(rD,rU,yr,E5);
 }
@@ -2576,23 +2577,22 @@ const 적격기준_조달청 = {
 // 2단계 구조. UI 쪽(강제할당 버튼 색상, LH 점수 상세 패널, srType 표시 문자열 등)은 이번에도 손대지 않았고,
 // 계산 로직(간이 점수·최종 판정)만 옮겼다. priceScore는 기존 lhCalcPriceScore 함수를 그대로 참조한다.
 const 적격기준_LH = {
-  // 경영상태 점수(별표2/별표3) — 2026-09-04: calcEconScore가 그동안 LH도 조달청 별표6/7A 기준으로
-  // 계산해오던 것을, LH 고유 배점표(위 ECON_TABLE_*LH2/LH3)를 쓰도록 교체. 별표2(50억+)는 조달청
-  // 별표6과 구간·배점이 동일해 결과가 안 바뀌지만, 별표3(10~50억)은 부채구간이 달라 결과가 바뀔 수 있음.
-  // forcedDebtGrade: calcEconScore가 넘겨주는 부채비율 "만점/등급 강제" 문자('A'~'E', 강제 없으면 falsy).
-  // 별표3에서만 조달청 표준 강제등급표 대신 LH3_FORCE_DEBT_RATIO로 rD를 다시 계산해 구간을 맞춘다.
-  econScore: function(rD,rU,yr,E5,forcedDebtGrade){
+  // 경영상태 점수(별표2/별표3-A공사) — 2026-09-04: calcEconScore가 그동안 LH도 조달청 별표6/7A 기준으로
+  // 계산해오던 것을 LH 고유 배점표(위 ECON_TABLE_*LH2/LH3)를 쓰도록 교체. 별표2(50억+)·별표3-A공사(10~50억,
+  // 이 툴이 다루는 전기공사 등) 모두 구간·배점이 조달청 별표6/7A와 완전히 동일하다고 재확인됨(2026-09-04
+  // 정정 — 최초 이식 시 별표3을 B공사 구간으로 잘못 옮겨 실사용 중 오판정이 발생했었음). rD는 calcEconScore가
+  // 이미 만점강제/실비율을 반영해 계산해 넘겨주므로 여기서 별도 보정 불필요.
+  econScore: function(rD,rU,yr,E5){
     if(E5>=LIMIT_50){
       var bd2=부채등급LH2(rD);var ud2=유동등급LH2(rU);
       var od2=yr!=null?영업등급LH2(yr):null;
       var sc2=(bd2.s+ud2.s+(od2?od2.s:0))*15/45;
       return{type:'LH2',부채:bd2,유동:ud2,영업:od2,score:sc2,rD:rD,rU:rU,yr:yr};
     } else if(E5>=LIMIT_10){
-      var rD3=forcedDebtGrade?(LH3_FORCE_DEBT_RATIO[forcedDebtGrade]!=null?LH3_FORCE_DEBT_RATIO[forcedDebtGrade]:0):rD;
-      var bd3=부채등급LH3(rD3);var ud3=유동등급LH3(rU);
+      var bd3=부채등급LH3(rD);var ud3=유동등급LH3(rU);
       var od3=yr!=null?영업등급LH3(yr):null;
       var sc3=bd3.s+ud3.s+(od3?od3.s:0);
-      return{type:'LH3',부채:bd3,유동:ud3,영업:od3,score:sc3,rD:rD3,rU:rU,yr:yr};
+      return{type:'LH3',부채:bd3,유동:ud3,영업:od3,score:sc3,rD:rD,rU:rU,yr:yr};
     }
     return null;
   },
