@@ -2813,6 +2813,38 @@ const 적격기준_한전 = {
   }
 };
 
+// ████ SECTION: 적격기준 구조화 (도로공사·수자원공사) ████
+// 도로공사/수자원공사는 경영상태 점수(econScore)·적격판정(judge)은 조달청 기준(별표6/7A)을 그대로 쓰지만,
+// 안전보건경영시스템 가점·일자리창출 가점 적용비율은 기관마다 고유하다(calcSafetyBonus 참고 — 이 함수
+// 자체는 원래도 단일 함수였음). 문제는 "이 기관이면 어떤 srType 문자열을 쓰고, 일자리가점 raw값에 어떤
+// 비율을 곱하는가"를 계산하는 짧은 삼항연산자 체인이 파일 6곳(3751/3753, 4026/4045, 4064, 6510/6523,
+// 7396/7399, 8034/8037, 8055/8058행 부근)에 그대로 복붙되어 있었다는 것 — 2026-09-04에 이 두 기관을
+// 모듈로 정리하면서 그 6곳을 전부 이 모듈 호출로 교체했다(아래 참고).
+// **정리 과정에서 발견한 기존 버그(사용자에게 별도 안내):** buildTypeCompanyOptions()의 showPct=false
+// 분기(4064행 부근, 도로공사처럼 최대지분율 표시를 안 하는 기관용 드롭다운 라벨)에 있던 사본 하나에는
+// 'DoRo6'(도로공사 50억+) 케이스가 아예 빠져 있어서, 도로공사 50억+ 공고의 업체 드롭다운 라벨에만
+// 일자리가점이 ×0.3 축소 없이(=원값 그대로) 표시되고 있었다. 실제 조합 점수 계산(3753/7399/8037/8058)은
+// 전부 정상이었으므로 실제 적격판정 결과에는 영향이 없었고, 드롭다운에 보이는 참고용 숫자만 부정확했다.
+// 이번에 모듈 호출로 통일하면서 이 사본도 같이 정상화됨 — 즉 이 리팩터로 도로공사 50억+ 드롭다운 라벨의
+// 표시값이 바뀐다(더 작아짐, 올바른 방향으로).
+const 적격기준_도로공사 = {
+  srType: function(is50억){ return is50억?'DoRo6':'DoRo7A'; },
+  // 50억+(DoRo6)만 raw×0.3으로 축소, 50억 미만(DoRo7A)은 raw 그대로(축소 없음) — calcSafetyBonus 주석의
+  // "도로공사 50억+: KOSHA/ISO 1점×30%=0.3 / 50억미만: KOSHA/ISO 모두 +1.0"과 같은 축소 패턴.
+  jobBonusRatio: function(raw,is50억){ return is50억?Math.round(raw*0.3*100)/100:raw; },
+  safetyBonus: function(system,is50억){ return calcSafetyBonus(system,this.srType(is50억)); },
+  econScore: 적격기준_조달청.econScore,
+  judge: 적격기준_조달청.judge
+};
+const 적격기준_수자원공사 = {
+  srType: function(is50억){ return is50억?'KW6':'KW7A'; },
+  // 50억+(KW6)만 raw×0.5로 축소, 50억 미만(KW7A)은 raw 그대로.
+  jobBonusRatio: function(raw,is50억){ return is50억?Math.round(raw*0.5*100)/100:raw; },
+  safetyBonus: function(system,is50억){ return calcSafetyBonus(system,this.srType(is50억)); },
+  econScore: 적격기준_조달청.econScore,
+  judge: 적격기준_조달청.judge
+};
+
 // ████ SECTION: 적격기준 그릇(레지스트리) — b.적격기준 문자열 하나로 기관별 모듈을 조회 ████
 // 2026-09-04: 공고문분석/공고입력에서 확정된 "적격기준"(b.적격기준, 지자체·조달청·LH·철도공단·한전·도로공사·
 // 수자원공사 등)은 이미 이 파일 전체에서 유일하게 신뢰하는 원본 값이었지만, calcBid()/calcEconScore()/
@@ -2820,7 +2852,9 @@ const 적격기준_한전 = {
 // 타는 구조였다("그릇" 부재 — 같은 판단을 여러 곳에서 중복). 이 레지스트리는 그 문자열 → 모듈 매핑을
 // 한 곳에 모아, calcBid()가 계산 즉시 calc.적격모듈 하나에 담아두고(아래 calcBid 수정), calcEconScore/
 // calcSlot이 각자 flag를 다시 파생시키는 대신 이 하나의 참조로 분기하도록 정리한 것.
-// 도로공사/수자원공사는 별도 econScore/judge가 없고 조달청 기준을 그대로 쓰므로 조달청 모듈을 매핑한다
+// 도로공사/수자원공사는 위에서 정의한 자체 모듈을 매핑한다 — econScore/judge는 내부적으로 조달청
+// 함수를 그대로 참조하므로 판정 결과는 기존과 동일하고, srType/jobBonusRatio/safetyBonus는 이 두
+// 기관만의 고유 로직(각 모듈 정의부 참고)이다.
 // (isDoRo/isKW 자체는 이 매핑과 무관한 화면 표시·최대지분율 게이트용 플래그라 별도로 그대로 둠).
 // 지자체는 econScore 시그니처가 다르고(jijaTier 별도 계산 필요) judge()가 없어(조달청 판정을 그대로 씀)
 // 이 레지스트리엔 포함하되, 호출부에서 module별 시그니처 차이는 여전히 개별 처리한다(동작 변경 없음 —
@@ -2831,8 +2865,8 @@ var 적격기준_REGISTRY={
   'LH':적격기준_LH,
   '철도공단':적격기준_철도공단,
   '한전':적격기준_한전,
-  '도로공사':적격기준_조달청,
-  '수자원공사':적격기준_조달청
+  '도로공사':적격기준_도로공사,
+  '수자원공사':적격기준_수자원공사
 };
 function resolveEligibilityModule(적격기준){
   return 적격기준_REGISTRY[적격기준]||적격기준_조달청;
@@ -3748,9 +3782,9 @@ function calcSlot(combo,calc){
     var _신인도Override=!!s.신인도Override;
     if(!calc.isJija&&dbEntry){
       if(!_신인도Override){
-        var _srTypeS=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc.isKW?(calc.is50억?'KW6':'KW7A'):calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc.is50억?'6':'7A');
+        var _srTypeS=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?적격기준_도로공사.srType(calc.is50억):calc.isKW?적격기준_수자원공사.srType(calc.is50억):calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc.is50억?'6':'7A');
         var _rawS=Number(dbEntry.일자리가점!=null?dbEntry.일자리가점:(dbEntry.신인도||0));
-        var _jaS=(_srTypeS==='6')?Math.round(_rawS/3*100)/100:(_srTypeS==='DoRo6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='KW6')?Math.round(_rawS*0.5*100)/100:(_srTypeS==='LH6'||_srTypeS==='LH7A')?((_rawS>=2.5?1.0:0)+(_rawS===0.5||_rawS===3.0?0.5:0)):(_srTypeS==='철도6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='철도7A')?Math.round(_rawS*(0.5/3)*100)/100:_rawS;
+        var _jaS=(_srTypeS==='6')?Math.round(_rawS/3*100)/100:(_srTypeS==='DoRo6'||_srTypeS==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_rawS,_srTypeS==='DoRo6'):(_srTypeS==='KW6'||_srTypeS==='KW7A')?적격기준_수자원공사.jobBonusRatio(_rawS,_srTypeS==='KW6'):(_srTypeS==='LH6'||_srTypeS==='LH7A')?((_rawS>=2.5?1.0:0)+(_rawS===0.5||_rawS===3.0?0.5:0)):(_srTypeS==='철도6')?Math.round(_rawS*0.3*100)/100:(_srTypeS==='철도7A')?Math.round(_rawS*(0.5/3)*100)/100:_rawS;
         신인도=_jaS+calcSafetyBonus(dbEntry.안전보건시스템||'',_srTypeS);
         if(_srTypeS==='LH6'||_srTypeS==='LH7A') 신인도=Math.min(신인도,1.5); // LH 신인도 배점한도 +1.5
       }
@@ -4023,7 +4057,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
   var usedEl=currentCi!=null?getUsedElsewhere(currentCi):new Set();
   var html='<option value="">— 업체 선택 —</option>';
   var showPct=calc&&!calc.isDoRo&&!calc.isKEPCO&&(calc.E7>0||(calc.isLH&&calc.lh지분율기준));
-  var srType=calc&&calc.isLH?(calc.is50억?'LH6':'LH7A'):calc&&calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc&&calc.isKW?(calc.is50억?'KW6':'KW7A'):calc&&calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc&&calc.is50억?'6':'7A');
+  var srType=calc&&calc.isLH?(calc.is50억?'LH6':'LH7A'):calc&&calc.isDoRo?적격기준_도로공사.srType(calc.is50억):calc&&calc.isKW?적격기준_수자원공사.srType(calc.is50억):calc&&calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc&&calc.is50억?'6':'7A');
   // 업체 옵션 HTML 생성 헬퍼
   function makeOpt(c,extra){
     var label=esc(c.업체명);
@@ -4042,8 +4076,8 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
       } else {
         var _raw일자리=Number(c.일자리가점!=null?c.일자리가점:(c.신인도||0));
         var _일자리적용=(srType==='6')?Math.round(_raw일자리/3*100)/100
-                      :(srType==='DoRo6')?Math.round(_raw일자리*0.3*100)/100
-                      :(srType==='KW6')?Math.round(_raw일자리*0.5*100)/100
+                      :(srType==='DoRo6'||srType==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_raw일자리,srType==='DoRo6')
+                      :(srType==='KW6'||srType==='KW7A')?적격기준_수자원공사.jobBonusRatio(_raw일자리,srType==='KW6')
                       :(srType==='LH6'||srType==='LH7A')?((_raw일자리>=2.5?1.0:0)+(_raw일자리===0.5||_raw일자리===3.0?0.5:0))
                       :(srType==='철도6')?Math.round(_raw일자리*0.3*100)/100
                       :(srType==='철도7A')?Math.round(_raw일자리*(0.5/3)*100)/100
@@ -4060,8 +4094,12 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
       // showPct=false(도로공사 등)여도 신인도/신용평가등급은 표시
       var _effDed2=getEffectiveDeduction(c,calc);
       var _raw2=Number(c.일자리가점!=null?c.일자리가점:(c.신인도||0));
+      // 2026-09-04: 이 사본엔 'DoRo6'(도로공사 50억+) 케이스가 빠져 있어, 도로공사 50억+ 업체 드롭다운
+      // 라벨에서만 일자리가점이 ×0.3 축소 없이 표시되던 기존 버그를 여기서 함께 바로잡음(다른 계산 경로는
+      // 이미 정상이었음 — 실제 적격판정 결과에는 영향 없었던 표시 전용 버그, [[bid_tool_doro_kw_module]] 참고).
       var _일자리2=(srType==='6')?Math.round(_raw2/3*100)/100
-                  :(srType==='KW6')?Math.round(_raw2*0.5*100)/100
+                  :(srType==='DoRo6'||srType==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_raw2,srType==='DoRo6')
+                  :(srType==='KW6'||srType==='KW7A')?적격기준_수자원공사.jobBonusRatio(_raw2,srType==='KW6')
                   :(srType==='LH6'||srType==='LH7A')?((_raw2>=2.5?1.0:0)+(_raw2===0.5||_raw2===3.0?0.5:0))
                   :(srType==='철도6')?Math.round(_raw2*0.3*100)/100
                   :(srType==='철도7A')?Math.round(_raw2*(0.5/3)*100)/100
@@ -6507,7 +6545,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   var remainLines=[];
   (function(){
     if(c.isDoRo||c.isKEPCO||!(c.E7>0||(c.isLH&&c.lh지분율기준)))return;
-    var srType=c.isLH?(c.is50억?'LH6':'LH7A'):c.isKW?(c.is50억?'KW6':'KW7A'):c.isRail?(c.is50억?'철도6':'철도7A'):(c.is50억?'6':'7A');
+    var srType=c.isLH?(c.is50억?'LH6':'LH7A'):c.isKW?적격기준_수자원공사.srType(c.is50억):c.isRail?(c.is50억?'철도6':'철도7A'):(c.is50억?'6':'7A');
     var 기준E7=c.isLH&&c.lh지분율기준?c.lh지분율기준:c.E7;
     var cand=getDbByType('지역',c).filter(function(cc){return !seen[cc.업체명];});
     var rows=cand.map(function(cc){
@@ -6520,7 +6558,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
         if(_jed4.method==='credit')credGrade=_jed4.grade; // 재무비율보다 신용등급이 유리해 대체된 경우
       }else{
         var raw=Number(cc.일자리가점!=null?cc.일자리가점:(cc.신인도||0));
-        var ja=(srType==='6')?Math.round(raw/3*100)/100:(srType==='KW6')?Math.round(raw*0.5*100)/100:(srType==='LH6'||srType==='LH7A')?((raw>=2.5?1.0:0)+(raw===0.5||raw===3.0?0.5:0)):(srType==='철도6')?Math.round(raw*0.3*100)/100:(srType==='철도7A')?Math.round(raw*(0.5/3)*100)/100:raw;
+        var ja=(srType==='6')?Math.round(raw/3*100)/100:(srType==='KW6'||srType==='KW7A')?적격기준_수자원공사.jobBonusRatio(raw,srType==='KW6'):(srType==='LH6'||srType==='LH7A')?((raw>=2.5?1.0:0)+(raw===0.5||raw===3.0?0.5:0)):(srType==='철도6')?Math.round(raw*0.3*100)/100:(srType==='철도7A')?Math.round(raw*(0.5/3)*100)/100:raw;
         var jaTot=ja+calcSafetyBonus(cc.안전보건시스템||'',srType);
         if(srType==='LH6'||srType==='LH7A')jaTot=Math.min(jaTot,1.5);
         // 2026-08-06: 재무비율(econ) 감점만 쓰던 것을 getEffectiveDeduction으로 교체 —
@@ -7393,10 +7431,10 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
 
   // DB 업체를 슬롯 데이터로 변환 (검색/드롭다운 선택 시와 동일한 방식)
   function buildSlotFromDb(cc,지분율,grp){
-    var _type=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?(calc.is50억?'DoRo6':'DoRo7A'):calc.isKW?(calc.is50억?'KW6':'KW7A'):calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc.is50억?'6':'7A');
+    var _type=calc.isLH?(calc.is50억?'LH6':'LH7A'):calc.isDoRo?적격기준_도로공사.srType(calc.is50억):calc.isKW?적격기준_수자원공사.srType(calc.is50억):calc.isRail?(calc.is50억?'철도6':'철도7A'):(calc.is50억?'6':'7A');
     var _sb=calcSafetyBonus(cc.안전보건시스템||'',_type);
     var _rj=Number(cc.일자리가점)||0;
-    var _ja=(_type==='6')?Math.round(_rj/3*100)/100:(_type==='DoRo6')?Math.round(_rj*0.3*100)/100:(_type==='KW6')?Math.round(_rj*0.5*100)/100:(_type==='LH6'||_type==='LH7A')?((_rj>=2.5?1.0:0)+(_rj===0.5||_rj===3.0?0.5:0)):(_type==='철도6')?Math.round(_rj*0.3*100)/100:(_type==='철도7A')?Math.round(_rj*(0.5/3)*100)/100:_rj;
+    var _ja=(_type==='6')?Math.round(_rj/3*100)/100:(_type==='DoRo6'||_type==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_rj,_type==='DoRo6'):(_type==='KW6'||_type==='KW7A')?적격기준_수자원공사.jobBonusRatio(_rj,_type==='KW6'):(_type==='LH6'||_type==='LH7A')?((_rj>=2.5?1.0:0)+(_rj===0.5||_rj===3.0?0.5:0)):(_type==='철도6')?Math.round(_rj*0.3*100)/100:(_type==='철도7A')?Math.round(_rj*(0.5/3)*100)/100:_rj;
     var _sinindo=(_type==='LH6'||_type==='LH7A')?Math.min(_ja+_sb,1.5):_ja+_sb;
     var _eff=getEffectiveDeduction(cc,calc);var _pdc=getCompPerfData(cc,calc.공종||'전기');
     return{업체명:cc.업체명,신인도:_sinindo,감점:_eff.value,실적:(calc.use3yr?(_pdc.실적3||0):(_pdc.실적5||0)),시평액:_pdc.시평액||0,지분율:지분율,grp:grp,isRec:true,개별최대지분율:cc.개별최대지분율!=null?cc.개별최대지분율:null};
@@ -8031,10 +8069,10 @@ function bind(){
       var cc=state.db.find(function(x){return x.업체명===name;});
       if(cc){
         withLegacyDBIfNeeded(function(){
-        var _calc=calcBid();var _type=_calc.isLH?(_calc.is50억?'LH6':'LH7A'):_calc.isDoRo?(_calc.is50억?'DoRo6':'DoRo7A'):_calc.isKW?(_calc.is50억?'KW6':'KW7A'):_calc.isRail?(_calc.is50억?'철도6':'철도7A'):(_calc.is50억?'6':'7A');
+        var _calc=calcBid();var _type=_calc.isLH?(_calc.is50억?'LH6':'LH7A'):_calc.isDoRo?적격기준_도로공사.srType(_calc.is50억):_calc.isKW?적격기준_수자원공사.srType(_calc.is50억):_calc.isRail?(_calc.is50억?'철도6':'철도7A'):(_calc.is50억?'6':'7A');
         var _sb=calcSafetyBonus(cc.안전보건시스템||'',_type);
         var _raw일자리=Number(cc.일자리가점)||0;
-        var _일자리적용=(_type==='6')?Math.round(_raw일자리/3*100)/100:(_type==='DoRo6')?Math.round(_raw일자리*0.3*100)/100:(_type==='KW6')?Math.round(_raw일자리*0.5*100)/100:(_type==='LH6'||_type==='LH7A')?((_raw일자리>=2.5?1.0:0)+(_raw일자리===0.5||_raw일자리===3.0?0.5:0)):(_type==='철도6')?Math.round(_raw일자리*0.3*100)/100:(_type==='철도7A')?Math.round(_raw일자리*(0.5/3)*100)/100:_raw일자리;
+        var _일자리적용=(_type==='6')?Math.round(_raw일자리/3*100)/100:(_type==='DoRo6'||_type==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_raw일자리,_type==='DoRo6'):(_type==='KW6'||_type==='KW7A')?적격기준_수자원공사.jobBonusRatio(_raw일자리,_type==='KW6'):(_type==='LH6'||_type==='LH7A')?((_raw일자리>=2.5?1.0:0)+(_raw일자리===0.5||_raw일자리===3.0?0.5:0)):(_type==='철도6')?Math.round(_raw일자리*0.3*100)/100:(_type==='철도7A')?Math.round(_raw일자리*(0.5/3)*100)/100:_raw일자리;
         var _sinindo=(_type==='LH6'||_type==='LH7A')?Math.min(_일자리적용+_sb,1.5):_일자리적용+_sb; // LH cap +1.5
         var _eff6=getEffectiveDeduction(cc,_calc);var _pdc=getCompPerfData(cc,effPerfGongjong(oldGrp,_calc));state.combos[pci].slots[psi]={업체명:cc.업체명,신인도:_sinindo,감점:_eff6.value,실적:(_calc.use3yr?(_pdc.실적3||0):(_pdc.실적5||0)),시평액:_pdc.시평액||0,지분율:old지분,grp:oldGrp,isRec:false,개별최대지분율:cc.개별최대지분율!=null?cc.개별최대지분율:null,Func:(oldGrp==='통신'||oldGrp==='소방')?oldGrp:undefined};
         });
@@ -8052,10 +8090,10 @@ function bind(){
     var cc=state.db.find(function(x){return x.업체명===name;});
     if(cc){
       withLegacyDBIfNeeded(function(){
-      var _calc2=calcBid();var _type2=_calc2.isLH?(_calc2.is50억?'LH6':'LH7A'):_calc2.isDoRo?(_calc2.is50억?'DoRo6':'DoRo7A'):_calc2.isKW?(_calc2.is50억?'KW6':'KW7A'):_calc2.isRail?(_calc2.is50억?'철도6':'철도7A'):(_calc2.is50억?'6':'7A');
+      var _calc2=calcBid();var _type2=_calc2.isLH?(_calc2.is50억?'LH6':'LH7A'):_calc2.isDoRo?적격기준_도로공사.srType(_calc2.is50억):_calc2.isKW?적격기준_수자원공사.srType(_calc2.is50억):_calc2.isRail?(_calc2.is50억?'철도6':'철도7A'):(_calc2.is50억?'6':'7A');
       var _sb2=calcSafetyBonus(cc.안전보건시스템||'',_type2);
       var _raw일자리2=Number(cc.일자리가점)||0;
-      var _일자리적용2=(_type2==='6')?Math.round(_raw일자리2/3*100)/100:(_type2==='DoRo6')?Math.round(_raw일자리2*0.3*100)/100:(_type2==='KW6')?Math.round(_raw일자리2*0.5*100)/100:(_type2==='LH6'||_type2==='LH7A')?((_raw일자리2>=2.5?1.0:0)+(_raw일자리2===0.5||_raw일자리2===3.0?0.5:0)):(_type2==='철도6')?Math.round(_raw일자리2*0.3*100)/100:(_type2==='철도7A')?Math.round(_raw일자리2*(0.5/3)*100)/100:_raw일자리2;
+      var _일자리적용2=(_type2==='6')?Math.round(_raw일자리2/3*100)/100:(_type2==='DoRo6'||_type2==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_raw일자리2,_type2==='DoRo6'):(_type2==='KW6'||_type2==='KW7A')?적격기준_수자원공사.jobBonusRatio(_raw일자리2,_type2==='KW6'):(_type2==='LH6'||_type2==='LH7A')?((_raw일자리2>=2.5?1.0:0)+(_raw일자리2===0.5||_raw일자리2===3.0?0.5:0)):(_type2==='철도6')?Math.round(_raw일자리2*0.3*100)/100:(_type2==='철도7A')?Math.round(_raw일자리2*(0.5/3)*100)/100:_raw일자리2;
       var _sinindo2=(_type2==='LH6'||_type2==='LH7A')?Math.min(_일자리적용2+_sb2,1.5):_일자리적용2+_sb2; // LH cap +1.5
       var _eff7=getEffectiveDeduction(cc,_calc2);var _pdc2=getCompPerfData(cc,_calc2.공종||'전기');state.combos[mci].slots[msi]={업체명:cc.업체명,신인도:_sinindo2,감점:_eff7.value,실적:(_calc2.use3yr?(_pdc2.실적3||0):(_pdc2.실적5||0)),시평액:_pdc2.시평액||0,지분율:old지분,grp:'검색',isRec:false,개별최대지분율:cc.개별최대지분율!=null?cc.개별최대지분율:null};
       });
