@@ -2410,18 +2410,7 @@ function calcEconScore(dbEntry,calc){
     return null;
   }
   // ── 조달청 기준 (별표6/7A) ────────────────────────────────────────
-  if(E5>=5000000000){
-    var bd6=부채등급6(rD);var ud6=유동등급6(rU);
-    var od6=yr!=null?영업등급6(yr):null;
-    var sc6=(bd6.s+ud6.s+(od6?od6.s:0))*15/45;
-    return{type:'6',부채:bd6,유동:ud6,영업:od6,score:sc6,rD:rD,rU:rU,yr:yr};
-  } else if(E5>=1000000000){
-    var bd7=부채등급7A(rD);var ud7=유동등급7A(rU);
-    var od7=yr!=null?영업등급7(yr):null;
-    var sc7=bd7.s+ud7.s+(od7?od7.s:0);
-    return{type:'7A',부채:bd7,유동:ud7,영업:od7,score:sc7,rD:rD,rU:rU,yr:yr};
-  }
-  return null;
+  return 적격기준_조달청.econScore(rD,rU,yr,E5);
 }
 
 // ████ SECTION: 신용평가 (별표10 파싱/점수/감점) ████
@@ -2566,6 +2555,57 @@ function jijaEffectiveDeduction(dbEntry,calc){
   return{value:Math.abs(Number(dbEntry.감점)||0),method:'fallback',grade:null,ratioDed:null,ok:false};
 }
 적격기준_지자체.effectiveDeduction=jijaEffectiveDeduction;
+
+// ████ SECTION: 적격기준 구조화 (파일럿 — 조달청) ████
+// 조달청은 지자체와 달리 전용 플래그(isXXX)가 없음 — LH·철도공단·한전을 걸러낸 "기본" 판정이
+// 곧 조달청 로직이고, 인천공항·도로공사·수자원공사도 그대로 쓰며, 지자체도 자기 입력값(E6/신인도 등)을
+// 앞단에서 조정한 뒤 결국 이 판정을 통과한다. 즉 이 모듈은 "조달청 전용"이라기보다 앱의 공용 기본
+// 판정 엔진이며, 아래로 옮긴 뒤에도 이 엔진을 쓰는 다른 기관들의 동작은 전혀 바뀌지 않는다(원래도
+// 같은 코드를 그대로 실행하고 있었음). LH/철도공단/한전 자체 판정 로직은 이번에도 손대지 않았다.
+const 적격기준_조달청 = {
+  // 경영상태 점수(별표6/7A) — 추정가격 10억 미만은 해당 없음(null)
+  econScore: function(rD,rU,yr,E5){
+    if(E5>=LIMIT_50){
+      var bd6=부채등급6(rD);var ud6=유동등급6(rU);
+      var od6=yr!=null?영업등급6(yr):null;
+      var sc6=(bd6.s+ud6.s+(od6?od6.s:0))*15/45;
+      return{type:'6',부채:bd6,유동:ud6,영업:od6,score:sc6,rD:rD,rU:rU,yr:yr};
+    } else if(E5>=LIMIT_10){
+      var bd7=부채등급7A(rD);var ud7=유동등급7A(rU);
+      var od7=yr!=null?영업등급7(yr):null;
+      var sc7=bd7.s+ud7.s+(od7?od7.s:0);
+      return{type:'7A',부채:bd7,유동:ud7,영업:od7,score:sc7,rD:rD,rU:rU,yr:yr};
+    }
+    return null;
+  },
+  // 실적/시평/신인도 요건 확인 + 신인도만 부족할 때 신용등급 구제 재판정까지 포함한 최종 적격 판정.
+  // calcSlot()의 기존 "else" 분기(LH/철도공단/한전이 아닌 모든 경우)를 그대로 옮긴 것 — 조건 순서·문구 동일.
+  // rescue.try/revert는 calcSlot 스코프의 _tryCreditRescue/_revertCreditRescue를 그대로 넘겨받아 씀
+  // (감점환산·순신인도는 그 함수들이 참조하는 calcSlot 로컬 변수라 여기서 직접 만들 수 없음 — 최신값은
+  // 이 함수의 인자로 받고, 바뀐 값은 반환해서 호출부가 다시 반영하도록 함).
+  judge: function(합산실적,E6,합산시평,E3,순신인도,감점환산,rescue){
+    var 실적OK=합산실적>E6;
+    var 시평OK=(E3==null)?true:(합산시평>E3);
+    var 신인도OK=순신인도>=0;
+    if(실적OK&&시평OK&&!신인도OK){
+      var _rescue=rescue.try();
+      if(_rescue){
+        if(_rescue.순신인도>=0){
+          감점환산=_rescue.감점환산;순신인도=_rescue.순신인도;신인도OK=true;
+        } else {
+          rescue.revert(_rescue.applied);
+        }
+      }
+    }
+    var 적격=false,적격사유='';
+    if(실적OK&&시평OK&&신인도OK){적격=true;적격사유='적격';}
+    else if(!실적OK&&!시평OK)적격사유='실적·시평 모두 부족';
+    else if(!실적OK)적격사유='실적 부족';
+    else if(!시평OK)적격사유='시평 부족';
+    else 적격사유='신인도 감점 초과(순신인도 '+TRIM3(순신인도)+')';
+    return{적격:적격,적격사유:적격사유,감점환산:감점환산,순신인도:순신인도};
+  }
+};
 
 // 확정메세지/조합결과TXT 참고용 신용등급 병기: 신용등급 대체가 실제 적용되지 않은 업체라도, 신용등급 감점이
 // 실제 적용된(경영비율) 감점보다 유리하면 "|등급" 또는 "|등급/-감점"으로 참고 병기한다.
@@ -3744,26 +3784,11 @@ function calcSlot(combo,calc){
     }
     적격=false;
   } else {
-    var 실적OK=합산실적>calc.E6;
-    var 시평OK=(calc.E3==null)?true:(합산시평>calc.E3);
-    var 신인도OK=순신인도>=0;
     // ② 실적·시평은 충족하는데 경영상태비율(①) 기준 신인도만 부족한 경우, 감점업체 신용등급이
     //    재무비율보다 유리하면 대체 적용 후 재판정. 대체해도 여전히 미달이면 ①로 원복.
-    if(실적OK&&시평OK&&!신인도OK){
-      var _rescue=_tryCreditRescue();
-      if(_rescue){
-        if(_rescue.순신인도>=0){
-          감점환산=_rescue.감점환산;순신인도=_rescue.순신인도;신인도OK=true;
-        } else {
-          _revertCreditRescue(_rescue.applied);
-        }
-      }
-    }
-    if(실적OK&&시평OK&&신인도OK){적격=true;적격사유='적격';}
-    else if(!실적OK&&!시평OK)적격사유='실적·시평 모두 부족';
-    else if(!실적OK)적격사유='실적 부족';
-    else if(!시평OK)적격사유='시평 부족';
-    else 적격사유='신인도 감점 초과(순신인도 '+TRIM3(순신인도)+')';
+    // (조달청 기본 판정 — 적격기준_조달청.judge 참고. 인천공항/도로공사/수자원공사도 이 판정을 그대로 씀)
+    var _jd=적격기준_조달청.judge(합산실적,calc.E6,합산시평,calc.E3,순신인도,감점환산,{try:_tryCreditRescue,revert:_revertCreditRescue});
+    적격=_jd.적격;적격사유=_jd.적격사유;감점환산=_jd.감점환산;순신인도=_jd.순신인도;
   }
   return Object.assign({ROW:ROW,합산실적:합산실적,합산시평:합산시평,합산시평_raw:합산시평_raw,신인도환산:신인도환산,감점환산:감점환산,순신인도:순신인도,지분합_pct:지분합_pct,지분율OK:지분율OK,적격:적격,적격사유:적격사유,used:used,기술점수합계:기술점수합계,분담시평합산:분담시평합산,lh원점수:lh원점수},lh데이터,railData);
 }
