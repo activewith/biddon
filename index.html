@@ -394,53 +394,6 @@ body.role-user .railtech-field{pointer-events:none;background:#f3f4f6}
     </div>
   </section>
 
-
-  <section id="tab-lh" class="hidden">
-    <div class="panel">
-      <h2>LH 공고 입력 <span class="small" style="font-weight:400;color:#6b7280">한국토지주택공사 공사적격심사세부기준 (2026.05)</span></h2>
-      <div class="row" style="gap:12px;flex-wrap:wrap">
-        <div class="field"><label>추정가격 (원)</label><input type="text" inputmode="numeric" class="money" id="lh-추정가격" placeholder="예: 3,300,000,000" style="width:200px"></div>
-        <div class="field"><label>공사예정금액 <span style="font-size:10px;color:#6b7280">(추정+부가세, 자동)</span></label><input type="text" inputmode="numeric" class="money" id="lh-공사예정금액" readonly placeholder="자동: 추정×1.1" style="width:200px;background:#f0fdf4;border-color:#86efac;color:#374151"></div>
-        <div class="field"><label>소방/통신 추정금액 <span style="font-size:10px;color:#6b7280">(복합업종 시)</span></label><input type="text" inputmode="numeric" class="money" id="lh-소방통신추정" placeholder="해당없으면 비움" style="width:180px"></div>
-        <div class="field"><label>A값 (예정가격) <span style="font-size:10px;color:#059669">★복수예가</span></label><input type="text" inputmode="numeric" class="money" id="lh-A값" placeholder="없으면 기초금액 적용" style="width:200px;background:#f0fdf4;border-color:#86efac"></div>
-        <div class="field"><label>기초금액 <span style="font-size:10px;color:#6b7280" id="lh-기초금액-hint">(없으면 자동: 추정×1.1)</span></label><input type="text" inputmode="numeric" class="money" id="lh-기초금액" placeholder="추정×1.1 자동" style="width:180px"></div>
-        <div class="field"><label>사정률 <span style="font-size:10px;color:#6b7280">(%)</span></label><input type="number" id="lh-사정률" step="0.001" placeholder="예: 102.0" value="" style="width:100px"></div>
-        <div class="field">
-          <label>업종 구분</label>
-          <select id="lh-업종" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;background:#fff">
-            <option value="전기">전기공사</option>
-            <option value="정보통신">정보통신공사</option>
-            <option value="소방">소방시설공사</option>
-            <option value="문화재">문화재공사</option>
-            <option value="기타">기타(토목/건축 등)</option>
-          </select>
-        </div>
-        <div class="field"><label>구성업체수</label><input type="number" id="lh-구성업체수" step="1" min="1" max="5" value="3" style="width:70px"></div>
-      </div>
-      <div class="summary" style="margin-top:10px" id="lh-stats">
-        <div class="stat"><div class="k">추정가격</div><div class="v" id="lh-o-추정">-</div></div>
-        <div class="stat"><div class="k">공사예정금액</div><div class="v" id="lh-o-예정">-</div></div>
-        <div class="stat"><div class="k">적용 별표</div><div class="v" id="lh-o-별표" style="font-weight:700">-</div></div>
-        <div class="stat"><div class="k">필요실적 (지분1.0)</div><div class="v" id="lh-o-필요실적">-</div></div>
-        <div class="stat"><div class="k">예상투찰금액</div><div class="v" id="lh-o-투찰">-</div></div>
-        <div class="stat"><div class="k">순공사원가 98%</div><div class="v" id="lh-o-하한가">-</div></div>
-        <div class="stat" style="background:#fef3c7;border-color:#fde68a"><div class="k" style="color:#92400e">업계평균(부채/유동)</div><div class="v" style="color:#92400e;font-size:11px" id="lh-o-업계평균">-</div></div>
-      </div>
-    </div>
-
-    <div class="panel" id="lh-combos-panel">
-      <h2>업체 입력 (공동수급체)
-        <button class="btn btn-ghost btn-sm" id="lh-btn-calc" style="margin-left:8px;background:#059669;color:#fff;border-color:#059669">▶ 점수 계산</button>
-        <button class="btn btn-ghost btn-sm" id="lh-btn-reset" style="margin-left:4px">초기화</button>
-      </h2>
-      <div id="lh-combos"></div>
-    </div>
-
-    <div class="panel" id="lh-result-panel" style="display:none">
-      <h2>LH 적격심사 결과</h2>
-      <div id="lh-result-body"></div>
-    </div>
-  </section>
   <section id="tab-db" class="hidden">
     <div class="panel">
       <h2>업체 DB 관리 <span style="font-size:14px;font-weight:600;color:#374151;margin-left:6px">총 <span id="db-count">0</span>개 등록</span></h2>
@@ -1904,6 +1857,27 @@ function 부채등급7A(r){return _econTier(ECON_TABLE_부채7A,r,'lt');}
 function 유동등급7A(r){return _econTier(ECON_TABLE_유동7A,r,'gte');}
 function 영업등급7(y){return _econTier(ECON_TABLE_영업7,y,'gte');}
 
+// ── LH(한국토지주택공사) 경영상태 배점표 ────────────────────────────────
+// 2026-09-04: 죽은 코드(구 lhEcon2/lhEcon3, 미사용 LH 단독계산기 안에만 있던 로직)에서 이식.
+// 별표2(추정가격 50억 이상): 부채22+유동21+영업2=45점 → ×15/45 — 구간·배점이 조달청 별표6과 완전히 동일.
+var ECON_TABLE_부채LH2=[{t:50,g:'A',s:22.0},{t:75,g:'B',s:19.7},{t:100,g:'C',s:17.5},{t:125,g:'D',s:15.2},{g:'E',s:13.0}];
+var ECON_TABLE_유동LH2=[{t:150,g:'A',s:21.0},{t:120,g:'B',s:18.7},{t:100,g:'C',s:16.5},{t:70,g:'D',s:14.2},{g:'E',s:12.0}];
+var ECON_TABLE_영업LH2=[{t:5,g:'5년+',s:2.0},{t:3,g:'3~5년',s:1.8},{g:'3년미만',s:1.5}];
+function 부채등급LH2(r){return _econTier(ECON_TABLE_부채LH2,r,'lt');}
+function 유동등급LH2(r){return _econTier(ECON_TABLE_유동LH2,r,'gte');}
+function 영업등급LH2(y){return _econTier(ECON_TABLE_영업LH2,y,'gte');}
+// 별표3 A공사(추정가격 10억~50억 미만): 부채7+유동7+영업1=15점 — 유동·영업기간 구간은 조달청 별표7A와
+// 동일하나, 부채구간만 다름(LH: 100/130/160/190, 조달청 별표7A: 50/75/100/125).
+var ECON_TABLE_부채LH3=[{t:100,g:'A',s:7.0},{t:130,g:'B',s:6.2},{t:160,g:'C',s:5.4},{t:190,g:'D',s:4.6},{g:'E',s:3.8}];
+var ECON_TABLE_유동LH3=[{t:150,g:'A',s:7.0},{t:120,g:'B',s:6.2},{t:100,g:'C',s:5.4},{t:70,g:'D',s:4.6},{g:'E',s:3.8}];
+var ECON_TABLE_영업LH3=[{t:3,g:'3년+',s:1.0},{t:1,g:'1~3년',s:0.9},{g:'1년미만',s:0.8}];
+function 부채등급LH3(r){return _econTier(ECON_TABLE_부채LH3,r,'lt');}
+function 유동등급LH3(r){return _econTier(ECON_TABLE_유동LH3,r,'gte');}
+function 영업등급LH3(y){return _econTier(ECON_TABLE_영업LH3,y,'gte');}
+// 별표3 부채비율 강제등급(만점 체크 등) 대표값 — 조달청 표준 강제등급표(50/75/100/125 기준)와는
+// 구간이 달라 별도 매핑이 필요함(구 lhEconFromDB의 LH3_FORCE_DEBT_RATIO 그대로).
+var LH3_FORCE_DEBT_RATIO={A:0,B:115,C:145,D:175,E:200};
+
 // ── 철도공단(국가철도공단) 경영상태 배점표 ────────────────────────────
 // 붙임3/붙임4는 별표6/7A와 값이 유사하지만 반올림 방식이 달라 독립된 표를 그대로 유지함(계수 환산 아님).
 // 붙임3 (추정가격 100억원미만 50억원이상): 부채7.0+유동6.0+영업2.0=15점
@@ -2235,7 +2209,7 @@ function econForcedGrade(v){if(!v)return '';return v===true?'A':v;}
 // 강제 지정된 등급을 실제 배점 계산에 반영하기 위한 대표 비율값.
 // 부채(낮을수록 유리)/유동(높을수록 유리) 등급구간(50/75/100/125, 150/120/100/70)은 조달청 표준·지자체·철도1/2·LH별표2 등
 // 이 파일의 거의 모든 배점표에서 동일하게 쓰이므로, 이 대표값 하나로 어떤 배점표를 타더라도 같은 등급이 재현된다.
-// 예외: LH 별표3(A공사)는 부채구간이 다름(100/130/160/190) — lhEconFromDB()에서 별도 대표값을 쓴다.
+// 예외: LH 별표3(A공사)는 부채구간이 다름(100/130/160/190) — 별도 대표값을 쓴다.
 var ECON_FORCE_DEBT_RATIO={A:0,B:60,C:85,D:110,E:130};
 var ECON_FORCE_LIQ_RATIO={A:9999,B:130,C:110,D:80,E:50};
 function econForcedDebtRatio(g){return ECON_FORCE_DEBT_RATIO[g]!=null?ECON_FORCE_DEBT_RATIO[g]:0;}
@@ -2395,20 +2369,10 @@ function calcEconScore(dbEntry,calc){
   if(isJija&&jijaTier>0)return 적격기준_지자체.econScore(rD,rU,yr,jijaTier);
   // ── 철도공단 기준 (붙임3/붙임4-A공사, 조달청과 배점 다름) ──────────
   var isRail=calc?calc.isRail:false;
-  if(isRail){
-    if(E5>=5000000000){
-      var bdR1=부채등급철도1(rD);var udR1=유동등급철도1(rU);
-      var odR1=yr!=null?영업등급철도1(yr):null;
-      var scR1=bdR1.s+udR1.s+(odR1?odR1.s:0);
-      return{type:'철도1',부채:bdR1,유동:udR1,영업:odR1,score:scR1,rD:rD,rU:rU,yr:yr};
-    } else if(E5>=1000000000){
-      var bdR2=부채등급철도2(rD);var udR2=유동등급철도2(rU);
-      var odR2=yr!=null?영업등급철도2(yr):null;
-      var scR2=bdR2.s+udR2.s+(odR2?odR2.s:0);
-      return{type:'철도2',부채:bdR2,유동:udR2,영업:odR2,score:scR2,rD:rD,rU:rU,yr:yr};
-    }
-    return null;
-  }
+  if(isRail)return 적격기준_철도공단.econScore(rD,rU,yr,E5);
+  // ── LH 기준 (별표2/별표3, 별표3만 조달청과 부채구간 다름 — 2026-09-04) ──
+  var isLH=calc?calc.isLH:false;
+  if(isLH)return 적격기준_LH.econScore(rD,rU,yr,E5,_fD1);
   // ── 조달청 기준 (별표6/7A) ────────────────────────────────────────
   return 적격기준_조달청.econScore(rD,rU,yr,E5);
 }
@@ -2612,6 +2576,26 @@ const 적격기준_조달청 = {
 // 2단계 구조. UI 쪽(강제할당 버튼 색상, LH 점수 상세 패널, srType 표시 문자열 등)은 이번에도 손대지 않았고,
 // 계산 로직(간이 점수·최종 판정)만 옮겼다. priceScore는 기존 lhCalcPriceScore 함수를 그대로 참조한다.
 const 적격기준_LH = {
+  // 경영상태 점수(별표2/별표3) — 2026-09-04: calcEconScore가 그동안 LH도 조달청 별표6/7A 기준으로
+  // 계산해오던 것을, LH 고유 배점표(위 ECON_TABLE_*LH2/LH3)를 쓰도록 교체. 별표2(50억+)는 조달청
+  // 별표6과 구간·배점이 동일해 결과가 안 바뀌지만, 별표3(10~50억)은 부채구간이 달라 결과가 바뀔 수 있음.
+  // forcedDebtGrade: calcEconScore가 넘겨주는 부채비율 "만점/등급 강제" 문자('A'~'E', 강제 없으면 falsy).
+  // 별표3에서만 조달청 표준 강제등급표 대신 LH3_FORCE_DEBT_RATIO로 rD를 다시 계산해 구간을 맞춘다.
+  econScore: function(rD,rU,yr,E5,forcedDebtGrade){
+    if(E5>=LIMIT_50){
+      var bd2=부채등급LH2(rD);var ud2=유동등급LH2(rU);
+      var od2=yr!=null?영업등급LH2(yr):null;
+      var sc2=(bd2.s+ud2.s+(od2?od2.s:0))*15/45;
+      return{type:'LH2',부채:bd2,유동:ud2,영업:od2,score:sc2,rD:rD,rU:rU,yr:yr};
+    } else if(E5>=LIMIT_10){
+      var rD3=forcedDebtGrade?(LH3_FORCE_DEBT_RATIO[forcedDebtGrade]!=null?LH3_FORCE_DEBT_RATIO[forcedDebtGrade]:0):rD;
+      var bd3=부채등급LH3(rD3);var ud3=유동등급LH3(rU);
+      var od3=yr!=null?영업등급LH3(yr):null;
+      var sc3=bd3.s+ud3.s+(od3?od3.s:0);
+      return{type:'LH3',부채:bd3,유동:ud3,영업:od3,score:sc3,rD:rD3,rU:rU,yr:yr};
+    }
+    return null;
+  },
   // 입찰가격 점수 — 기존 lhCalcPriceScore 그대로 참조(로직 이동 없음)
   priceScore: lhCalcPriceScore,
   // "강제할당" 버튼 활성화 게이트용 간이 점수 — 지분율 합이 100% 미만이어도 그 비율만큼만 인정해서 계산.
@@ -2695,6 +2679,132 @@ const 적격기준_LH = {
     }
     var lh데이터={lh시공경험:lh시공경험,lh실적점수:lh실적점수,lh품질:lh품질,lh경영상태:lh경영상태,lh신인도:lh신인도,lh하도급:lh하도급,lh자재인력:lh자재인력,lh가격:lh가격,lh총점:lh총점,lh경영만점:lh경영만점,LH점수모드:(LH부족목록.length>0&&적격),LH부족목록:LH부족목록};
     return{적격:적격,적격사유:적격사유,감점환산:감점환산,순신인도:순신인도,lh데이터:lh데이터};
+  },
+  // LH 협정계산 팝업(showLHComboPop)의 점수 계산 — 팝업에서 사용자가 각사 품질점수를 직접 입력할 수
+  // 있다는 점만 calcSlot의 judge()와 다르고, 계산식은 동일 계열(단, judge()는 확정 적격판정용이라
+  // 수행능력에 상한을 적용하지 않는 2026-08-06 변경을 그대로 반영 — 이 팝업도 같은 방식).
+  // 품질가중합은 DOM 입력값을 읽어야 해서 호출부(recalc)에서 미리 계산해 넘겨받는다.
+  popupScore: function(slots,품질가중합,필요실적,예정가격,A값,투찰금액,is50억){
+    var 지분환산실적=slots.reduce(function(a,s){return a+(Number(s.실적)||0)*(Number(s.지분율)||0)/100;},0);
+    var 실적계수=필요실적>0?지분환산실적/필요실적:0;
+    var 실적점수=Math.min(실적계수*13,13);
+    var 품질득점=품질가중합>=90?5:품질가중합>=88?3:품질가중합>=85?2:품질가중합>=83?1.5:품질가중합>=80?1:0;
+    var 시공경험점수=Math.min(실적점수+품질득점,15);
+    var 합산경영=slots.reduce(function(a,s){return a+15*(Number(s.지분율)||0)/100;},0);
+    var 합산신인도=slots.reduce(function(a,s){return a+((Number(s.신인도)||0)-(Number(s.감점)||0))*(Number(s.지분율)||0)/100;},0);
+    var 신인도점수=Math.max(-3,Math.min(1.5,합산신인도));
+    var 하도급점수=is50억?10:0;
+    var 자재점수=is50억?10:0;
+    // 2026-08-06: 시공경험(최대15)+경영상태(15)가 상한(30/50)을 이루지만 신인도(+1.5~-3.0)는
+    // 그 위에 추가/차감되는 항목이라 합계가 상한을 넘거나(가점) 못 미쳐도(감점) 그대로 반영해야 함
+    // — 실제 적격판정 엔진(judge())은 총점에 이 상한을 적용하지 않으므로 여기서도 Math.min으로
+    // 잘라내지 않는다(사용자 확인: 30.250pt인데 30.000pt로 잘려 총점이 95.00으로 낮게 나오던 문제).
+    var 수행능력합=시공경험점수+합산경영+신인도점수+하도급점수+자재점수;
+    var 수행능력상한=is50억?50:30;
+    var 수행능력점수=수행능력합;
+    var 기본가격점수=is50억?45:65;
+    var mBase=is50억?50:70;
+    var mFactor=is50억?2:4;
+    var 분모=A값?(예정가격-A값):예정가격;
+    var 분자=A값?(투찰금액-A값):투찰금액;
+    var ratio_r=분모>0?Math.round(분자/분모*10000)/10000:0;
+    var C51=Math.abs((0.9-ratio_r)*100);
+    var 입찰가격득점=mBase-mFactor*C51;
+    var 가산점=Math.max(0,Math.floor(입찰가격득점-기본가격점수));
+    var 가격점수=기본가격점수+가산점;
+    var 총점=수행능력점수+가격점수;
+    var 적격=총점>=95;
+    return{지분환산실적:지분환산실적,실적계수:실적계수,실적점수:실적점수,품질득점:품질득점,시공경험점수:시공경험점수,
+      합산경영:합산경영,합산신인도:합산신인도,신인도점수:신인도점수,하도급점수:하도급점수,자재점수:자재점수,
+      수행능력합:수행능력합,수행능력상한:수행능력상한,수행능력점수:수행능력점수,
+      기본가격점수:기본가격점수,mBase:mBase,mFactor:mFactor,ratio_r:ratio_r,C51:C51,입찰가격득점:입찰가격득점,가산점:가산점,가격점수:가격점수,
+      총점:총점,적격:적격};
+  }
+};
+
+// ████ SECTION: 적격기준 구조화 (파일럿 — 철도공단) ████
+// 철도공단은 추정가격 3억~100억 구간에서만 100점 배점제(붙임3)를 쓰고, 그 밖(3억 미만/100억 이상)은
+// railScoreTier()가 null을 반환해 calcSlot()의 분기 순서(else if 연쇄)가 자동으로 기본(조달청) 판정으로
+// 넘어간다 — 이 폴백은 그대로 두었고, judge()도 호출부가 railScoreTier(E5)로 이미 확인한 뒤에만 부른다.
+// 신인도 처리도 조달청/LH와 다름: 감점을 순신인도로 넷팅하지 않고 경영상태 점수에서 직접 차감하고,
+// 신인도(가점)는 신인도한도 내에서 별도로 더한다 — 그래서 econScore/judge 모두 원본 변수명(신인도환산 등)을
+// 그대로 인자로 받아 계산 방식 차이가 드러나게 했다.
+const 적격기준_철도공단 = {
+  // 경영상태 점수(붙임3=철도1/50억 이상, 붙임4-A공사=철도2/10~50억) — 10억 미만은 해당 없음(null)
+  econScore: function(rD,rU,yr,E5){
+    if(E5>=LIMIT_50){
+      var bdR1=부채등급철도1(rD);var udR1=유동등급철도1(rU);
+      var odR1=yr!=null?영업등급철도1(yr):null;
+      var scR1=bdR1.s+udR1.s+(odR1?odR1.s:0);
+      return{type:'철도1',부채:bdR1,유동:udR1,영업:odR1,score:scR1,rD:rD,rU:rU,yr:yr};
+    } else if(E5>=LIMIT_10){
+      var bdR2=부채등급철도2(rD);var udR2=유동등급철도2(rU);
+      var odR2=yr!=null?영업등급철도2(yr):null;
+      var scR2=bdR2.s+udR2.s+(odR2?odR2.s:0);
+      return{type:'철도2',부채:bdR2,유동:udR2,영업:odR2,score:scR2,rD:rD,rU:rU,yr:yr};
+    }
+    return null;
+  },
+  // 100점 배점제 최종 판정(추정가격 3억~100억). calcSlot()의
+  // "else if(calc.isRail&&railScoreTier(...))" 블록 그대로 이동 — 조건·문구·구제로직 동일.
+  judge: function(합산시평,E3,합산실적,E5,감점환산,순신인도,신인도환산,기술점수합계,예정가격,A값,H7,rescue){
+    if(E3!=null&&합산시평<=E3){
+      return{적격:false,적격사유:'시평 부족 (합산 '+FMT_NUM(Math.round(합산시평))+' / 제한 '+FMT_NUM(E3)+')',감점환산:감점환산,순신인도:순신인도,railData:{}};
+    }
+    var railTier=railScoreTier(E5);
+    var rail실적계수=(E5>0&&railTier.실적N>0)?(합산실적/(E5*railTier.실적N)):0;
+    var rail실적점수=Math.min(Math.floor(rail실적계수*railTier.실적배점*1000)/1000,railTier.실적배점);
+    var rail기술등급정보=railTechRatingFromScore(기술점수합계,E5);
+    var rail기술점수=rail기술등급정보?rail기술등급정보.point:0;
+    var rail경영상태점수=Math.max(0,railTier.경영배점-감점환산);
+    var rail신인도점수=Math.max(-railTier.신인도한도,Math.min(railTier.신인도한도,신인도환산));
+    var rail시공계획점수=railTier.시공계획; // 사용자 요청: 항상 만점 고정 처리
+    var 투찰금액3=A값?(예정가격-A값)*H7+A값:예정가격*H7;
+    var rail가격비율=예정가격>0?(투찰금액3/예정가격):null; // 참고용으로만 계산·보관(점수에는 미반영)
+    // 예비가격을 알 수 없는 사전 판정 단계에서는 가격점수를 캡값(railScoreTier의 가격cap점수)으로 보수적 고정.
+    var rail가격점수=railTier.가격cap점수;
+    var rail총점=rail실적점수+rail기술점수+rail경영상태점수+rail신인도점수+rail시공계획점수+rail가격점수;
+    var 적격=rail총점>=95;
+    // 부적격일 때, 감점업체 신용등급이 재무비율보다 유리하면 대체 후 재판정 (LH와 동일 패턴)
+    if(!적격){
+      var _rescueRail=rescue.try();
+      if(_rescueRail){
+        var rail경영상태점수2=Math.max(0,railTier.경영배점-_rescueRail.감점환산);
+        var rail총점2=rail실적점수+rail기술점수+rail경영상태점수2+rail신인도점수+rail시공계획점수+rail가격점수;
+        if(rail총점2>=95){
+          감점환산=_rescueRail.감점환산;순신인도=_rescueRail.순신인도;rail경영상태점수=rail경영상태점수2;rail총점=rail총점2;적격=true;
+        } else {
+          rescue.revert(_rescueRail.applied);
+        }
+      }
+    }
+    var 적격사유=적격?'적격 ('+rail총점.toFixed(2)+'점)':'부적격 ('+rail총점.toFixed(2)+'점 / 95점 미달)';
+    var railData={rail티어:railTier.tier,rail티어명:railTier.label,rail실적점수:rail실적점수,rail기술점수:rail기술점수,rail기술등급:(rail기술등급정보&&rail기술등급정보.grade)||null,rail경영상태점수:rail경영상태점수,rail신인도점수:rail신인도점수,rail시공계획점수:rail시공계획점수,rail가격점수:rail가격점수,rail가격비율:rail가격비율,rail총점:rail총점};
+    return{적격:적격,적격사유:적격사유,감점환산:감점환산,순신인도:순신인도,railData:railData};
+  }
+};
+
+// ████ SECTION: 적격기준 구조화 (파일럿 — 한전) ████
+// 한전은 적격/부적격 판정 자체를 하지 않음(2026-08-12 사용자 요청) — 기초금액 대비 5년실적 비율만
+// 참고용으로 계산·표시한다. 경영상태(calcEconScore)는 한전 전용 분기가 없어 조달청 별표6/7A를 그대로
+// 쓰는데, 그건 원래도 그랬던 것이라 이번에 손대지 않았다.
+const 적격기준_한전 = {
+  // calcSlot()의 "else if(calc.isKEPCO)" 블록 그대로 이동 — 항상 적격:false, 문구도 동일.
+  judge: function(합산실적,ROW,한전분담E6,E6){
+    var 적격사유;
+    if(한전분담E6){
+      var kepco상세=Object.keys(한전분담E6).map(function(k){
+        var amt=(k==='전기')?합산실적:ROW.filter(function(r){return r.grp===k;}).reduce(function(a,r){return a+(r.지분환산실적||0);},0);
+        var e6k=한전분담E6[k];
+        var pct=e6k>0?(amt/e6k*100):0;
+        return k+' '+pct.toFixed(1)+'%('+FMT_NUM(Math.round(amt))+'/'+FMT_NUM(Math.round(e6k))+')';
+      });
+      적격사유='실적비율 '+kepco상세.join(' · ')+' (참고용 · 적격판정 미적용)';
+    } else {
+      var kepco실적비율=E6>0?(합산실적/E6*100):0;
+      적격사유='실적비율 '+kepco실적비율.toFixed(1)+'% (참고용 · 적격판정 미적용)';
+    }
+    return{적격:false,적격사유:적격사유};
   }
 };
 
@@ -3745,61 +3855,15 @@ function calcSlot(combo,calc){
     적격=_ljd.적격;적격사유=_ljd.적격사유;감점환산=_ljd.감점환산;순신인도=_ljd.순신인도;lh데이터=_ljd.lh데이터;
   } else if(calc.isRail&&railScoreTier(calc.E5)){
     // ── 철도공단 100점 배점제 적격 판정 (별표3 전기·정보통신공사, 추정가격 3억~100억 구간) ──
-    // 2.시공계획적정성은 사용자 요청에 따라 항상 만점 고정. 3억 미만/100억 이상은 이 분기에 들어오지 않고
-    // 아래 일반(else) 게이트 방식(실적/시평/신인도)으로 처리됨 — railScoreTier()가 null 반환.
-    if(calc.E3!=null&&합산시평<=calc.E3){
-      적격사유='시평 부족 (합산 '+FMT_NUM(Math.round(합산시평))+' / 제한 '+FMT_NUM(calc.E3)+')';
-    } else {
-      var railTier=railScoreTier(calc.E5);
-      var rail실적계수=(calc.E5>0&&railTier.실적N>0)?(합산실적/(calc.E5*railTier.실적N)):0;
-      var rail실적점수=Math.min(Math.floor(rail실적계수*railTier.실적배점*1000)/1000,railTier.실적배점);
-      var rail기술등급정보=railTechRatingFromScore(기술점수합계,calc.E5);
-      var rail기술점수=rail기술등급정보?rail기술등급정보.point:0;
-      var rail경영상태점수=Math.max(0,railTier.경영배점-감점환산);
-      var rail신인도점수=Math.max(-railTier.신인도한도,Math.min(railTier.신인도한도,신인도환산));
-      var rail시공계획점수=railTier.시공계획; // 사용자 요청: 항상 만점 고정 처리
-      var 예정가격3=calc.예정가격,A값3=calc.A값;
-      var 투찰금액3=A값3?(예정가격3-A값3)*calc.H7+A값3:예정가격3*calc.H7;
-      var rail가격비율=예정가격3>0?(투찰금액3/예정가격3):null; // 참고용으로만 계산·보관(점수에는 미반영)
-      // 2026-09-02(사용자 확정): 예비가격을 알 수 없는 사전 판정 단계에서는 가격점수를 예상 투찰률(H7)
-      // 기반 공식으로 낙관 계산하지 않고, 구간별 캡값(railScoreTier의 가격cap점수 — 50억~100억=45 /
-      // 10억~50억·3억~10억=65)으로 보수적으로 고정한다. 실제 예비가격에 따라 이보다 낮게 나올 수도 있으므로
-      // "이 캡값 기준으로도 95점을 넘는가"만 확인하는 보수적 사전판정임에 유의.
-      var rail가격점수=railTier.가격cap점수;
-      var rail총점=rail실적점수+rail기술점수+rail경영상태점수+rail신인도점수+rail시공계획점수+rail가격점수;
-      적격=rail총점>=95;
-      // 부적격일 때, 감점업체 신용등급이 재무비율보다 유리하면 대체 후 재판정 (LH와 동일 패턴)
-      if(!적격){
-        var _rescueRail=_tryCreditRescue();
-        if(_rescueRail){
-          var rail경영상태점수2=Math.max(0,railTier.경영배점-_rescueRail.감점환산);
-          var rail총점2=rail실적점수+rail기술점수+rail경영상태점수2+rail신인도점수+rail시공계획점수+rail가격점수;
-          if(rail총점2>=95){
-            감점환산=_rescueRail.감점환산;순신인도=_rescueRail.순신인도;rail경영상태점수=rail경영상태점수2;rail총점=rail총점2;적격=true;
-          } else {
-            _revertCreditRescue(_rescueRail.applied);
-          }
-        }
-      }
-      적격사유=적격?'적격 ('+rail총점.toFixed(2)+'점)':'부적격 ('+rail총점.toFixed(2)+'점 / 95점 미달)';
-      railData={rail티어:railTier.tier,rail티어명:railTier.label,rail실적점수:rail실적점수,rail기술점수:rail기술점수,rail기술등급:(rail기술등급정보&&rail기술등급정보.grade)||null,rail경영상태점수:rail경영상태점수,rail신인도점수:rail신인도점수,rail시공계획점수:rail시공계획점수,rail가격점수:rail가격점수,rail가격비율:rail가격비율,rail총점:rail총점};
-    }
+    // 3억 미만/100억 이상은 이 분기에 들어오지 않고 아래 일반(else) 게이트 방식(실적/시평/신인도)으로
+    // 처리됨 — railScoreTier()가 null 반환. (적격기준_철도공단.judge 참고)
+    var _rjd=적격기준_철도공단.judge(합산시평,calc.E3,합산실적,calc.E5,감점환산,순신인도,신인도환산,기술점수합계,calc.예정가격,calc.A값,calc.H7,{try:_tryCreditRescue,revert:_revertCreditRescue});
+    적격=_rjd.적격;적격사유=_rjd.적격사유;감점환산=_rjd.감점환산;순신인도=_rjd.순신인도;railData=_rjd.railData;
   } else if(calc.isKEPCO){
-    // 한전(한국전력공사): 기초금액 대비 5년실적 비율만 계산·표시. 시평/신인도를 포함한 적격·부적격 판정은 하지 않음(2026-08-12 사용자 요청).
-    // 공동도급/분담이행으로 업종별 분담비율이 감지된 경우(calc.한전분담E6), 업종별로 각각 실적비율을 나눠 계산.
-    if(calc.한전분담E6){
-      var kepco상세=Object.keys(calc.한전분담E6).map(function(k){
-        var amt=(k==='전기')?합산실적:ROW.filter(function(r){return r.grp===k;}).reduce(function(a,r){return a+(r.지분환산실적||0);},0);
-        var e6k=calc.한전분담E6[k];
-        var pct=e6k>0?(amt/e6k*100):0;
-        return k+' '+pct.toFixed(1)+'%('+FMT_NUM(Math.round(amt))+'/'+FMT_NUM(Math.round(e6k))+')';
-      });
-      적격사유='실적비율 '+kepco상세.join(' · ')+' (참고용 · 적격판정 미적용)';
-    } else {
-      var kepco실적비율=calc.E6>0?(합산실적/calc.E6*100):0;
-      적격사유='실적비율 '+kepco실적비율.toFixed(1)+'% (참고용 · 적격판정 미적용)';
-    }
-    적격=false;
+    // 한전(한국전력공사): 기초금액 대비 5년실적 비율만 계산·표시. 시평/신인도를 포함한 적격·부적격 판정은
+    // 하지 않음(2026-08-12 사용자 요청). (적격기준_한전.judge 참고)
+    var _kjd=적격기준_한전.judge(합산실적,ROW,calc.한전분담E6,calc.E6);
+    적격=_kjd.적격;적격사유=_kjd.적격사유;
   } else {
     // ② 실적·시평은 충족하는데 경영상태비율(①) 기준 신인도만 부족한 경우, 감점업체 신용등급이
     //    재무비율보다 유리하면 대체 적용 후 재판정. 대체해도 여전히 미달이면 ①로 원복.
@@ -8964,293 +9028,6 @@ function bind(){
 }
 
 
-// ████ SECTION: LH 적격심사 계산 로직 (자동화 v2) ████
-
-// ── LH 등급·점수 헬퍼 ──────────────────────────────────────────────
-
-// 별표2 경영상태: 부채22+유동21+영업2=45 → ×15/45
-function lhEcon2(rD, rU, yr) {
-  var bd = rD < 50  ? 22.0 : rD < 75  ? 19.7 : rD < 100 ? 17.5 : rD < 125 ? 15.2 : 13.0;
-  var ud = rU >= 150 ? 21.0 : rU >= 120 ? 18.7 : rU >= 100 ? 16.5 : rU >= 70 ? 14.2 : 12.0;
-  var yd = yr >= 5  ? 2.0 : yr >= 3 ? 1.8 : 1.5;
-  return { bd:bd, ud:ud, yd:yd, raw:bd+ud+yd, score:Math.round((bd+ud+yd)/45*15*1000)/1000,
-    gD: rD<50?'A':rD<75?'B':rD<100?'C':rD<125?'D':'E',
-    gU: rU>=150?'A':rU>=120?'B':rU>=100?'C':rU>=70?'D':'E',
-    gY: yr>=5?'A':yr>=3?'B':'C' };
-}
-// 별표3 경영상태 (A공사 기준): 부채7+유동7+영업1=15
-function lhEcon3(rD, rU, yr) {
-  var bd = rD < 100 ? 7.0 : rD < 130 ? 6.2 : rD < 160 ? 5.4 : rD < 190 ? 4.6 : 3.8;
-  var ud = rU >= 150 ? 7.0 : rU >= 120 ? 6.2 : rU >= 100 ? 5.4 : rU >= 70 ? 4.6 : 3.8;
-  var yd = yr >= 3 ? 1.0 : yr >= 1 ? 0.9 : 0.8;
-  return { bd:bd, ud:ud, yd:yd, raw:bd+ud+yd, score:Math.round((bd+ud+yd)*1000)/1000,
-    gD: rD<100?'A':rD<130?'B':rD<160?'C':rD<190?'D':'E',
-    gU: rU>=150?'A':rU>=120?'B':rU>=100?'C':rU>=70?'D':'E',
-    gY: yr>=3?'A':yr>=1?'B':'C' };
-}
-
-// 업체 1개에 대한 LH 경영상태 자동 계산 (DB + 업계평균 필요)
-function lhEconFromDB(dbEntry, 별표) {
-  var avgD = Number(state.bid.업계평균부채비율) || 0;
-  var avgU = Number(state.bid.업계평균유동비율) || 0;
-  var noAvg = (!avgD || !avgU);
-
-  var _fDl=econForcedGrade(dbEntry.부채만점),_fUl=econForcedGrade(dbEntry.유동만점);
-  // LH 별표3(A공사)만 부채구간이 다름(100/130/160/190) — 강제등급 대표값도 별도로 매핑.
-  var LH3_FORCE_DEBT_RATIO={A:0,B:115,C:145,D:175,E:200};
-  var rD, rU;
-  if (_fDl) { rD = (별표===3)?(LH3_FORCE_DEBT_RATIO[_fDl]!=null?LH3_FORCE_DEBT_RATIO[_fDl]:0):econForcedDebtRatio(_fDl); }
-  else if (avgD && dbEntry.부채비율 != null) { rD = (Number(dbEntry.부채비율) / avgD) * 100; }
-  else { rD = null; }
-
-  if (_fUl) { rU = econForcedLiqRatio(_fUl); }
-  else if (avgU && dbEntry.유동비율 != null) { rU = (Number(dbEntry.유동비율) / avgU) * 100; }
-  else { rU = null; }
-
-  var yr = calcYears(dbEntry.공사업등록일) || 0;
-
-  if (rD === null || rU === null) { return { score: null, noAvg: noAvg, noData: true, yr:yr }; }
-  var res = 별표 === 2 ? lhEcon2(rD, rU, yr) : lhEcon3(rD, rU, yr);
-  return Object.assign(res, { noAvg: noAvg, noData: false, rD:rD, rU:rU, yr:yr });
-}
-
-// LH 품질평가 점수 (85 기본)
-function lhQualityScore(q) {
-  var n = Number(q) || 85;
-  return n >= 90 ? 5.0 : n >= 88 ? 3.0 : n >= 85 ? 2.0 : n >= 83 ? 1.5 : n >= 80 ? 1.0 : 0.0;
-}
-
-// LH 안전보건 가점 (별표2: KOSHA=1/ISO=0.8, 별표3: 전기소방 = +1)
-function lhSafetyBonus(system, 별표) {
-  var ps = parseSafetySystem(system || '');
-  if (!ps.valid || !ps.type) return 0;
-  // 별표2: LH PQ준용 → KOSHA=1점, ISO=0.8점 (전문공사 수준)
-  if (별표 === 2) return ps.type === 'KOSHA-MS' ? 1.0 : ps.type === 'ISO-45001' ? 0.8 : 0;
-  // 별표3: 전기/소방/통신 → 안전보건인증 +1점
-  return ps.type ? 1.0 : 0;
-}
-
-// LH 입찰가격 점수
-function lhPriceScore(투찰금액, 예정가격, A값, 별표) {
-  if (!투찰금액 || !예정가격) return null;
-  var denom = A값 ? (예정가격 - A값) : 예정가격;
-  var numer = A값 ? (투찰금액 - A값) : 투찰금액;
-  if (denom <= 0) return null;
-  var ratio = numer / denom;
-  var diff = Math.abs(0.9 - ratio) * 100;
-  if (별표 === 2) {
-    if (ratio <= 1.0 && ratio >= 0.925) return 45;
-    return Math.max(2, Math.round((50 - 2 * diff) * 1000) / 1000);
-  } else {
-    // 별표3 (10억이상)
-    if (ratio <= 1.0 && ratio >= 0.9125) return 65;
-    return Math.max(2, Math.round((70 - 4 * diff) * 1000) / 1000);
-  }
-}
-
-// ── LH 상태 ────────────────────────────────────────────────────────
-var lhState = {
-  추정가격:null, 소방통신추정:null, A값:null, 기초금액:null,
-  사정률:102.0, 업종:'전기', 구성업체수:3,
-  slots:[] // [{업체명, 지분율}]  — 나머지는 DB에서 자동
-};
-
-function lhEmptySlot() { return { 업체명:'', 지분율:0 }; }
-
-// ── 기본 계산 ──────────────────────────────────────────────────────
-function lhCalcBase() {
-  var E5 = Number(lhState.추정가격) || 0;
-  var H4 = Number(lhState.기초금액) || E5 * getBaseMult();
-  var 공예 = E5 * getBaseMult();  // 공사예정금액 = 추정가격 × 배율 (기본 1.1, 설정>공고/적격에서 변경 가능)
-  var 소방통신 = Number(lhState.소방통신추정) || 0;
-  var A = lhState.A값 ? Number(lhState.A값) : null;
-  var 사정률 = (Number(lhState.사정률) || 102) / 100;
-  var 예정가격 = A ? A : H4 * 사정률;
-  var 별표 = E5 >= 5000000000 ? 2 : 3;
-  var 업종 = lhState.업종;
-  // 실적 배수 (별표2: 전기/통신=2, 나머지=3; 별표3: 1)
-  var mult2 = (업종==='전기'||업종==='정보통신') ? 2 : 3;
-  var mult = 별표===2 ? mult2 : 1;
-  var 전기비율 = 소방통신 > 0 ? Math.max(0, (E5 - 소방통신) / E5) : 1.0;
-  var 필요실적 = 별표===2 ? H4 * 2 * 전기비율 : H4 * mult; // 기초금액(H4) × 배수
-  var autoTbRate = E5 >= 5000000000 ? 0.87495 : 0.88745;
-  var 투찰금액 = A ? (예정가격 - A) * autoTbRate + A : 예정가격 * autoTbRate;
-  var 하한가 = Math.ceil(예정가격 * 0.98 / 10) * 10;
-  return { E5, H4, 공예, 소방통신, A, 사정률, 예정가격, 별표, 업종, mult, 전기비율, 필요실적, 투찰금액, 하한가 };
-}
-
-// ── Stats 표시 ────────────────────────────────────────────────────
-function lhRefreshStats() {
-  var c = lhCalcBase();
-  var avgD = Number(state.bid.업계평균부채비율)||0;
-  var avgU = Number(state.bid.업계평균유동비율)||0;
-  var econWarn = (!avgD||!avgU) ? ' ⚠️업계평균미입력' : '';
-  $('#lh-o-추정').textContent  = c.E5   ? FMT_NUM(c.E5)   : '-';
-  $('#lh-o-예정').textContent  = c.공예 ? FMT_NUM(c.공예) : '-';
-  $('#lh-o-별표').textContent  = c.E5   ? '별표'+(c.별표===2?'2 (수행50+입찰50)':'3 (수행30+입찰70)') : '-';
-  $('#lh-o-필요실적').textContent = c.필요실적 ? FMT_NUM(Math.round(c.필요실적)) : '-';
-  $('#lh-o-투찰').textContent  = c.투찰금액 ? FMT_NUM(Math.round(c.투찰금액)) : '-';
-  $('#lh-o-하한가').textContent = c.하한가  ? FMT_NUM(c.하한가) : '-';
-  $('#lh-o-업계평균').textContent = avgD&&avgU ? '부채'+avgD+'% / 유동'+avgU+'%' : '⚠️ 미입력'+econWarn;
-  lhRenderCombos();
-}
-
-// ── 슬롯별 자동계산 ───────────────────────────────────────────────
-function lhSlotCalc(s, c) {
-  var f = (Number(s.지분율)||0) / 100;
-  var db = state.db.find(function(x){ return x.업체명 === s.업체명; });
-  var warn = [];
-
-  if (!s.업체명 || !db) {
-    return { f:f, db:null, warn:['업체 없음'], econ:null, 실적5년:0, 신인도가점:0, 품질점수:85, 품질득점:lhQualityScore(85) };
-  }
-
-  // 경영상태
-  var econResult = lhEconFromDB(db, c.별표);
-  if (econResult.noData) {
-    warn.push(econResult.noAvg ? '업계평균 미입력→경영상태 수동필요' : '부채/유동비율 DB 없음');
-  }
-
-  // 5년실적
-  var 실적5년 = Number(db.실적5) || 0;
-  if (!실적5년) warn.push('5년실적 DB 없음(0 처리)');
-
-  // 품질점수: DB에 품질평가 항목 없으면 기본85
-  var 품질점수 = 85; // 기본값
-
-  // 신인도 = 일자리가점(LH기준) + 안전보건 가점
-  var _rawJ = Number(db.일자리가점 != null ? db.일자리가점 : (db.신인도||0));
-  var 일자리 = (_rawJ>=2.5?1.0:0)+(_rawJ===0.5||_rawJ===3.0?0.5:0); // LH: A조건=+1(7A는+2.5), B조건=+0.5
-  var 안전 = lhSafetyBonus(db.안전보건시스템||'', c.별표);
-  var 신인도가점 = Math.min(일자리 + 안전, 1.5);
-
-  return { f:f, db:db, warn:warn, econ:econResult, 실적5년:실적5년,
-           신인도가점:신인도가점, 일자리:일자리, 안전:안전,
-           품질점수:품질점수, 품질득점:lhQualityScore(품질점수),
-           지분환산실적:실적5년*f };
-}
-
-// ── 슬롯 렌더링 ───────────────────────────────────────────────────
-function lhRenderCombos() {
-  var n = Number(lhState.구성업체수)||3;
-  while (lhState.slots.length < n) lhState.slots.push(lhEmptySlot());
-  lhState.slots = lhState.slots.slice(0,n);
-
-  var c = lhCalcBase();
-  var avgD = Number(state.bid.업계평균부채비율)||0;
-  var avgU = Number(state.bid.업계평균유동비율)||0;
-
-  var html = '<div style="overflow-x:auto"><table class="tbl" style="min-width:1100px;font-size:12px">';
-  html += '<thead><tr style="background:#f8fafc">'
-    + '<th style="min-width:130px">업체명 (DB 자동연동)</th>'
-    + '<th style="width:72px">지분율(%)</th>'
-    + '<th style="width:100px">경영상태점수<br><span style="font-size:10px;font-weight:400;color:#6b7280">/15점</span></th>'
-    + '<th style="width:110px">부채/유동/영업<br><span style="font-size:10px;font-weight:400;color:#6b7280">등급(자동)</span></th>'
-    + '<th style="width:100px">5년실적<br><span style="font-size:10px;font-weight:400;color:#6b7280">(DB자동)</span></th>'
-    + '<th style="width:90px">지분환산실적</th>'
-    + '<th style="width:80px">신인도가점<br><span style="font-size:10px;font-weight:400;color:#6b7280">(일자리+안전)</span></th>'
-    + '<th style="min-width:120px">상태</th>'
-    + '</tr></thead><tbody>';
-
-  lhState.slots.forEach(function(s, i) {
-    var sc = lhSlotCalc(s, c);
-    var econStr = '—', gradeStr = '—', warnStr = '';
-    var econColor = '#374151';
-    if (sc.econ && !sc.econ.noData) {
-      econStr = sc.econ.score.toFixed(3);
-      econColor = '#1d4ed8';
-      gradeStr = sc.econ.gD + ' / ' + sc.econ.gU + ' / ' + sc.econ.gY;
-    } else if (sc.econ && sc.econ.noData) {
-      econStr = '?'; econColor = '#d97706';
-    }
-    if (sc.warn.length) warnStr = sc.warn.map(function(w){return '<span style="color:#dc2626;font-size:10px">⚠ '+esc(w)+'</span>';}).join('<br>');
-    else warnStr = '<span style="color:#16a34a;font-size:10px">✅ 자동완성</span>';
-
-    // 지분율 색상
-    var 지분합_now = lhState.slots.reduce(function(a,sl){return a+(Number(sl.지분율)||0);},0);
-    var 지분OK = Math.abs(지분합_now - 100) < 0.01;
-
-    html += '<tr>'
-      // 업체명: datalist 자동완성
-      + '<td><input type="text" value="' + esc(s.업체명) + '" data-lhi="'+i+'" data-lhf="업체명"'
-      + ' list="lh-db-list" autocomplete="off"'
-      + ' style="width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:3px'
-      + (sc.db?';border-color:#86efac':s.업체명?';border-color:#fca5a5':'') + '"'
-      + ' placeholder="업체명 입력"></td>'
-      // 지분율
-      + '<td><input type="number" value="' + (s.지분율||'') + '" data-lhi="'+i+'" data-lhf="지분율"'
-      + ' step="0.1" min="0" max="100"'
-      + ' style="width:62px;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:3px;text-align:right'
-      + (지분OK?';border-color:#86efac':';border-color:#fca5a5') + '"></td>'
-      // 경영상태 (읽기전용)
-      + '<td style="text-align:right;font-weight:700;color:'+econColor+'">' + econStr + '</td>'
-      // 등급 (읽기전용)
-      + '<td style="text-align:center;font-size:11px;color:#374151">' + gradeStr
-      + (sc.econ && !sc.econ.noData ? '<br><span style="color:#9ca3af">rD='+(sc.econ.rD!=null?sc.econ.rD.toFixed(0):'?')+'% rU='+(sc.econ.rU!=null?sc.econ.rU.toFixed(0):'?')+'%</span>' : '')
-      + '</td>'
-      // 5년실적
-      + '<td style="text-align:right;font-size:11px">' + (sc.실적5년 ? FMT_NUM(sc.실적5년) : '<span style="color:#9ca3af">0</span>') + '</td>'
-      // 지분환산실적
-      + '<td style="text-align:right;font-size:11px">' + (sc.지분환산실적 > 0 ? FMT_NUM(Math.round(sc.지분환산실적)) : '-') + '</td>'
-      // 신인도
-      + '<td style="text-align:right;font-size:11px;color:#92400e">'
-      + (sc.db ? ((sc.신인도가점>0?'+':'')+TRIM3(sc.신인도가점)
-        +'<br><span style="color:#9ca3af">일자리'+sc.일자리.toFixed(1)+' 안전+'+sc.안전.toFixed(1)+'</span>') : '—')
-      + '</td>'
-      // 상태
-      + '<td style="font-size:11px">' + warnStr + '</td>'
-      + '</tr>';
-  });
-
-  html += '</tbody></table></div>';
-
-  // 지분율 합 표시
-  var 지분합 = lhState.slots.reduce(function(a,s){return a+(Number(s.지분율)||0);},0);
-  var 지분OK = Math.abs(지분합-100)<0.01;
-  html += '<div style="margin-top:6px;font-size:12px;font-weight:700;color:'+(지분OK?'#16a34a':'#dc2626')+'">'
-    + '지분율 합계: '+TRIMDEC(지분합)+'% '+(지분OK?'✅':'⚠️ 합계가 100%가 되어야 합니다')+'</div>';
-
-  // 업계평균 안내
-  html += '<div style="margin-top:4px;font-size:11px;color:#6b7280">'
-    + '경영상태 자동계산 기준: 업계평균부채 '+(avgD?avgD+'%':'<b style="color:#dc2626">미입력</b>')
-    + ' / 업계평균유동 '+(avgU?avgU+'%':'<b style="color:#dc2626">미입력</b>')
-    + ' → ① 입찰적격 탭 → "공고 입력" 패널 오른쪽 하단 "평균부채/유동" 항목에서 입력</div>';
-
-  html += '<div style="margin-top:4px;font-size:11px;color:#6b7280">'
-    + '별표2(50억+): 부채등급 A(&lt;50%)/B(&lt;75%)/C(&lt;100%)/D(&lt;125%)/E(이상) | 영업기간 A≥5년/B≥3년/C 미만<br>'
-    + '별표3(50억미만): 부채등급 A(&lt;100%)/B(&lt;130%)/C(&lt;160%)/D(&lt;190%)/E(이상) | 영업기간 A≥3년/B≥1년/C 미만</div>';
-
-  var el = $('#lh-combos');
-  if(el) el.innerHTML = html;
-
-  // datalist 생성
-  var dl = $('#lh-db-list');
-  if (!dl) {
-    dl = document.createElement('datalist');
-    dl.id = 'lh-db-list';
-    document.body.appendChild(dl);
-  }
-  dl.innerHTML = state.db.map(function(x){ return '<option value="'+esc(x.업체명)+'">'; }).join('');
-
-  // 이벤트 바인딩
-  document.querySelectorAll('#lh-combos [data-lhi]').forEach(function(el) {
-    el.addEventListener('change', function() {
-      var i = Number(this.dataset.lhi), f = this.dataset.lhf;
-      lhState.slots[i][f] = f==='지분율' ? (Number(this.value)||0) : this.value;
-      lhRenderCombos();
-    });
-    el.addEventListener('input', function() {
-      if (this.dataset.lhf === '업체명') {
-        var i = Number(this.dataset.lhi);
-        lhState.slots[i].업체명 = this.value;
-        lhRenderCombos();
-      }
-    });
-  });
-}
-
-// ── 계산 & 결과 표시 ─────────────────────────────────────────────
-
 // ████ SECTION: 확정 팝업 ████
 function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
   var combo=state.combos[ci];
@@ -9537,6 +9314,9 @@ function showLHComboPop(ci) {
   wrap.addEventListener('click',function(e){if(e.target===wrap)wrap.remove();});
 
   // ── 계산 함수 ──────────────────────────────────────────────────────
+  // 순수 계산(품질점수 합산 이후 전부)은 적격기준_LH.popupScore로 옮김. 여기 남은 건 DOM에서 품질점수를
+  // 읽고, 결과를 화면에 그리는 부분뿐 — 계산식 자체는 한 글자도 바뀌지 않았다(2026-08-06 상한 미적용
+  // 결정 포함, popupScore 안에 그대로 있음).
   function recalc(){
     // 품질점수 수집
     var qualInputs=wrap.querySelectorAll('.lhpop-quality');
@@ -9555,55 +9335,14 @@ function showLHComboPop(ci) {
     if(품질합셀)품질합셀.textContent=품질가중합.toFixed(3)+' → '+
       (품질가중합>=90?5:품질가중합>=88?3:품질가중합>=85?2:품질가중합>=83?1.5:품질가중합>=80?1:0)+'pt';
 
-    // 지분환산실적 합계
-    var 지분환산실적=slots.reduce(function(a,s){return a+(Number(s.실적)||0)*(Number(s.지분율)||0)/100;},0);
+    var r=적격기준_LH.popupScore(slots,품질가중합,필요실적,예정가격,A값,투찰금액,is50억);
+
     var 실적합셀=document.getElementById('lhpop-실적합계');
-    if(실적합셀)실적합셀.textContent=FN(지분환산실적);
+    if(실적합셀)실적합셀.textContent=FN(r.지분환산실적);
 
-    // 시공경험
-    var 실적계수=필요실적>0?지분환산실적/필요실적:0;
-    var 실적점수=Math.min(실적계수*13,13);
-    var 품질득점=품질가중합>=90?5:품질가중합>=88?3:품질가중합>=85?2:품질가중합>=83?1.5:품질가중합>=80?1:0;
-    var 시공경험점수=Math.min(실적점수+품질득점,15);
-
-    // 경영상태 (만점)
-    var 합산경영=slots.reduce(function(a,s){return a+15*(Number(s.지분율)||0)/100;},0);
-
-    // 신인도
-    var 합산신인도=slots.reduce(function(a,s){return a+((Number(s.신인도)||0)-(Number(s.감점)||0))*(Number(s.지분율)||0)/100;},0);
-    var 신인도점수=Math.max(-3,Math.min(1.5,합산신인도));
-
-    // 하도급·자재
-    var 하도급점수=is50억?10:0;
-    var 자재점수=is50억?10:0;
-
-    // 수행능력
-    // 2026-08-06: 시공경험(최대15)+경영상태(15)가 상한(30/50)을 이루지만 신인도(+1.5~-3.0)는
-    // 그 위에 추가/차감되는 항목이라 합계가 상한을 넘거나(가점) 못 미쳐도(감점) 그대로 반영해야 함
-    // — 실제 적격판정 엔진(calcSlot의 LH 분기)은 총점에 이 상한을 적용하지 않음. 여기서만 Math.min으로
-    // 잘라내던 것을 제거(사용자 확인: 30.250pt인데 30.000pt로 잘려 총점이 95.00으로 낮게 나오던 문제).
-    var 수행능력합=시공경험점수+합산경영+신인도점수+하도급점수+자재점수;
-    var 수행능력상한=is50억?50:30;
-    var 수행능력점수=수행능력합;
-
-    // 입찰가격
-    var 기본가격점수=is50억?45:65;
-    var mBase=is50억?50:70;
-    var mFactor=is50억?2:4;
-    var 분모=A값?(예정가격-A값):예정가격;
-    var 분자=A값?(투찰금액-A값):투찰금액;
-    var ratio_r=분모>0?Math.round(분자/분모*10000)/10000:0;
-    var C51=Math.abs((0.9-ratio_r)*100);
-    var 입찰가격득점=mBase-mFactor*C51;
-    var 가산점=Math.max(0,Math.floor(입찰가격득점-기본가격점수));
-    var 가격점수=기본가격점수+가산점;
-
-    // 총점
-    var 총점=수행능력점수+가격점수;
-    var 적격=총점>=95;
-    var bg=적격?'#dcfce7':'#fee2e2';
-    var tc=적격?'#166534':'#991b1b';
-    var bc=적격?'#86efac':'#fca5a5';
+    var bg=r.적격?'#dcfce7':'#fee2e2';
+    var tc=r.적격?'#166534':'#991b1b';
+    var bc=r.적격?'#86efac':'#fca5a5';
 
     function row(label,val,sub,hl){
       return '<tr'+(hl?' style="background:#fef3c7"':'')+'>'+
@@ -9618,35 +9357,35 @@ function showLHComboPop(ci) {
     '<div style="flex:1;min-width:250px"><table style="width:100%;border-collapse:collapse">'+
       sec('▸ 시공경험 (만점 15점)','#065f46')+
       row('필요실적',FN(필요실적),'기초금액×'+lhMult+(전기비율<1?' ×'+Math.round(전기비율*100)+'%':''))+
-      row('지분환산실적합산',FN(지분환산실적))+
-      row('실적계수',실적계수.toFixed(4),'→ '+실적점수.toFixed(3)+'pt')+
-      row('품질 가중합산',품질가중합.toFixed(3),'→ '+품질득점+'pt',true)+
-      row('시공경험 득점',시공경험점수.toFixed(3)+' pt',undefined,true)+
+      row('지분환산실적합산',FN(r.지분환산실적))+
+      row('실적계수',r.실적계수.toFixed(4),'→ '+r.실적점수.toFixed(3)+'pt')+
+      row('품질 가중합산',품질가중합.toFixed(3),'→ '+r.품질득점+'pt',true)+
+      row('시공경험 득점',r.시공경험점수.toFixed(3)+' pt',undefined,true)+
       sec('▸ 경영상태 (만점 15점)','#1d4ed8')+
-      row('경영상태',합산경영.toFixed(3)+' pt','만점 처리',true)+
+      row('경영상태',r.합산경영.toFixed(3)+' pt','만점 처리',true)+
       sec('▸ 신인도 (+1.5~-3.0점)','#92400e')+
-      row('합산순신인도',TRIM3(합산신인도))+
-      row('신인도 득점',(신인도점수>=0?'+':'')+TRIM3(신인도점수)+' pt',undefined,true)+
+      row('합산순신인도',TRIM3(r.합산신인도))+
+      row('신인도 득점',(r.신인도점수>=0?'+':'')+TRIM3(r.신인도점수)+' pt',undefined,true)+
       (is50억?(sec('▸ 하도급·자재 (각 만점 10점)','#374151')+row('하도급+자재','20 pt','만점',true)):'')+
-      sec('▸ 수행능력 (상한 '+수행능력상한+'pt)','#374151')+
-      row('수행능력 합계',수행능력합.toFixed(3)+' pt',undefined,true)
+      sec('▸ 수행능력 (상한 '+r.수행능력상한+'pt)','#374151')+
+      row('수행능력 합계',r.수행능력합.toFixed(3)+' pt',undefined,true)
     +'</table></div>'+
     '<div style="flex:1;min-width:250px"><table style="width:100%;border-collapse:collapse">'+
       sec('▸ 입찰가격 (상한 '+(is50억?50:70)+'pt)','#374151')+
       row('투찰율',((투찰율*100).toFixed(3))+'%')+
       row('투찰금액',FN(투찰금액)+(하한가?' ★하한가':''))+
-      row('비율(D48)',ratio_r.toFixed(4),'(투찰-A)÷(예정-A)')+
-      row('편차(C51)',C51.toFixed(4),'|0.9-비율|×100')+
-      row('가격득점(C53)',입찰가격득점.toFixed(3)+'pt',mBase+'-'+mFactor+'×'+C51.toFixed(4))+
-      row('기본가격점수',기본가격점수+' pt')+
-      row('가산점(H25)',가산점+' pt','FLOOR(득점-기본)')+
-      row('가격점수',가격점수+' pt',undefined,true)+
+      row('비율(D48)',r.ratio_r.toFixed(4),'(투찰-A)÷(예정-A)')+
+      row('편차(C51)',r.C51.toFixed(4),'|0.9-비율|×100')+
+      row('가격득점(C53)',r.입찰가격득점.toFixed(3)+'pt',r.mBase+'-'+r.mFactor+'×'+r.C51.toFixed(4))+
+      row('기본가격점수',r.기본가격점수+' pt')+
+      row('가산점(H25)',r.가산점+' pt','FLOOR(득점-기본)')+
+      row('가격점수',r.가격점수+' pt',undefined,true)+
     '</table></div></div>'+
     '<div style="margin-top:12px;padding:12px 16px;background:'+bg+';border:2px solid '+bc+';border-radius:8px;text-align:center">'+
-      '<div style="font-size:12px;color:'+tc+';margin-bottom:2px">수행능력 '+수행능력점수.toFixed(3)+'pt + 가격 '+가격점수+'pt</div>'+
-      '<div style="font-size:26px;font-weight:800;color:'+tc+'">총점 '+총점.toFixed(2)+'점</div>'+
-      '<div style="font-size:15px;font-weight:700;color:'+tc+';margin-top:2px">'+(적격?'✅ 적격 (95점 이상)':'❌ 부적격 (95점 미달, '+(총점-95).toFixed(2)+'점)')+
-      (수행능력점수>=수행능력상한?' ⚠ 수행능력 만점':'')+'</div>'+
+      '<div style="font-size:12px;color:'+tc+';margin-bottom:2px">수행능력 '+r.수행능력점수.toFixed(3)+'pt + 가격 '+r.가격점수+'pt</div>'+
+      '<div style="font-size:26px;font-weight:800;color:'+tc+'">총점 '+r.총점.toFixed(2)+'점</div>'+
+      '<div style="font-size:15px;font-weight:700;color:'+tc+';margin-top:2px">'+(r.적격?'✅ 적격 (95점 이상)':'❌ 부적격 (95점 미달, '+(r.총점-95).toFixed(2)+'점)')+
+      (r.수행능력점수>=r.수행능력상한?' ⚠ 수행능력 만점':'')+'</div>'+
     '</div>';
 
     var area=document.getElementById('lhpop-score-area');
@@ -9660,159 +9399,6 @@ function showLHComboPop(ci) {
 
   // 초기 계산
   recalc();
-}
-
-function lhCalcAndShow() {
-  var c = lhCalcBase();
-  if (!c.E5) { toast('추정가격을 먼저 입력하세요'); return; }
-
-  var slots = lhState.slots.filter(function(s){ return (s.업체명||'').trim(); });
-  if (!slots.length) { toast('업체명을 1개 이상 입력하세요'); return; }
-
-  // 집계
-  var 합산경영상태=0, 합산지분환산실적=0, 합산신인도=0, 합산품질지분=0, 합산지분=0;
-  var rows=[], hasWarn=false;
-
-  lhState.slots.forEach(function(s) {
-    var sc = lhSlotCalc(s, c);
-    var f = sc.f;
-    합산지분 += Number(s.지분율)||0;
-    if (sc.econ && !sc.econ.noData) 합산경영상태 += sc.econ.score * f;
-    else if (sc.db) hasWarn = true;
-    합산지분환산실적 += sc.지분환산실적;
-    합산신인도 += sc.신인도가점 * f;
-    합산품질지분 += sc.품질점수 * f;  // 가중평균용
-    rows.push(sc);
-  });
-
-  if (Math.abs(합산지분-100)>0.1) { toast('지분율 합이 100%가 아닙니다 (현재 '+TRIMDEC(합산지분)+'%)'); return; }
-
-  // 시공경험
-  var mult = c.mult;
-  var 공예 = c.공예;
-  var 전기비율 = c.전기비율;
-  // 필요실적기준 = lhCalcBase()에서 이미 기초금액 기준으로 계산됨
-  var 필요실적기준 = c.필요실적;
-  var 실적계수 = 필요실적기준>0 ? 합산지분환산실적/필요실적기준 : 0;
-  var 실적점수 = Math.min(실적계수*13, 13);
-
-  // 품질평가: 지분가중평균 → 점수
-  var 품질avg = 합산지분>0 ? 합산품질지분 : 85;
-  var 품질득점 = lhQualityScore(품질avg);
-  var 시공경험점수 = Math.min(실적점수+품질득점, 15);
-
-  // 신인도
-  var 신인도점수;
-  if (c.별표===2) {
-    신인도점수 = Math.max(-3.0, Math.min(1.5, 합산신인도)); // LH A조건=+1점 직접 적용
-  } else {
-    신인도점수 = Math.min(1.5, 합산신인도);
-  }
-
-  // 하도급 / 자재인력 (전기/소방/통신/문화재 만점)
-  var 하도급점수 = c.별표===2 ? 10 : 0;
-  var 자재인력점수 = c.별표===2 ? 10 : 0;
-
-  var 수행능력합 = 합산경영상태+시공경험점수+신인도점수+하도급점수+자재인력점수;
-  var 수행능력상한 = c.별표===2 ? 50 : 30;
-  var 수행능력점수 = Math.min(수행능력합, 수행능력상한);
-
-  var 입찰가격점수 = lhPriceScore(c.투찰금액, c.예정가격, c.A, c.별표);
-  var 입찰가격상한 = c.별표===2 ? 50 : 70;
-
-  var 총점 = 수행능력점수 + (입찰가격점수||0);
-  var 적격 = 총점 >= 95;
-
-  // ── 결과 HTML ──────────────────────────────────────────────────
-  var bg = 적격?'#dcfce7':'#fee2e2', bc = 적격?'#86efac':'#fca5a5', tc = 적격?'#166534':'#991b1b';
-  var html = '<div class="summary" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">';
-  html += '<div class="stat"><div class="k">경영상태<br><small>/15점</small></div><div class="v" style="color:#1d4ed8;font-weight:800">'+합산경영상태.toFixed(3)+'</div></div>';
-  html += '<div class="stat"><div class="k">시공경험<br><small>실적'+실적점수.toFixed(2)+'+품질'+품질득점.toFixed(1)+'/15점</small></div><div class="v" style="color:#065f46;font-weight:800">'+시공경험점수.toFixed(3)+'</div></div>';
-  html += '<div class="stat"><div class="k">신인도<br><small>+1.5~-3</small></div><div class="v" style="color:#92400e;font-weight:800">'+(신인도점수>=0?'+':'')+TRIM3(신인도점수)+'</div></div>';
-  if(c.별표===2){
-    html += '<div class="stat"><div class="k">하도급<br><small>만점/10점</small></div><div class="v">'+하도급점수+'</div></div>';
-    html += '<div class="stat"><div class="k">자재인력<br><small>만점/10점</small></div><div class="v">'+자재인력점수+'</div></div>';
-  }
-  html += '<div class="stat" style="background:#dbeafe;border-color:#93c5fd"><div class="k" style="color:#1d4ed8">수행능력</div><div class="v" style="color:#1d4ed8;font-weight:800">'+수행능력점수.toFixed(3)+' /'+수행능력상한+'</div></div>';
-  html += '<div class="stat" style="background:#f0fdf4;border-color:#86efac"><div class="k" style="color:#065f46">입찰가격<br><small>투찰율 자동</small></div><div class="v" style="color:#065f46;font-weight:800">'+(입찰가격점수!=null?입찰가격점수.toFixed(2):'?')+' /'+입찰가격상한+'</div></div>';
-  html += '<div class="stat" style="background:'+bg+';border-color:'+bc+';min-width:120px">'
-    + '<div class="k" style="color:'+tc+'">총점 (95점+ 적격)</div>'
-    + '<div class="v" style="font-size:22px;font-weight:800;color:'+tc+'">'+총점.toFixed(2)+'</div>'
-    + '<div style="font-weight:700;color:'+tc+'">'+(적격?'✅ 적격':'❌ 부적격')+'</div></div>';
-  html += '</div>';
-
-  if (hasWarn) html += '<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:8px;margin-bottom:8px;font-size:12px;color:#92400e">⚠️ 일부 업체의 경영상태를 자동계산하지 못했습니다. 업계평균 입력 또는 해당 업체 DB에 부채·유동비율을 등록해 주세요.</div>';
-
-  // 업체별 상세
-  html += '<table class="tbl" style="font-size:12px"><thead><tr>'
-    + '<th>업체명</th><th>지분율</th><th>경영상태(각자)</th><th>지분환산경영</th>'
-    + '<th>5년실적</th><th>지분환산실적</th><th>신인도(일자리+안전)</th><th>부채/유동/영업등급</th>'
-    + '</tr></thead><tbody>';
-  rows.forEach(function(sc) {
-    var s = sc.db ? sc.db : {};
-    var 업체명 = lhState.slots[rows.indexOf(sc)] ? lhState.slots[rows.indexOf(sc)].업체명 : '';
-    var econScore = (sc.econ&&!sc.econ.noData) ? sc.econ.score.toFixed(3) : '?';
-    var gradeStr = (sc.econ&&!sc.econ.noData) ? sc.econ.gD+'/'+sc.econ.gU+'/'+sc.econ.gY : '?';
-    html += '<tr>'
-      + '<td>'+esc(업체명||'-')+'</td>'
-      + '<td style="text-align:right">'+TRIMDEC(Number(lhState.slots[rows.indexOf(sc)]&&lhState.slots[rows.indexOf(sc)].지분율)||0)+'%</td>'
-      + '<td style="text-align:right;color:#1d4ed8">'+econScore+'</td>'
-      + '<td style="text-align:right">'+(sc.econ&&!sc.econ.noData?(sc.econ.score*sc.f).toFixed(3):'?')+'</td>'
-      + '<td style="text-align:right">'+(sc.실적5년?FMT_NUM(sc.실적5년):'-')+'</td>'
-      + '<td style="text-align:right">'+(sc.지분환산실적>0?FMT_NUM(Math.round(sc.지분환산실적)):'-')+'</td>'
-      + '<td style="text-align:right">'+(sc.db?(sc.신인도가점>0?'+':'')+TRIM3(sc.신인도가점)+' (일:'+sc.일자리.toFixed(1)+' 안:'+sc.안전.toFixed(1)+')':'—')+'</td>'
-      + '<td style="text-align:center;font-size:11px">'+gradeStr+'</td>'
-      + '</tr>';
-  });
-  html += '</tbody></table>';
-
-  html += '<div style="margin-top:8px;font-size:11px;color:#6b7280">'
-    + '실적계수 = '+(합산지분환산실적>0?FMT_NUM(Math.round(합산지분환산실적)):0)+' ÷ ('
-    + FMT_NUM(Math.round(공예))+' × '+mult+(c.전기비율<1?' × '+Math.round(c.전기비율*100)+'%(전기비율)':'')+')'
-    + ' = '+실적계수.toFixed(4)+' → 실적점수 '+실적점수.toFixed(3)+'점 (상한 13점)'
-    + ' | 투찰금액 '+FMT_NUM(Math.round(c.투찰금액))+'원 기준 → 입찰가격 '+((입찰가격점수||0).toFixed(2))+'점</div>';
-
-  var rp = $('#lh-result-panel'), rb = $('#lh-result-body');
-  if(rp) rp.style.display='';
-  if(rb) rb.innerHTML = html;
-}
-
-// ── 초기화 ──────────────────────────────────────────────────────
-function lhResetAll() {
-  lhState = { 추정가격:null, 소방통신추정:null, A값:null, 기초금액:null, 사정률:102.0, 업종:'전기', 구성업체수:3, slots:[] };
-  ['lh-추정가격','lh-소방통신추정','lh-A값','lh-기초금액'].forEach(function(id){var el=$('#'+id);if(el)el.value='';});
-  var s=$('#lh-사정률');if(s)s.value='102';
-  var u=$('#lh-업종');if(u)u.value='전기';
-  var n=$('#lh-구성업체수');if(n)n.value=3;
-  var rp=$('#lh-result-panel');if(rp)rp.style.display='none';
-  lhRefreshStats();
-}
-
-// ── 이벤트 바인딩 ───────────────────────────────────────────────
-function lhBind() {
-  var moneyIds = ['lh-추정가격','lh-소방통신추정','lh-A값','lh-기초금액'];
-  moneyIds.forEach(function(id) {
-    var el=$('#'+id); if(!el)return;
-    el.addEventListener('input', function() {
-      var raw=this.value.replace(/[^0-9]/g,'');
-      if(raw)this.value=FMT_NUM(Number(raw));
-      lhState[id.replace('lh-','')] = raw?Number(raw):null;
-      lhRefreshStats();
-    });
-  });
-  var s=$('#lh-사정률');
-  if(s)s.addEventListener('input',function(){lhState.사정률=Number(this.value)||102;lhRefreshStats();});
-  ['lh-업종','lh-구성업체수'].forEach(function(id){
-    var el=$('#'+id);if(!el)return;
-    el.addEventListener('change',function(){
-      lhState[id.replace('lh-','')] = id==='lh-구성업체수'?Number(this.value):this.value;
-      lhRenderCombos();lhRefreshStats();
-    });
-  });
-  var calcBtn=$('#lh-btn-calc');
-  if(calcBtn)calcBtn.addEventListener('click',lhCalcAndShow);
-  var resetBtn=$('#lh-btn-reset');
-  if(resetBtn)resetBtn.addEventListener('click',lhResetAll);
 }
 
 // ████ SECTION: 입찰적격판정 화면 다중화 (bidScreens, 계정별 파티션) ████
@@ -10374,9 +9960,6 @@ function boot(){
   refreshCombos();
   refreshExtAppNav();
   bind();
-  lhBind();
-  lhRenderCombos();
-  lhRefreshStats();
   var _gb=document.getElementById('btn-gist-sync');
   if(_gb)_gb.addEventListener('click',openGistModal);
   var _bts=document.getElementById('btn-bid-tab-search'),_its=document.getElementById('in-bid-tab-search');
