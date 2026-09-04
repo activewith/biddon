@@ -2392,7 +2392,7 @@ function calcEconScore(dbEntry,calc){
   if(isNaN(rD)||isNaN(rU))return null;
   var yr=calcYears(_pd.공사업등록일);
   // ── 지자체 기준 분기 ──────────────────────────────────────────────
-  if(isJija&&jijaTier>0)return calcEconScoreJija(rD,rU,yr,jijaTier);
+  if(isJija&&jijaTier>0)return 적격기준_지자체.econScore(rD,rU,yr,jijaTier);
   // ── 철도공단 기준 (붙임3/붙임4-A공사, 조달청과 배점 다름) ──────────
   var isRail=calc?calc.isRail:false;
   if(isRail){
@@ -2480,6 +2480,49 @@ function getEffectiveDeduction(c,calc){
   return{value:raw,method:'ratio',grade:null,expiry:null};
 }
 
+// ████ SECTION: 적격기준 구조화 (파일럿 — 지자체) ████
+// 목적: 지자체 적격심사에 필요한 "판정 규칙"(구간 판정·자동값·적용여부)을 한 곳에 모아 이름 붙여 호출하도록 함.
+// calcBid()/calcEconScore/jijaEffectiveDeduction/creditRefForRow 등 기존 호출부의 시그니처와 계산 결과는
+// 그대로이며, 그 안에서 흩어져 있던 지자체 관련 규칙만 여기를 거쳐 호출하도록 바꿈(동작 변경 없음).
+// econScore/effectiveDeduction은 기존 함수(calcEconScoreJija/jijaEffectiveDeduction)를 그대로 참조만 함 —
+// 로직 자체를 옮기지 않아 기존 검증 이력(별표3/4 환산 등)이 그대로 유효함.
+// 나중에 LH/철도공단/한전/도로공사/수자원공사도 같은 형태(적격기준_XXX)로 만들어, 공고문분석에서 정해진
+// 적격기준 하나만 선택적으로 호출하는 구조("그릇")로 확장할 예정 — 이번 단계는 그 첫 단계(지자체만 파일럿).
+const 적격기준_지자체 = {
+  // 추정가격(E5) → 별표 tier: 0=해당없음, 1=별표4(10~30억), 2=별표3(30~50억), 3=별표2(50~100억), 4=별표1(100억+)
+  tier: function(E5){
+    if(!(E5>0))return 0;
+    if(E5<LIMIT_30)return 1;
+    if(E5<LIMIT_50)return 2;
+    if(E5<LIMIT_100)return 3;
+    return 4;
+  },
+  // tier별 배수/투찰률 자동값(사용자가 직접 입력하지 않았을 때만 사용) — calcBid()의 기존 값 그대로
+  autoRates: function(tier,E5){
+    return {
+      배수: tier<=2?0.8:tier===3?1.7:1.8,
+      투찰률: tier>=4?0.81995:(E5>=LIMIT_50?0.87495:0.88745)
+    };
+  },
+  // 3개년 실적 사용 여부 — 추정가격 50억 이상(tier 3·4)만 해당
+  usesThreeYear: function(E5){ return E5>=LIMIT_50; },
+  // 신인도(가점) 적용 여부 — 지자체는 별표1~4 전 구간 미적용
+  appliesSinindo: function(){ return false; },
+  // 최대지분율 제한 예외 여부 — 10~30억(tier1)만 제한 없음
+  noMaxShareLimit: function(tier){ return tier===1; },
+  // 신용평가 등급 → 15점 만점 직접 환산(별표10, 지자체 전용 — 조달청 등 타기관의 35점 환산과 다름).
+  // jijaEffectiveDeduction/creditRefForRow가 각각 따로 갖고 있던 동일 수식을 하나로 통합.
+  creditScore15: function(grade){
+    var s=creditGradeScore(grade);
+    return s>=35.0?15.0:(grade==='BB-'?14.0:(['B+','B','B0','B-'].indexOf(grade)>=0?13.0:10.0));
+  },
+  // 경영상태 점수(별표4/3/2/1) 계산 — 기존 calcEconScoreJija 그대로 참조(로직 이동 없음)
+  econScore: null, // calcEconScoreJija 정의(2243행) 직후 아래에서 채워짐
+  // 재무비율 vs 신용평가 중 유리한 감점 선택 — 기존 jijaEffectiveDeduction 그대로 참조(로직 이동 없음)
+  effectiveDeduction: null // jijaEffectiveDeduction 정의 직후 아래에서 채워짐
+};
+적격기준_지자체.econScore=calcEconScoreJija;
+
 // 지자체 경영상태 감점: 재무비율(별표4/3/2/1) vs 신용평가 중 더 낮은(유리한) 값을 선택
 // 별표3(30~50억): 재무비율 평점합계는 15점 만점으로 산출되지만 최종 배점은 10점이므로 ×10/15 환산 필요
 // 별표4(10~30억): 이미 15점 만점 그대로 최종 배점 — 환산 불필요 (사용자 확인, 2026-07-15)
@@ -2498,7 +2541,7 @@ function jijaEffectiveDeduction(dbEntry,calc){
       var rD=_fDj?econForcedDebtRatio(_fDj):(Number(pd.부채비율)/avgD)*100;
       var rU=_fUj?econForcedLiqRatio(_fUj):(Number(pd.유동비율)/avgU)*100;
       var yr=calcYears(pd.공사업등록일);
-      var econJ=calcEconScoreJija(rD,rU,yr,calc.jijaTier);
+      var econJ=적격기준_지자체.econScore(rD,rU,yr,calc.jijaTier);
       if(econJ){
         var rawDed=15-econJ.score;
         ratioDed=Math.round((calc.jijaTier===2?rawDed*10/15:rawDed)*1000)/1000;
@@ -2511,7 +2554,7 @@ function jijaEffectiveDeduction(dbEntry,calc){
   if(cr&&cr.isValid){
     // 별표10 신용평가 점수표(15점 만점 기준): AAA~BB+/BB0=15.0, BB-=14.0, B+/B/B-=13.0, CCC+이하=10.0
     // 별표3(jijaTier===2, 최종 10점 만점)만 ×10/15 환산, 나머지(별표4/2/1)는 15점 만점 그대로 적용
-    var cs15=creditGradeScore(cr.grade)>=35.0?15.0:(cr.grade==='BB-'?14.0:(['B+','B','B0','B-'].indexOf(cr.grade)>=0?13.0:10.0));
+    var cs15=적격기준_지자체.creditScore15(cr.grade);
     creditDed=Math.round((calc.jijaTier===2?(15-cs15)*10/15:(15-cs15))*1000)/1000;
   }
   if(creditDed!=null&&(ratioDed==null||creditDed<ratioDed)){
@@ -2522,6 +2565,7 @@ function jijaEffectiveDeduction(dbEntry,calc){
   }
   return{value:Math.abs(Number(dbEntry.감점)||0),method:'fallback',grade:null,ratioDed:null,ok:false};
 }
+적격기준_지자체.effectiveDeduction=jijaEffectiveDeduction;
 
 // 확정메세지/조합결과TXT 참고용 신용등급 병기: 신용등급 대체가 실제 적용되지 않은 업체라도, 신용등급 감점이
 // 실제 적용된(경영비율) 감점보다 유리하면 "|등급" 또는 "|등급/-감점"으로 참고 병기한다.
@@ -2535,7 +2579,7 @@ function creditRefForRow(dbEntry,calc){
   if(calc&&calc.isJija&&calc.jijaTier>0){
     var cr=parseCreditRating(dbEntry.신용평가||'');
     if(!cr||!cr.isValid)return null;
-    var cs15=creditGradeScore(cr.grade)>=35.0?15.0:(cr.grade==='BB-'?14.0:(['B+','B','B0','B-'].indexOf(cr.grade)>=0?13.0:10.0));
+    var cs15=적격기준_지자체.creditScore15(cr.grade);
     var ded=Math.round((calc.jijaTier===2?(15-cs15)*10/15:(15-cs15))*1000)/1000;
     return{grade:cr.grade,deduction:ded};
   }
@@ -3170,20 +3214,14 @@ function calcBid(){
   var isJija=(b.적격기준==='지자체');
   var isKEPCO=(b.적격기준==='한전');
   // jijaTier: 0=해당없음, 1=10억~30억, 2=30억~50억, 3=50억~100억, 4=100억~300억
-  var jijaTier=0;
-  if(isJija&&E5>0){
-    if(E5<LIMIT_30)jijaTier=1;
-    else if(E5<LIMIT_50)jijaTier=2;
-    else if(E5<LIMIT_100)jijaTier=3;
-    else jijaTier=4;
-  }
+  var jijaTier=isJija?적격기준_지자체.tier(E5):0;
   // ── 배수·투찰률 자동값 ────────────────────────────────────────────────
   // 지자체: 배수=추정가격 구간별(0.8/1.7/1.8), E6=E5×배수
   // 조달청/LH/도로공사: 배수=1 or 2, E6=E4×배수
   var auto배수, auto투찰률;
   if(isJija&&jijaTier>0){
-    auto배수=jijaTier<=2?0.8:jijaTier===3?1.7:1.8;
-    auto투찰률=jijaTier>=4?0.81995:(E5>=LIMIT_50?0.87495:0.88745);
+    var _jr=적격기준_지자체.autoRates(jijaTier,E5);
+    auto배수=_jr.배수;auto투찰률=_jr.투찰률;
   } else if(isKEPCO){
     // 한전(한국전력공사): 추정가격 10억 기준으로 기초금액 배수만 다름(10억 이상=×1, 10억 미만=×0.5). 투찰률은 참고용으로 조달청 기본값 유지.
     auto배수=E5>=LIMIT_10?1:0.5;
@@ -3205,7 +3243,7 @@ function calcBid(){
   // 이 값만은 적격판정에 직접 반영됨(분담 그룹 시평액 합산이 이 값을 넘어야 함). 2026-07-29 추가
   var 분담시평=(b.분담시평!=null&&b.분담시평!==''&&!isNaN(b.분담시평))?Number(b.분담시평):null;
   // 3년실적: 지자체이면서 추정가격 50억 이상인 경우만 (tier 3,4)
-  var use3yr=isJija&&E5>=LIMIT_50;
+  var use3yr=isJija&&적격기준_지자체.usesThreeYear(E5);
   // ── LH 기준 ──────────────────────────────────────────────────────
   var isLH=(b.적격기준==='LH');
   if(isLH&&E5>0){
