@@ -10025,7 +10025,10 @@ function searchBidScreens(term){
   if(state.kepcoModeActive)exitKepcoPage();
   var q=term.toLowerCase();
   bidTabSearchMatches=state.bidScreens.map(function(scr,i){
-    var hay=((scr.name||'')+' '+((scr.bid&&scr.bid.공고명)||'')+' '+((scr.bid&&scr.bid.공고번호)||'')).toLowerCase();
+    var b=scr.bid||{};
+    // 2026-09-08: 검색 대상에 적격기준(지자체/한전/LH 등)과 지역선택(배열)을 추가
+    var 지역텍스트=Array.isArray(b.지역선택)?b.지역선택.join(' '):(b.지역선택||'');
+    var hay=((scr.name||'')+' '+(b.공고명||'')+' '+(b.공고번호||'')+' '+(b.적격기준||'')+' '+지역텍스트).toLowerCase();
     return hay.indexOf(q)>=0?i:-1;
   }).filter(function(i){return i>=0;});
   renderBidScreenTabs();
