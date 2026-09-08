@@ -6691,7 +6691,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       // 기존처럼 합산 숫자에 월 표시를 붙이고 등급을 참고로 이어붙임(예: (+0.3_8월)BB-).
       var _pureCredit3=row.creditApplied&&row._creditInfo&&row._creditInfo.grade&&!row.신인도;
       if(_pureCredit3){
-        snSuffix='('+row._creditInfo.grade+(row._creditInfo.deduction>0?('/-'+TRIM3(row._creditInfo.deduction)):'')+')';
+        snSuffix='('+(row._creditInfo.deduction>0?('-'+TRIM3(row._creditInfo.deduction)+'_'):'')+row._creditInfo.grade+')';
       }else{
         if(row.creditApplied&&row._creditInfo&&row._creditInfo.grade){
           snSuffix=snSuffix?snSuffix+row._creditInfo.grade:'('+row._creditInfo.grade+')';
@@ -6702,7 +6702,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
         // (예: 순감점 0이면 (-3.2_8월|BB0), 0보다 크면 (-1.5_8월|BB-/-1))
         if(!row.creditApplied&&sn<0){
           var _cg3=creditRefForRow(_dbE3,c);
-          if(_cg3&&_cg3.deduction<Math.abs(sn)&&snSuffix)snSuffix=snSuffix.slice(0,-1)+'|'+_cg3.grade+(_cg3.deduction>0?('/-'+TRIM3(_cg3.deduction)):'')+')';
+          if(_cg3&&_cg3.deduction<Math.abs(sn)&&snSuffix)snSuffix=snSuffix.slice(0,-1)+'|'+(_cg3.deduction>0?('-'+TRIM3(_cg3.deduction)+'_'):'')+_cg3.grade+')';
         }
       }
       return nm+' '+TRIMDEC(Number(row.지분율)||0)+snSuffix+funcSuffixText(row);
@@ -6752,7 +6752,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       // 신용등급 대체 적용: 신인도(가점) 기여가 전혀 없는 순수 신용등급 대체 감점이면 "(등급/-감점)" 형태로만 표시
       var _pureCredit4=row.creditApplied&&row._creditInfo&&row._creditInfo.grade&&!row.신인도;
       if(_pureCredit4){
-        snSfx2='('+row._creditInfo.grade+(row._creditInfo.deduction>0?('/-'+TRIM3(row._creditInfo.deduction)):'')+')';
+        snSfx2='('+(row._creditInfo.deduction>0?('-'+TRIM3(row._creditInfo.deduction)+'_'):'')+row._creditInfo.grade+')';
       }else{
         if(row.creditApplied&&row._creditInfo&&row._creditInfo.grade){
           snSfx2=snSfx2?snSfx2+row._creditInfo.grade:'('+row._creditInfo.grade+')';
@@ -6762,7 +6762,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
         // 대체(구제) 적용 안 됐어도 신용등급 감점이 실제 적용된 감점보다 유리하면 참고용으로 병기 — 감점(음수)일 때만
         if(!row.creditApplied&&sn2<0){
           var _cg4=creditRefForRow(_dbE4,c);
-          if(_cg4&&_cg4.deduction<Math.abs(sn2)&&snSfx2)snSfx2=snSfx2.slice(0,-1)+'|'+_cg4.grade+(_cg4.deduction>0?('/-'+TRIM3(_cg4.deduction)):'')+')';
+          if(_cg4&&_cg4.deduction<Math.abs(sn2)&&snSfx2)snSfx2=snSfx2.slice(0,-1)+'|'+(_cg4.deduction>0?('-'+TRIM3(_cg4.deduction)+'_'):'')+_cg4.grade+')';
         }
       }
       seen[nm]=true;maxLines.push(nm4+' '+Math.floor(mx)+'%'+snSfx2);
@@ -9512,7 +9512,7 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
     // 2026-08-21: (-1.0_8월)BB- 형식은 신용등급이 매월 갱신되는 것처럼 보여 오해 소지가 있다는 지적으로 수정.
     var _pureCredit7=s.creditApplied&&s._creditInfo&&s._creditInfo.grade&&!s.신인도;
     if(_pureCredit7){
-      netStr=' ('+s._creditInfo.grade+(s._creditInfo.deduction>0?('/-'+TRIM3(s._creditInfo.deduction)):'')+')';
+      netStr=' ('+(s._creditInfo.deduction>0?('-'+TRIM3(s._creditInfo.deduction)+'_'):'')+s._creditInfo.grade+')';
     }else{
       // 신용등급은 '경영상태비율로 부적격일 때 대체 적용된 경우'에만 표시 (BB0 이상=감점0이면 점수 없이 등급만)
       if(s.creditApplied&&s._creditInfo&&s._creditInfo.grade){
@@ -9528,7 +9528,7 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
       if(!s.creditApplied&&net<0){
         var _cg7=creditRefForRow(dbEntry,_comboCalc);
         if(_cg7&&_cg7.deduction<Math.abs(net)&&netStr){
-          netStr=netStr.slice(0,-1)+'|'+_cg7.grade+(_cg7.deduction>0?('/-'+TRIM3(_cg7.deduction)):'')+')';
+          netStr=netStr.slice(0,-1)+'|'+(_cg7.deduction>0?('-'+TRIM3(_cg7.deduction)+'_'):'')+_cg7.grade+')';
         }
       }
     }
