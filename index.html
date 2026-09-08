@@ -9520,15 +9520,17 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
       }
       // 월 표시는 감점/가점 숫자가 실제로 있을 때만 붙임 — 신용등급만 있을 때는 매월 갱신되는 자료가 아니므로 생략
       if(_hasNum7)netStr=jobAMonthTag(dbEntry,s.신인도,netStr);
-      // 대체(구제) 적용 안 됐어도 신용등급 감점이 실제 적용된 감점보다 유리하면 참고용으로 "|등급"(또는 "|등급/-감점") 병기.
-      // 2026-08-20: 한때 감점 숫자를 지우고 등급만 남기도록 바꿨었으나(둘 중 하나만 표시), 2026-08-21에 조합결과TXT
-      // (exportCombosText)와 동일하게 "감점 숫자는 유지 + 신용등급 참고 병기" 방식으로 재통일함(사용자 요청).
+      // 대체(구제) 적용 안 됐어도 신용등급 감점이 실제(경영비율) 감점보다 유리하면, 경영비율 숫자 대신
+      // 신용등급 쪽만 표시(둘 중 더 유리한 쪽 하나만 — "|" 병기 방식 폐지).
+      // 2026-08-20: 한때 감점 숫자를 지우고 등급만 남기도록 바꿨다가, 2026-08-21에 "숫자 유지+등급 병기"로
+      // 재통일했었으나(조합결과TXT와 동일 포맷), 2026-09-08에 확정메세지만 다시 "유리한 쪽 하나만 표시"로 변경(사용자 요청).
+      // 조합결과TXT(exportCombosText)는 기존 "숫자 유지+등급 병기"(|) 방식 그대로 유지 — 확정메세지에만 적용.
       // 지자체 건은 creditRefForRow가 별표10 15점 직접 환산표를 쓰므로, 기존에 여기서 쓰던 getCreditDeduction(비지자체용
       // 35점→15점 환산)이 지자체 신용등급 감점을 실제보다 훨씬 작게 오판해 감점 숫자 자체를 지워버리던 버그도 함께 해결됨.
       if(!s.creditApplied&&net<0){
         var _cg7=creditRefForRow(dbEntry,_comboCalc);
-        if(_cg7&&_cg7.deduction<Math.abs(net)&&netStr){
-          netStr=netStr.slice(0,-1)+'|'+(_cg7.deduction>0?('-'+TRIM3(_cg7.deduction)+'_'):'')+_cg7.grade+')';
+        if(_cg7&&_cg7.deduction<Math.abs(net)){
+          netStr=' ('+(_cg7.deduction>0?('-'+TRIM3(_cg7.deduction)+'_'):'')+_cg7.grade+')';
         }
       }
     }
