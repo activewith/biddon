@@ -7564,6 +7564,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
             '">강제할당'+(combo.강제할당?' ON':'')+'</button>':'')+
           (calc.isLH?'<button class="btn btn-sm" style="background:'+lhBtnColor+';color:#fff;font-weight:600" data-lhcalc="'+ci+'">점수계산</button>':'')+
           (calc.isRail?'<button class="btn btn-sm" style="background:#0369a1;color:#fff;font-weight:600" data-railtech="'+ci+'" title="철도기술점수 DB에서 업체명이 일치하는 업체의 총합산점수를 각 슬롯 Func 칸에 자동 입력">🚄기술</button>':'')+
+          '<input type="text" class="combo-confirm-memo" data-ci="'+ci+'" maxlength="20" placeholder="확정메세지 메모(20자)" value="'+esc(combo.확정메모||'')+'" style="width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit" title="확정 버튼을 누르면 메세지 맨 끝에 [메모내용]으로 추가됩니다(20자 이내)">'+
           '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-weight:600" data-confirm="'+ci+'">확정</button>'+
           '<button class="btn btn-sm btn-ghost" data-add-slot="'+ci+'"'+(slotFull?' disabled title="슬롯 최대 5개"':'')+'>＋ 슬롯</button>'+
           '<button class="btn btn-sm" style="background:#2563eb;color:#fff;font-weight:600" data-rec="'+ci+'">자동분배</button>'+
@@ -8289,6 +8290,15 @@ function bind(){
     }
     if(t.classList.contains('combo-sipyung-chk')){
       state.combos[Number(t.dataset.ci)].표시시평합=t.checked;save();return;
+    }
+    // 확정메세지 전용 메모 — 확정 버튼(showConfirmPop)을 누르면 메세지 맨 끝에 "[메모내용]"으로 추가됨.
+    // 20자 제한은 maxlength로 입력 단계에서부터 막되(붙여넣기 대비), 여기서도 한 번 더 잘라 저장.
+    if(t.classList.contains('combo-confirm-memo')){
+      var cmi=Number(t.dataset.ci);
+      var mv=(t.value||'').slice(0,20);
+      if(mv!==t.value)t.value=mv;
+      state.combos[cmi].확정메모=mv;
+      save();return;
     }
     // 조합별 사정률 입력 처리
     if(t.classList.contains('combo-sajeong-input')){
@@ -9644,6 +9654,9 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
   }else{
     result=msg+'\n\n'+TAG+'\n'+compLines+'\n\n'+(_globalCalc.isKEPCO?'협정 부탁드립니다.':'협정 부탁 드립니다.');
   }
+  // 조합슬롯의 "확정메세지 메모" 입력칸(combo.확정메모, 20자 이내)에 내용이 있으면 메세지 맨 끝(협정 부탁 문구 다음 줄)에
+  // "[메모내용]" 형태로 추가. 협정메세지(state.bid.협정메세지)와 달리 이 메모는 확정메세지에만 쓰이는 조합별 값이다.
+  if(combo.확정메모&&combo.확정메모.trim())result+='\n['+combo.확정메모.trim()+']';
   // 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티")를 라벨로 추출해 "복합(전기+분담)"의 "분담"을 대체
   var _damLabels=slots.filter(function(s){return s.grp==='분담';}).map(function(s){
     var _nm=(s.업체명||'').trim();
