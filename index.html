@@ -6746,8 +6746,8 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     var _showSipyung=!c.isKEPCO&&!!(b.표시시평합||combo.표시시평합);
     if(_showJeoksum||_showSipyung){
       var _sumParts=[];
-      if(_showJeoksum)_sumParts.push('실적합 '+_EOK_FLOOR(r.합산실적)+'억');
-      if(_showSipyung)_sumParts.push('시평합 '+_EOK_FLOOR(r.합산시평)+'억');
+      if(_showJeoksum)_sumParts.push('실적합'+_EOK_FLOOR(r.합산실적)+'억');
+      if(_showSipyung)_sumParts.push('시평합'+_EOK_FLOOR(r.합산시평)+'억');
       line+=' ['+_sumParts.join('_')+']';
     }
     comboLines.push(line);
