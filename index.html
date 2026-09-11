@@ -695,7 +695,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},regionNotes:{},eligTables:null,eligTablesUpdated:null},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[]},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -793,6 +793,7 @@ function gistApplyData(obj){
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
   if(obj.settings&&obj.settings.regionNotes)Object.assign(state.settings.regionNotes,obj.settings.regionNotes);
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
+  if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
   ensureDefaultAccounts();
@@ -1381,6 +1382,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
   if(obj.settings&&obj.settings.regionNotes)Object.assign(state.settings.regionNotes,obj.settings.regionNotes);
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
+  if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
   if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
@@ -1465,6 +1467,7 @@ function load(){
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
   if(obj.settings&&obj.settings.regionNotes)Object.assign(state.settings.regionNotes,obj.settings.regionNotes);
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||null;applyEligTablesFromSettings();}
+  if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
     if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
     if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
@@ -3110,6 +3113,80 @@ function resetEligTablesToDefault(){
   save();
 }
 function eligTablesSaveSupported(){return typeof window.showSaveFilePicker==='function';}
+
+// ████ SECTION: 조달청 적격기준 적용 발주처 추가 (커스텀 발주처 — 중복 모듈 없이 "이름만 다른 조달청") ████
+// 배경: 별표6/7A 등 조달청 세부기준을 그대로 쓰는 발주처(예: 가스공사 등 공기업)가 다수 존재.
+// 판정/신인도/감점/안전보건/경영비율 로직은 이미 조달청과 100% 동일(적격기준_REGISTRY의 fallback이 미등록
+// 발주처는 전부 적격기준_조달청으로 처리하고, calcBid/calcSlot의 isJija/isKEPCO/isLH/isDoRo/isKW/isRail
+// 분기도 이 6개 기관 외에는 전혀 걸리지 않아 "조달청"과 완전히 동일한 default 경로를 그대로 탄다 —
+// 인천공항이 이미 이 방식으로 동작 중인 것과 동일한 패턴). 따라서 이 기능은 새 판정 모듈을 만들지 않고,
+// (1) #in-적격기준 드롭다운에 발주처명을 추가하고 (2) 적격기준_REGISTRY에 그 이름→적격기준_조달청(동일 참조)을
+// 매핑하고 (3) 적격(발주처)메모 목록에 그 이름을 추가하는 것만으로 "이름이 다른 조달청 적격기준"을 완성한다.
+// "적용범위"(판정/신인도(가점)/감점/안전보건/경영비율) 체크박스는 현재 전부 조달청과 동일하게 동작하며
+// (조달청 자체도 이 5개 항목을 개별로 껐다 켰다 하는 기능이 없음), 향후 특정 항목만 조달청과 달라지는
+// 발주처가 확인되면 그때 해당 체크를 해제해 구분해두는 용도의 기록/문서화 필드다.
+function customInstitutionsList(){
+  return Array.isArray(state.settings&&state.settings.customInstitutions)?state.settings.customInstitutions:[];
+}
+// ELIG_NOTE_INSTITUTIONS(고정 7+1개 기관)에 커스텀 발주처를 더한 "실제 사용" 목록.
+// 적격(발주처)메모 UI가 이 목록으로 렌더링되므로, 커스텀 발주처도 자기 메모 칸을 자동으로 갖게 된다.
+function effectiveEligNoteInstitutions(){
+  return ELIG_NOTE_INSTITUTIONS.concat(customInstitutionsList().map(function(c){return[c.name,c.name];}));
+}
+var STATIC_INSTITUTION_NAMES=['조달청','인천공항','철도공단','지자체','LH','도로공사','수자원공사','한전'];
+function isDuplicateInstitutionName(name){
+  if(STATIC_INSTITUTION_NAMES.indexOf(name)>=0)return true;
+  return customInstitutionsList().some(function(c){return c.name===name;});
+}
+// #in-적격기준 select(공고 입력 화면)에 커스텀 발주처 옵션을 추가/갱신.
+function refreshCustomInstitutionSelect(){
+  var sel=document.getElementById('in-적격기준');
+  if(!sel)return;
+  var keep=sel.value;
+  Array.prototype.slice.call(sel.querySelectorAll('option[data-custom-inst]')).forEach(function(o){o.remove();});
+  customInstitutionsList().forEach(function(c){
+    var op=document.createElement('option');
+    op.value=c.name;op.textContent=c.name;op.setAttribute('data-custom-inst','1');
+    sel.appendChild(op);
+  });
+  if(keep)sel.value=keep;
+}
+// 부팅/Pull/백업복원 시 호출 — 적격기준_REGISTRY 매핑과 드롭다운 옵션을 저장된 커스텀 발주처 목록과 동기화.
+function applyCustomInstitutionsFromSettings(){
+  customInstitutionsList().forEach(function(c){
+    if(c&&c.name)적격기준_REGISTRY[c.name]=적격기준_조달청;
+  });
+  refreshCustomInstitutionSelect();
+}
+function addCustomInstitution(name,scope){
+  name=String(name||'').trim();
+  if(!name)return{ok:false,error:'발주처명을 입력하세요'};
+  if(name.length>20)return{ok:false,error:'발주처명은 20자 이내로 입력하세요'};
+  if(/["'<>&\\\/]/.test(name))return{ok:false,error:'발주처명에 사용할 수 없는 문자가 포함되어 있습니다( " \' < > & \\ / )'};
+  if(isDuplicateInstitutionName(name))return{ok:false,error:'이미 있는 발주처명입니다: '+name};
+  if(!state.settings.customInstitutions)state.settings.customInstitutions=[];
+  state.settings.customInstitutions.push({
+    id:'ci_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    name:name,base:'조달청',
+    scope:{판정:!!(scope&&scope.판정),신인도가점:!!(scope&&scope.신인도가점),감점:!!(scope&&scope.감점),안전보건:!!(scope&&scope.안전보건),경영비율:!!(scope&&scope.경영비율)},
+    createdAt:new Date().toISOString()
+  });
+  적격기준_REGISTRY[name]=적격기준_조달청;
+  refreshCustomInstitutionSelect();
+  save();
+  return{ok:true};
+}
+function removeCustomInstitution(id){
+  var list=customInstitutionsList();
+  var idx=list.findIndex(function(c){return c.id===id;});
+  if(idx<0)return{ok:false,error:'항목을 찾을 수 없습니다'};
+  var removed=list[idx];
+  list.splice(idx,1);
+  if(removed&&removed.name&&적격기준_REGISTRY[removed.name]===적격기준_조달청)delete 적격기준_REGISTRY[removed.name];
+  refreshCustomInstitutionSelect();
+  save();
+  return{ok:true};
+}
 // 다운로드. pickFolder=true면(그리고 브라우저가 지원하면) 저장 위치를 직접 고르는 대화상자를 띄우고,
 // 미지원 브라우저이거나 pickFolder=false면 일반 다운로드(브라우저 기본 다운로드 폴더)로 대체한다.
 async function downloadEligTablesPackage(pickFolder){
@@ -6339,7 +6416,7 @@ function showPdfResultModal(found,preview){
     }
     if(k==='적격기준'){
       var cur2=found.적격기준||'';
-      var opts2=['조달청','인천공항','철도공단','지자체','LH','도로공사','수자원공사'];
+      var opts2=['조달청','인천공항','철도공단','지자체','LH','도로공사','수자원공사'].concat(customInstitutionsList().map(function(c){return c.name;}));
       return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
         '<option value=""'+(cur2?'':' selected')+'>직접선택</option>'+
         opts2.map(function(o){return '<option value="'+o+'"'+(cur2===o?' selected':'')+'>'+o+'</option>';}).join('')+
@@ -8769,7 +8846,7 @@ function bind(){
               '<table class="settings-table">'+
               '<thead><tr><th style="width:170px">적격기준</th><th>메모</th></tr></thead>'+
               '<tbody>'+
-                ELIG_NOTE_INSTITUTIONS.map(function(o){
+                effectiveEligNoteInstitutions().map(function(o){
                   return '<tr><td>'+esc(o[1])+'</td>'+
                     '<td><textarea id="eligmemo-'+esc(o[0])+'" rows="2" style="width:100%;resize:vertical;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" placeholder="'+esc(o[1])+' 관련 메모를 입력하세요"></textarea></td></tr>';
                 }).join('')+
@@ -8807,6 +8884,42 @@ function bind(){
               '<div id="eligtbl-status" style="font-size:11px;color:#6b7280">'+
                 (state.settings.eligTablesUpdated?('마지막 적용: '+new Date(state.settings.eligTablesUpdated).toLocaleString('ko-KR')):'현재 기본값 사용 중(업로드 이력 없음)')+
               '</div>'+
+            '</div>'+
+            '<div style="margin:14px 16px 12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
+              '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:6px">🧩 조달청 적격기준 적용 발주처 추가</div>'+
+              '<div style="font-size:11px;color:#6b7280;line-height:1.6">'+
+                '적격기준 내용은 <b>조달청과 완전히 동일</b>하지만 발주처명만 다른 기관(예: 가스공사 등 공기업)을 추가합니다.<br>'+
+                '판정·신인도(가점)·감점·안전보건·경영비율 등 실제 계산 로직은 전부 조달청 로직을 그대로 재사용하며(중복 모듈 생성 안 함), '+
+                '이 화면에서는 <b>발주처명만</b> 새로 등록합니다. 등록하면 <b>적격기준</b> 드롭다운·적격(발주처)메모에 이 발주처명이 자동으로 추가되고, '+
+                '공고문·확정메세지·조합결과TXT 등 적격기준 이름이 표시되는 모든 곳에 "조달청"이 아니라 등록한 발주처명이 표시됩니다.<br>'+
+                '"적용범위" 체크는 참고/기록용입니다 — 현재 5개 항목 모두 조달청과 동일하게 계산되며, 체크를 해제해도 계산 결과는 바뀌지 않습니다'+
+                '(해당 발주처의 특정 항목이 실제로 조달청과 다르다는 것이 확인되면, 그 사실을 표시해 두는 용도로 사용하세요).<br>'+
+                '반영된 목록은 <b>이 계정 전체(모든 기기)에 공통 적용</b>됩니다.'+
+              '</div>'+
+            '</div>'+
+            '<div style="padding:0 16px 14px">'+
+              '<table class="settings-table" id="custinst-table">'+
+                '<thead><tr>'+
+                  '<th style="width:150px">발주처명(적격기준)</th>'+
+                  '<th style="width:60px;text-align:center">판정</th>'+
+                  '<th style="width:90px;text-align:center">신인도(가점)</th>'+
+                  '<th style="width:60px;text-align:center">감점</th>'+
+                  '<th style="width:70px;text-align:center">안전보건</th>'+
+                  '<th style="width:70px;text-align:center">경영비율</th>'+
+                  (currentRole()==='super'?'<th style="width:50px">삭제</th>':'')+
+                '</tr></thead>'+
+                '<tbody id="custinst-tbody"></tbody>'+
+              '</table>'+
+              (currentRole()==='super'?(
+              '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed #e5e7eb">'+
+                '<input type="text" id="custinst-new-name" placeholder="추가할 발주처명 (예: 가스공사)" maxlength="20" style="flex:1;min-width:140px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit">'+
+                ['판정','신인도가점','감점','안전보건','경영비율'].map(function(k){
+                  var lbl=k==='신인도가점'?'신인도(가점)':k;
+                  return '<label style="font-size:11px;color:#374151;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" class="custinst-new-scope" data-scope-key="'+k+'" checked>'+lbl+'</label>';
+                }).join('')+
+                '<button type="button" class="btn btn-sm" id="custinst-add-btn" style="background:#059669">+ 발주처 추가</button>'+
+              '</div>'
+              ):'<div style="font-size:11px;color:#9ca3af;margin-top:10px;padding-top:10px;border-top:1px dashed #e5e7eb">발주처 추가/삭제는 최고관리자 계정에서만 가능합니다.</div>')+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -9012,14 +9125,14 @@ function bind(){
       // ── 적격(발주처)메모 (공고입력 설정 탭 > 적격(발주처)메모 서브탭) ──
       (function(){
         var notes=state.settings.eligNotes||{};
-        ELIG_NOTE_INSTITUTIONS.forEach(function(o){
+        effectiveEligNoteInstitutions().forEach(function(o){
           var el=document.getElementById('eligmemo-'+o[0]);
           if(el)el.value=notes[o[0]]||'';
         });
         var _emSave=document.getElementById('eligmemo-save');
         if(_emSave)_emSave.onclick=function(){
           if(!state.settings.eligNotes)state.settings.eligNotes={};
-          ELIG_NOTE_INSTITUTIONS.forEach(function(o){
+          effectiveEligNoteInstitutions().forEach(function(o){
             var el=document.getElementById('eligmemo-'+o[0]);
             if(!el)return;
             var v=el.value.trim();
@@ -9068,6 +9181,51 @@ function bind(){
           resetEligTablesToDefault();
           toast('기본값으로 복원했습니다','ok');
           refreshEligTblStatus();
+        };
+      })();
+      // ── 조달청 적격기준 적용 발주처 추가 (공고입력 설정 탭 > 적격UPDATE 서브탭 하단) ──
+      (function(){
+        var SCOPE_KEYS=['판정','신인도가점','감점','안전보건','경영비율'];
+        function renderCustInstTable(){
+          var tbody=document.getElementById('custinst-tbody');
+          if(!tbody)return;
+          var list=customInstitutionsList();
+          var isSuper=currentRole()==='super';
+          tbody.innerHTML=list.length?list.map(function(c){
+            var cells=SCOPE_KEYS.map(function(k){
+              return '<td style="text-align:center">'+(c.scope&&c.scope[k]?'✓':'—')+'</td>';
+            }).join('');
+            var delCell=isSuper?('<td><button type="button" class="btn btn-sm btn-ghost custinst-del-btn" data-id="'+esc(c.id)+'" style="color:#dc2626">삭제</button></td>'):'';
+            return '<tr><td>'+esc(c.name)+'</td>'+cells+delCell+'</tr>';
+          }).join(''):('<tr><td colspan="'+(isSuper?7:6)+'" style="font-size:12px;color:#9ca3af;padding:8px 0">등록된 발주처가 없습니다</td></tr>');
+          tbody.querySelectorAll('.custinst-del-btn').forEach(function(btn){
+            btn.onclick=function(){
+              var id=btn.dataset.id;
+              var target=customInstitutionsList().find(function(c){return c.id===id;});
+              if(!target)return;
+              if(!confirm('"'+target.name+'" 발주처를 삭제할까요?\n이미 저장된 공고의 적격기준 값은 그대로 유지되지만, 새 공고에서는 더 이상 선택할 수 없게 됩니다.'))return;
+              var res=removeCustomInstitution(id);
+              if(!res.ok){toast(res.error||'삭제 실패','err');return;}
+              renderCustInstTable();
+              toast('삭제되었습니다','ok');
+            };
+          });
+        }
+        renderCustInstTable();
+        var _ciAddBtn=document.getElementById('custinst-add-btn');
+        if(_ciAddBtn)_ciAddBtn.onclick=function(){
+          var nameEl=document.getElementById('custinst-new-name');
+          var name=nameEl?nameEl.value:'';
+          var scope={};
+          document.querySelectorAll('.custinst-new-scope').forEach(function(chk){
+            scope[chk.dataset.scopeKey]=chk.checked;
+          });
+          var res=addCustomInstitution(name,scope);
+          if(!res.ok){toast(res.error||'추가 실패','err');return;}
+          if(nameEl)nameEl.value='';
+          document.querySelectorAll('.custinst-new-scope').forEach(function(chk){chk.checked=true;});
+          renderCustInstTable();
+          toast('발주처가 추가되었습니다','ok');
         };
       })();
       // 기본지분율 (조합 탭)
@@ -10541,6 +10699,7 @@ function bindLoginUI(){
 function boot(){
   load();
   applyEligTablesFromSettings(); // load()도 자체 호출하지만, 안전하게 한 번 더(멱등)
+  applyCustomInstitutionsFromSettings(); // 커스텀 발주처(조달청 적격기준 적용) 드롭다운·레지스트리 동기화(멱등)
   ensureDefaultAccounts();
   (function(){var _s=getSession();if(_s)loadBidScreensForUser(_s.id);})();
   renderBidScreenTabs();
