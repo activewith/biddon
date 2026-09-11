@@ -6372,8 +6372,9 @@ function showPdfResultModal(found,preview){
         '<option value="">직접선택</option><option value="전기">전기</option><option value="통신">통신</option><option value="소방">소방</option><option value="복합(전기+통신)">복합(전기+통신)</option><option value="복합(전기+소방)">복합(전기+소방)</option></select>';
     }
     if(k==='적격기준'){
+      var custOpts=customInstitutionsList().map(function(c){return '<option value="'+esc(c.name)+'">'+esc(c.name)+'</option>';}).join('');
       return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
-        '<option value="">직접선택</option><option value="조달청">조달청</option><option value="인천공항">인천공항</option><option value="철도공단">철도공단</option><option value="지자체">지자체</option><option value="LH">LH</option><option value="도로공사">도로공사</option><option value="수자원공사">수자원공사</option></select>';
+        '<option value="">직접선택</option><option value="조달청">조달청</option><option value="인천공항">인천공항</option><option value="철도공단">철도공단</option><option value="지자체">지자체</option><option value="LH">LH</option><option value="도로공사">도로공사</option><option value="수자원공사">수자원공사</option>'+custOpts+'</select>';
     }
     if(k==='지역선택'){
       var sst='width:80px;box-sizing:border-box;padding:2px 3px;border:1px solid #f59e0b;border-radius:3px;font-size:11px;background:#fffbeb;color:#111827';
