@@ -401,6 +401,9 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
         <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="체크 시 조합결과TXT의 모든 조합 우측에 시평 합산액을 표시">
           <input type="checkbox" id="chk-표시시평합">시평합
         </label>
+        <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="체크 시 모든 조합의 확정메세지 메모칸에 현재 적격기준(설정>공고/적격>적격(발주처)메모에 등록한 안내(URL))을 채워 넣습니다. 해제해도 이미 채워진 메모 내용은 지워지지 않습니다">
+          <input type="checkbox" id="chk-표시안내URL">안내(URL)
+        </label>
         <button class="btn btn-ghost btn-sm" id="btn-clear-combos">전체 조합 비우기</button>
         <button class="btn btn-sm" id="btn-export-xlsx">조합결과TXT</button>
       </h2>
@@ -565,6 +568,22 @@ const TRIM3=function(x){var _r=Math.round((Number(x)||0)*100)/100;if(Object.is(_
 const FMT_REP=function(x){return TRIM3(ROUND3(x));};
 // 소수점/% 표기: 최대 d자리(기본 2)까지 반올림 후 말단 0 생략(유효숫자만 표기). 2026-07-28 추가.
 const TRIMDEC=function(x,d){d=(d==null)?2:d;var f=Math.pow(10,d);var r=Math.round((Number(x)||0)*f)/f;if(Object.is(r,-0))r=0;var s=r.toFixed(d);if(s.indexOf('.')>=0)s=s.replace(/0+$/,'').replace(/\.$/,'');return s;};
+// 한글 폼 글자수 제한의 관용적 "바이트" 계산(EUC-KR 관례: 한글/전각문자 등 비ASCII 1글자=2byte, 영문/숫자/기호(ASCII)=1byte).
+// 실제 UTF-8 바이트 수(한글 3byte)와는 다르므로 주의 — "40byte=한글 20자 또는 영문 40자" 같은 실무 표기와 맞추기 위한 계산 방식.
+function koreanByteLength(str){
+  str=String(str||'');var len=0;
+  for(var i=0;i<str.length;i++)len+=(str.charCodeAt(i)>127)?2:1;
+  return len;
+}
+function truncateByBytes(str,maxBytes){
+  str=String(str||'');var out='',len=0;
+  for(var i=0;i<str.length;i++){
+    var w=(str.charCodeAt(i)>127)?2:1;
+    if(len+w>maxBytes)break;
+    len+=w;out+=str[i];
+  }
+  return out;
+}
 // 큰 금액을 억 단위로 단순화 표시(예: 10,359,437,000 → "103.6억"). 소수 1자리, 말단 0 생략. 2026-08-26 추가.
 const FMT_EOK=function(n){if(n==null||n===''||isNaN(n))return '-';return TRIMDEC(Number(n)/1e8,1)+'억';};
 // LH 우선순위2(점수판정) 표시용: 실제 달성값(합산실적/합산시평)을 억 단위 내림으로 표시 — 요구값(기준)은
@@ -652,12 +671,12 @@ function normalizeSlotGrp(slots){
 function emptyCombo(){
   var n=2;
   try{if(state&&state.bid)n=Math.max(1,Math.min(MAX_SLOTS,Number(state.bid.구성업체수)||2));}catch(e){}
-  return {slots:Array.from({length:n},emptySlot),사정률D7:null,강제할당:false,표시실적합:false,표시시평합:false};
+  return {slots:Array.from({length:n},emptySlot),사정률D7:null,강제할당:false,표시실적합:false,표시시평합:false,표시안내URL:false};
 }
 
 function defaultBidObj(){
   return {시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-       지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,표시실적합:false,표시시평합:false,
+       지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,표시실적합:false,표시시평합:false,표시안내URL:false,
        업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',협정메세지알람on:false,협정메세지알람일시:'',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',
        // 2026-08-27 추가(같은 날 재정정): 이 공고 탭의 "기준월"(YYYY-MM, #in-기준월 input[type=month]).
        // 협정마감일도, 탭 생성일도 정답이 아니다 — 둘 다 "공고 개시월"과 어긋날 수 있다고 사용자가 직접
@@ -668,7 +687,7 @@ function defaultBidObj(){
        // 월 표시(jobAMonthTag)가 모두 이 값 하나를 공통 기준으로 삼는다.
        _기준월:''};
 }
-function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null,강제할당:false,표시실적합:false,표시시평합:false};});}
+function defaultCombos(){return Array.from({length:DEFAULT_COMBOS},function(){return {slots:Array.from({length:2},emptySlot),사정률D7:null,강제할당:false,표시실적합:false,표시시평합:false,표시안내URL:false};});}
 
 var _initBid=defaultBidObj();
 var _initCombos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
@@ -695,7 +714,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[]},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[]},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -791,6 +810,7 @@ function gistApplyData(obj){
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
+  if(obj.settings&&obj.settings.eligGuideUrls)Object.assign(state.settings.eligGuideUrls,obj.settings.eligGuideUrls);
   if(obj.settings&&obj.settings.regionNotes)Object.assign(state.settings.regionNotes,obj.settings.regionNotes);
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
@@ -1380,6 +1400,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
+  if(obj.settings&&obj.settings.eligGuideUrls)Object.assign(state.settings.eligGuideUrls,obj.settings.eligGuideUrls);
   if(obj.settings&&obj.settings.regionNotes)Object.assign(state.settings.regionNotes,obj.settings.regionNotes);
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
@@ -1465,6 +1486,7 @@ function load(){
     if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
     if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
+  if(obj.settings&&obj.settings.eligGuideUrls)Object.assign(state.settings.eligGuideUrls,obj.settings.eligGuideUrls);
   if(obj.settings&&obj.settings.regionNotes)Object.assign(state.settings.regionNotes,obj.settings.regionNotes);
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||null;applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
@@ -3186,6 +3208,29 @@ function removeCustomInstitution(id){
   refreshCustomInstitutionSelect();
   save();
   return{ok:true};
+}
+
+// ████ SECTION: 적격(발주처)별 안내(URL) → 확정메세지 메모 자동삽입 ████
+// 설정>공고/적격>적격(발주처)메모에 기관별로 등록해둔 안내(URL)를, 조합의 "확정메세지 메모(40byte)" 입력칸에
+// 체크 한 번으로 채워 넣는 기능. 전체(공고 전체 조합)/개별(조합 하나) 두 단계로 켤 수 있음(표시실적합/표시시평합과 동일 패턴).
+function getEligGuideUrl(적격기준){
+  if(!적격기준)return'';
+  var m=state.settings&&state.settings.eligGuideUrls;
+  return(m&&m[적격기준])||'';
+}
+// 이 조합(ci)이 전체표시(state.bid.표시안내URL) 또는 개별표시(combo.표시안내URL) 중 하나라도 켜져 있으면
+// 현재 적격기준의 안내(URL)를 확정메모에 반영(40byte로 잘라서). 화면에 이미 그려진 입력칸이 있으면 그 값도 즉시 갱신.
+function syncGuideUrlToCombo(ci){
+  var combo=state.combos&&state.combos[ci];
+  if(!combo)return;
+  if(!(state.bid.표시안내URL||combo.표시안내URL))return;
+  var url=truncateByBytes(getEligGuideUrl(state.bid.적격기준),40);
+  combo.확정메모=url;
+  var input=document.querySelector('.combo-confirm-memo[data-ci="'+ci+'"]');
+  if(input)input.value=url;
+}
+function syncGuideUrlToAllCombos(){
+  (state.combos||[]).forEach(function(c,ci){syncGuideUrlToCombo(ci);});
 }
 // 다운로드. pickFolder=true면(그리고 브라우저가 지원하면) 저장 위치를 직접 고르는 대화상자를 띄우고,
 // 미지원 브라우저이거나 pickFolder=false면 일반 다운로드(브라우저 기본 다운로드 폴더)로 대체한다.
@@ -7663,6 +7708,9 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         (comboCalc.isKEPCO?'':'<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 시평 합산액을 표시(전체표시와 무관하게 적용)">'+
           '<input type="checkbox" class="combo-sipyung-chk" data-ci="'+ci+'"'+(combo.표시시평합?' checked':'')+'>시평합'+
         '</label>')+
+        '<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합의 확정메세지 메모칸에 현재 적격기준의 안내(URL)을 채워 넣습니다(이 조합에만 적용, 전체표시와 무관). 해제해도 이미 채워진 메모 내용은 지워지지 않습니다">'+
+          '<input type="checkbox" class="combo-guideurl-chk" data-ci="'+ci+'"'+(combo.표시안내URL?' checked':'')+'>안내(URL)'+
+        '</label>'+
       '</div>'+
       '<div class="combo-actions-row">'+
         '<span class="need-txt">필요값 : <b data-stat="필요값">'+esc(buildNeedHtml(comboCalc,result))+'</b></span>'+
@@ -7673,7 +7721,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
             '">강제할당'+(combo.강제할당?' ON':'')+'</button>':'')+
           (calc.isLH?'<button class="btn btn-sm" style="background:'+lhBtnColor+';color:#fff;font-weight:600" data-lhcalc="'+ci+'">점수계산</button>':'')+
           (calc.isRail?'<button class="btn btn-sm" style="background:#0369a1;color:#fff;font-weight:600" data-railtech="'+ci+'" title="철도기술점수 DB에서 업체명이 일치하는 업체의 총합산점수를 각 슬롯 Func 칸에 자동 입력">🚄기술</button>':'')+
-          '<input type="text" class="combo-confirm-memo" data-ci="'+ci+'" maxlength="20" placeholder="확정메세지 메모(20자)" value="'+esc(combo.확정메모||'')+'" style="width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit" title="확정 버튼을 누르면 메세지 맨 끝에 [메모내용]으로 추가됩니다(20자 이내)">'+
+          '<input type="text" class="combo-confirm-memo" data-ci="'+ci+'" placeholder="확정메세지 메모(40byte)" value="'+esc(combo.확정메모||'')+'" style="width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit" title="확정 버튼을 누르면 메세지 맨 끝에 [메모내용]으로 추가됩니다(40byte 이내 — 한글 20자 또는 영문 40자)">'+
           '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-weight:600" data-confirm="'+ci+'">확정</button>'+
           '<button class="btn btn-sm btn-ghost" data-add-slot="'+ci+'"'+(slotFull?' disabled title="슬롯 최대 5개"':'')+'>＋ 슬롯</button>'+
           '<button class="btn btn-sm" style="background:#2563eb;color:#fff;font-weight:600" data-rec="'+ci+'">자동분배</button>'+
@@ -8117,6 +8165,7 @@ function bind(){
   $('#in-적격기준').addEventListener('change',function(){
     state.bid.적격기준=$('#in-적격기준').value;
     applyInstitutionUI(state.bid.적격기준);
+    syncGuideUrlToAllCombos(); // 적격기준이 바뀌면 안내(URL) 표시가 켜진 조합들의 확정메모도 새 기관의 URL로 갱신
     save();refreshBidStats();refreshCombos();
   });
   // 한전 실적제한 수기입력(비율%/배수) — #o-실적제한-kepco 컨테이너에 이벤트 위임으로 바인딩
@@ -8173,14 +8222,15 @@ function bind(){
   });
   // 실적합/시평합 전체표시 체크박스 — 조합결과TXT에서 모든 조합에 실적/시평 합산액을 표시할지 여부(공고 탭별 저장)
   (function(){
-    var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합');
+    var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합'),_cu=$('#chk-표시안내URL');
     if(_cj)_cj.addEventListener('change',function(){state.bid.표시실적합=this.checked;save();});
     if(_cs)_cs.addEventListener('change',function(){state.bid.표시시평합=this.checked;save();});
+    if(_cu)_cu.addEventListener('change',function(){state.bid.표시안내URL=this.checked;if(this.checked)syncGuideUrlToAllCombos();save();});
   })();
 
   // 저장된 값을 inputs에 복원
   var b=state.bid;
-  (function(){var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합');if(_cj)_cj.checked=!!b.표시실적합;if(_cs)_cs.checked=!!b.표시시평합;})();
+  (function(){var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합'),_cu=$('#chk-표시안내URL');if(_cj)_cj.checked=!!b.표시실적합;if(_cs)_cs.checked=!!b.표시시평합;if(_cu)_cu.checked=!!b.표시안내URL;})();
   (function(){b.공종=normGongjong(b.공종)||'전기';var _ge=$('#in-공종');if(_ge)_ge.value=b.공종;syncAvgRatios(b.공종);var _lge=$('#o-공종-label');if(_lge)_lge.textContent=b.공종;})();
   refreshDbFixedSelect();
   if(b.시평제한!=null)$('#in-시평제한').value=FMT_NUM(b.시평제한);
@@ -8337,6 +8387,12 @@ function bind(){
   // 조합 입력 이벤트
   $('#combos').addEventListener('input',function(e){
     var t=e.target;
+    // 확정메세지 메모 — 40byte(한글 1자=2byte) 초과분은 타이핑 도중에도 즉시 잘라냄(붙여넣기 포함).
+    if(t.classList.contains('combo-confirm-memo')){
+      var _mv=truncateByBytes(t.value||'',40);
+      if(_mv!==t.value){t.value=_mv;try{t.setSelectionRange(_mv.length,_mv.length);}catch(_e){}}
+      return;
+    }
     if(t.classList.contains('search-inp')&&t.dataset.search){
       var skey=t.dataset.search;
       var drop=document.querySelector('[data-sdrop="'+skey+'"]');if(!drop)return;
@@ -8409,11 +8465,19 @@ function bind(){
     if(t.classList.contains('combo-sipyung-chk')){
       state.combos[Number(t.dataset.ci)].표시시평합=t.checked;save();return;
     }
+    // 조합별 안내(URL) 개별표시 체크박스 — 체크 시 이 조합의 확정메모를 현재 적격기준의 안내(URL)로 채움(전체표시와는 OR 조건).
+    // 해제해도 이미 채워진 메모 내용은 지우지 않음(표시실적합/표시시평합과 동일하게 비파괴적으로 동작).
+    if(t.classList.contains('combo-guideurl-chk')){
+      var gci=Number(t.dataset.ci);
+      state.combos[gci].표시안내URL=t.checked;
+      if(t.checked)syncGuideUrlToCombo(gci);
+      save();return;
+    }
     // 확정메세지 전용 메모 — 확정 버튼(showConfirmPop)을 누르면 메세지 맨 끝에 "[메모내용]"으로 추가됨.
-    // 20자 제한은 maxlength로 입력 단계에서부터 막되(붙여넣기 대비), 여기서도 한 번 더 잘라 저장.
+    // 40byte(한글 1자=2byte, 영문/숫자=1byte) 제한은 input 이벤트 단계에서부터 실시간으로 막되(붙여넣기 대비), 여기서도 한 번 더 잘라 저장.
     if(t.classList.contains('combo-confirm-memo')){
       var cmi=Number(t.dataset.ci);
-      var mv=(t.value||'').slice(0,20);
+      var mv=truncateByBytes(t.value||'',40);
       if(mv!==t.value)t.value=mv;
       state.combos[cmi].확정메모=mv;
       save();return;
@@ -8841,14 +8905,17 @@ function bind(){
           '</div>'+
           '<div class="settings-subtabpage" data-substabpage="eligmemo" style="display:none">'+
             '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
-              '적격기준별로 메모를 입력해두면, 공고 입력 화면의 <b>적격기준</b>에 마우스를 올렸을 때 풍선 도움말로 표시됩니다.'+
+              '적격기준별로 메모를 입력해두면, 공고 입력 화면의 <b>적격기준</b>에 마우스를 올렸을 때 풍선 도움말로 표시됩니다.<br>'+
+              '<b>안내(URL)</b>은 조합 화면의 <b>안내(URL)</b> 체크박스와 연동됩니다 — 체크하면 여기 등록한 내용을 확정메세지 메모칸에 그대로 채워 넣습니다(40byte 이내 — 한글 20자 또는 영문 40자).'+
             '</div>'+
             '<div style="padding:0 16px 12px">'+
               '<table class="settings-table">'+
               '<thead><tr><th style="width:170px">적격기준</th><th>메모</th></tr></thead>'+
               '<tbody>'+
                 effectiveEligNoteInstitutions().map(function(o){
-                  return '<tr><td>'+esc(o[1])+'</td>'+
+                  return '<tr><td>'+esc(o[1])+
+                    '<input type="text" id="eligurl-'+esc(o[0])+'" placeholder="안내(URL) — 40byte 이내" style="margin-top:6px;width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit;color:#0369a1">'+
+                    '</td>'+
                     '<td><textarea id="eligmemo-'+esc(o[0])+'" rows="2" style="width:100%;resize:vertical;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" placeholder="'+esc(o[1])+' 관련 메모를 입력하세요"></textarea></td></tr>';
                 }).join('')+
               '</tbody>'+
@@ -9126,21 +9193,40 @@ function bind(){
       // ── 적격(발주처)메모 (공고입력 설정 탭 > 적격(발주처)메모 서브탭) ──
       (function(){
         var notes=state.settings.eligNotes||{};
+        var urls=state.settings.eligGuideUrls||{};
         effectiveEligNoteInstitutions().forEach(function(o){
           var el=document.getElementById('eligmemo-'+o[0]);
           if(el)el.value=notes[o[0]]||'';
+          var uel=document.getElementById('eligurl-'+o[0]);
+          if(uel){
+            uel.value=urls[o[0]]||'';
+            // 안내(URL)도 확정메모와 동일하게 40byte(한글 1자=2byte) 제한 — 타이핑/붙여넣기 즉시 초과분 절삭.
+            uel.addEventListener('input',function(){
+              var mv=truncateByBytes(uel.value||'',40);
+              if(mv!==uel.value){uel.value=mv;try{uel.setSelectionRange(mv.length,mv.length);}catch(_e){}}
+            });
+          }
         });
         var _emSave=document.getElementById('eligmemo-save');
         if(_emSave)_emSave.onclick=function(){
           if(!state.settings.eligNotes)state.settings.eligNotes={};
+          if(!state.settings.eligGuideUrls)state.settings.eligGuideUrls={};
           effectiveEligNoteInstitutions().forEach(function(o){
             var el=document.getElementById('eligmemo-'+o[0]);
-            if(!el)return;
-            var v=el.value.trim();
-            if(v)state.settings.eligNotes[o[0]]=v;else delete state.settings.eligNotes[o[0]];
+            if(el){
+              var v=el.value.trim();
+              if(v)state.settings.eligNotes[o[0]]=v;else delete state.settings.eligNotes[o[0]];
+            }
+            var uel=document.getElementById('eligurl-'+o[0]);
+            if(uel){
+              var uv=truncateByBytes(uel.value.trim(),40);
+              if(uv)state.settings.eligGuideUrls[o[0]]=uv;else delete state.settings.eligGuideUrls[o[0]];
+            }
           });
           save();
           updateEligNoteTooltip(state.bid.적격기준);
+          syncGuideUrlToAllCombos(); // 지금 화면(현재 적격기준)에서 안내(URL) 표시가 켜진 조합이 있으면 방금 저장한 값으로 즉시 갱신
+          refreshCombos();
           toast('적격(발주처)메모 저장','ok');
         };
       })();
@@ -10269,6 +10355,7 @@ function restoreBidInputsFromState(){
   var _n=$('#in-구성업체수');if(_n)_n.value=Math.max(1,Math.min(MAX_SLOTS,Number(b.구성업체수)||2));
   var _cj=$('#chk-표시실적합');if(_cj)_cj.checked=!!b.표시실적합;
   var _cs=$('#chk-표시시평합');if(_cs)_cs.checked=!!b.표시시평합;
+  var _cu=$('#chk-표시안내URL');if(_cu)_cu.checked=!!b.표시안내URL;
   refreshCompanyAvgDisplay();
   updateBidNameLabel();
   refreshDbFixedSelect();
