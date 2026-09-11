@@ -658,7 +658,7 @@ function emptyCombo(){
 function defaultBidObj(){
   return {시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
        지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,표시실적합:false,표시시평합:false,
-       업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',협정메세지알람on:false,협정메세지알람일시:'',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',
+       업계평균부채비율:null,업계평균유동비율:null,공종:'전기',전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,소방통신추정가:null,lh지분율기준:null,lh순공사원가:null,품질평가점수:2,협정메세지:'',협정메세지알람on:false,협정메세지알람일시:'',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',
        // 2026-08-27 추가(같은 날 재정정): 이 공고 탭의 "기준월"(YYYY-MM, #in-기준월 input[type=month]).
        // 협정마감일도, 탭 생성일도 정답이 아니다 — 둘 다 "공고 개시월"과 어긋날 수 있다고 사용자가 직접
        // 정정함(예: 8/31 개시·9/9 마감 공고를 9월에 처음 탭으로 만들면 마감일·탭생성일 둘 다 9월이 되어
@@ -6486,6 +6486,7 @@ function showPdfResultModal(found,preview){
     _syncManualIntoFound();
     if(found.공사명){
       state.bid.공고명=found.공사명;
+      state.bid.공고명저장일시=new Date().toISOString();
       // 화면 탭 이름을 '공고명 앞6글자'로 자동 개명(탭 hover 시 풀네임 title은 renderBidScreenTabs가 별도로 계속 붙여줌)
       // ── 2026-07-31: 명명 규칙을 '앞4글자_적격판정' → '앞8글자' → '앞6글자'로 변경
       var _actScr=state.bidScreens&&state.bidScreens[state.activeBidScreenIndex];
@@ -8235,7 +8236,7 @@ function bind(){
   $('#btn-reset-bid').addEventListener('click',function(){
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
     (function(){var _rm=$('#in-기준월');if(_rm)_rm.value=state.bid._기준월;})(); // 2026-08-27: 공고 초기화 시 기준월도 이번 달로 리셋(재확인 필요)
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
@@ -10135,12 +10136,22 @@ function refreshDbFixedSelect(){
     if(oCur)oCur.textContent='현재 자료';
   }
 }
+function fmtBidNameSavedAt(iso){
+  if(!iso)return'';
+  var d=new Date(iso);
+  if(isNaN(d.getTime()))return'';
+  var Y=d.getFullYear(),M=String(d.getMonth()+1).padStart(2,'0'),D=String(d.getDate()).padStart(2,'0');
+  var h=d.getHours(),ap=h<12?'am':'pm',h12=h%12;if(h12===0)h12=12;
+  var HH=String(h12).padStart(2,'0'),mm=String(d.getMinutes()).padStart(2,'0');
+  return'['+Y+'-'+M+'-'+D+' '+ap+HH+':'+mm+']';
+}
 function updateBidNameLabel(){
   var el=document.getElementById('o-공고명-label');
   if(!el)return;
   var nm=state.bid.공고명||'';
   var no=state.bid.공고번호||'';
-  el.textContent=nm?('— '+nm+(no?' ('+no+')':'')):'';
+  var ts=fmtBidNameSavedAt(state.bid.공고명저장일시);
+  el.textContent=nm?('— '+nm+(no?' ('+no+')':'')+(ts?' '+ts:'')):'';
 }
 function switchBidScreen(idx){
   if(idx<0||idx>=state.bidScreens.length)return;
