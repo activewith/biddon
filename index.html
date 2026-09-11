@@ -7702,15 +7702,6 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           ' value="'+_sjDisp+'" placeholder="'+_sjPlaceholder+'"'+
           ' style="width:56px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;'+_sjOverrideStyle+'">%'+
         '</span>'+
-        '<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 실적 합산액을 표시(전체표시와 무관하게 적용)">'+
-          '<input type="checkbox" class="combo-jeoksum-chk" data-ci="'+ci+'"'+(combo.표시실적합?' checked':'')+'>실적합'+
-        '</label>'+
-        (comboCalc.isKEPCO?'':'<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 시평 합산액을 표시(전체표시와 무관하게 적용)">'+
-          '<input type="checkbox" class="combo-sipyung-chk" data-ci="'+ci+'"'+(combo.표시시평합?' checked':'')+'>시평합'+
-        '</label>')+
-        '<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합의 확정메세지 메모칸에 현재 적격기준의 안내(URL)을 채워 넣습니다(이 조합에만 적용, 전체표시와 무관). 해제해도 이미 채워진 메모 내용은 지워지지 않습니다">'+
-          '<input type="checkbox" class="combo-guideurl-chk" data-ci="'+ci+'"'+(combo.표시안내URL?' checked':'')+'>안내(URL)'+
-        '</label>'+
       '</div>'+
       '<div class="combo-actions-row">'+
         '<span class="need-txt">필요값 : <b data-stat="필요값">'+esc(buildNeedHtml(comboCalc,result))+'</b></span>'+
@@ -7721,6 +7712,15 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
             '">강제할당'+(combo.강제할당?' ON':'')+'</button>':'')+
           (calc.isLH?'<button class="btn btn-sm" style="background:'+lhBtnColor+';color:#fff;font-weight:600" data-lhcalc="'+ci+'">점수계산</button>':'')+
           (calc.isRail?'<button class="btn btn-sm" style="background:#0369a1;color:#fff;font-weight:600" data-railtech="'+ci+'" title="철도기술점수 DB에서 업체명이 일치하는 업체의 총합산점수를 각 슬롯 Func 칸에 자동 입력">🚄기술</button>':'')+
+          '<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 실적 합산액을 표시(전체표시와 무관하게 적용)">'+
+            '<input type="checkbox" class="combo-jeoksum-chk" data-ci="'+ci+'"'+(combo.표시실적합?' checked':'')+'>실적합'+
+          '</label>'+
+          (comboCalc.isKEPCO?'':'<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 시평 합산액을 표시(전체표시와 무관하게 적용)">'+
+            '<input type="checkbox" class="combo-sipyung-chk" data-ci="'+ci+'"'+(combo.표시시평합?' checked':'')+'>시평합'+
+          '</label>')+
+          '<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합의 확정메세지 메모칸에 현재 적격기준의 안내(URL)을 채워 넣습니다(이 조합에만 적용, 전체표시와 무관). 해제해도 이미 채워진 메모 내용은 지워지지 않습니다">'+
+            '<input type="checkbox" class="combo-guideurl-chk" data-ci="'+ci+'"'+(combo.표시안내URL?' checked':'')+'>안내(URL)'+
+          '</label>'+
           '<input type="text" class="combo-confirm-memo" data-ci="'+ci+'" placeholder="확정메세지 메모(40byte)" value="'+esc(combo.확정메모||'')+'" style="width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit" title="확정 버튼을 누르면 메세지 맨 끝에 [메모내용]으로 추가됩니다(40byte 이내 — 한글 20자 또는 영문 40자)">'+
           '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-weight:600" data-confirm="'+ci+'">확정</button>'+
           '<button class="btn btn-sm btn-ghost" data-add-slot="'+ci+'"'+(slotFull?' disabled title="슬롯 최대 5개"':'')+'>＋ 슬롯</button>'+
