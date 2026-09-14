@@ -54,7 +54,7 @@ main{padding:12px;max-width:1700px;margin:0 auto}
 /* 2026-09-14: "1. 공고 입력" 패널을 헤더 바로 아래에 고정(position:sticky)해, "2. 조합" 패널을 스크롤해도
    공고 입력 내용이 항상 보이도록 스크롤을 분리한다. top 값은 #top-sticky(헤더+화면탭줄)의 실제 높이를
    JS(syncTopStickyHeight, boot 시점 및 크기 변화 시 갱신)가 --top-sticky-h CSS 변수로 채워 넣는다. */
-#tab-bid>.panel:first-child{position:sticky;top:var(--top-sticky-h,60px);z-index:4;box-shadow:0 4px 10px -6px rgba(0,0,0,.15)}
+#tab-bid>.panel:first-child{position:sticky;top:var(--top-sticky-h,60px);z-index:4;box-shadow:0 4px 10px -6px rgba(0,0,0,.15);background:#eef2fb;border-color:#c7d4ea}
 .panel h2{margin:0 0 10px 0;font-size:14px;font-weight:700;color:#0f172a;border-bottom:2px solid var(--border);padding-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .field{display:flex;flex-direction:column;gap:2px}
