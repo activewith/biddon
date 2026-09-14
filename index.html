@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <!-- SECTION: CSS-스타일 -->
 <style>
-:root{--bg:#f5f6f8;--panel:#fff;--border:#e3e6ec;--text:#1f2937;--muted:#6b7280;--primary:#2563eb;--primary-d:#1d4ed8;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
+:root{--bg:#f5f6f8;--panel:#fff;--border:#e3e6ec;--text:#1f2937;--muted:#6b7280;--primary:#2563eb;--primary-d:#1d4ed8;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--top-sticky-h:60px}
 *{box-sizing:border-box}
 body{margin:0;font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:var(--bg);color:var(--text);font-size:13px;overflow-x:hidden}
 #top-sticky{position:sticky;top:0;z-index:10}
@@ -51,6 +51,10 @@ header nav button.active{background:var(--primary)}
 #btn-add-bid-screen{flex:0 0 auto;align-self:flex-end;background:#475569;font-weight:700;border-radius:7px 7px 0 0;height:32px;padding:0 12px;border:none;color:#fff;cursor:pointer}
 main{padding:12px;max-width:1700px;margin:0 auto}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px}
+/* 2026-09-14: "1. 공고 입력" 패널을 헤더 바로 아래에 고정(position:sticky)해, "2. 조합" 패널을 스크롤해도
+   공고 입력 내용이 항상 보이도록 스크롤을 분리한다. top 값은 #top-sticky(헤더+화면탭줄)의 실제 높이를
+   JS(syncTopStickyHeight, boot 시점 및 크기 변화 시 갱신)가 --top-sticky-h CSS 변수로 채워 넣는다. */
+#tab-bid>.panel:first-child{position:sticky;top:var(--top-sticky-h,60px);z-index:4;box-shadow:0 4px 10px -6px rgba(0,0,0,.15)}
 .panel h2{margin:0 0 10px 0;font-size:14px;font-weight:700;color:#0f172a;border-bottom:2px solid var(--border);padding-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .field{display:flex;flex-direction:column;gap:2px}
@@ -714,7 +718,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[]},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[]},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -807,6 +811,7 @@ function gistApplyData(obj){
   if(obj.bid)Object.assign(state.bid,obj.bid);
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&obj.settings.기초배율!=null&&!isNaN(obj.settings.기초배율)&&Number(obj.settings.기초배율)>0)state.settings.기초배율=Number(obj.settings.기초배율);
+  if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
@@ -1397,6 +1402,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.groups)state.groups=obj.groups;
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&obj.settings.기초배율!=null&&!isNaN(obj.settings.기초배율)&&Number(obj.settings.기초배율)>0)state.settings.기초배율=Number(obj.settings.기초배율);
+  if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
@@ -1483,6 +1489,7 @@ function load(){
     if(Array.isArray(obj.kepcoCombos)&&obj.kepcoCombos.length>0){state.kepcoCombos=obj.kepcoCombos;state.kepcoCombos.forEach(function(c){normalizeSlotGrp(c&&c.slots);});}
     if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
     if(obj.settings&&obj.settings.기초배율!=null&&!isNaN(obj.settings.기초배율)&&Number(obj.settings.기초배율)>0)state.settings.기초배율=Number(obj.settings.기초배율);
+    if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);
     if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
     if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
@@ -1738,6 +1745,15 @@ function migrateV13(obj){
 function toast(msg,kind){
   var t=document.createElement('div');t.className='toast '+(kind||'');t.textContent=msg;
   document.body.appendChild(t);setTimeout(function(){t.remove();},2200);
+}
+// 2026-09-14: #top-sticky(헤더+화면탭줄)의 실제 렌더링 높이를 --top-sticky-h CSS 변수로 반영.
+// #tab-bid의 "1. 공고 입력" 패널을 그 바로 아래에 sticky로 고정하는 데 사용(공고입력/조합 스크롤 분리).
+// 화면탭 개수 변화·창 크기 변화·모바일 미디어쿼리 전환 등으로 헤더 높이가 바뀔 때마다 자동 갱신되도록
+// ResizeObserver로 관찰(미지원 브라우저는 resize 이벤트로 대체).
+function syncTopStickyHeight(){
+  var el=document.getElementById('top-sticky');
+  if(!el)return;
+  document.documentElement.style.setProperty('--top-sticky-h',el.offsetHeight+'px');
 }
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g,function(c){
@@ -3756,6 +3772,37 @@ function getBidMemoAlerts(){
   }catch(e){}
   return out;
 }
+// 2026-09-14: "기초금액 확인 자동 알람" — 협정마감일이 임박했는데 기초금액/A값이 아직 입력되지 않은
+// (=발주처가 아직 미발표한) 공고를 놓치지 않도록 자동으로 알려준다. 설정>공고/적격>공고문분석 탭의
+// state.settings.기초알람(daysBefore/dailyAfter)로 기준일과 반복 여부를 조절.
+// - dailyAfter=false: 정확히 협정마감일-daysBefore일에 1회만 알림
+// - dailyAfter=true(기본): 그 날부터 협정마감일까지 매일 알림(기초금액/A값 둘 중 하나라도 입력되면 자동으로 중단)
+// - am10:00 이전에는 알리지 않음(설정 UI의 "am10:00" 표기와 일치)
+// - 이미 협정마감일이 지난 공고는 autoRemoveExpiredBidScreens()가 자동 삭제 대상이므로 여기서는 제외
+function getBaseAmountAlerts(){
+  var out=[];
+  try{
+    if(new Date().getHours()<10)return out;
+    var cfg=(state.settings&&state.settings.기초알람)||{};
+    var daysBefore=(cfg.daysBefore!=null&&cfg.daysBefore!==''&&!isNaN(cfg.daysBefore))?Number(cfg.daysBefore):5;
+    var dailyAfter=(cfg.dailyAfter!=null)?!!cfg.dailyAfter:true;
+    var today=new Date();today.setHours(0,0,0,0);
+    (state.bidScreens||[]).forEach(function(scr,i){
+      var b=scr&&scr.bid;
+      if(!b||!b.협정마감일_YMD)return;
+      var missing=(b.기초금액==null||b.기초금액==='')&&(b.A값==null||b.A값==='');
+      if(!missing)return;
+      var d=new Date(b.협정마감일_YMD+'T00:00:00');
+      if(isNaN(d.getTime()))return;
+      var diffDays=Math.round((d-today)/86400000);
+      if(diffDays<0)return;
+      var due=dailyAfter?(diffDays<=daysBefore):(diffDays===daysBefore);
+      if(!due)return;
+      out.push({screenIndex:i,공고명:(b.공고명||scr.name||'(제목없음)'),협정마감일:b.협정마감일_YMD,diffDays:diffDays});
+    });
+  }catch(e){}
+  return out;
+}
 function expiryWarnHTML(c){
   var alerts=getExpiryAlerts(c);
   if(!alerts.length)return '';
@@ -3774,10 +3821,11 @@ function showExpiryAlertModal(){
     if(alerts.length)list.push({업체명:c.업체명,alerts:alerts,excluded:!!c.만료알림제외,수정일시:c.수정일시||''});
   });
   var bidList=getBidMemoAlerts();
+  var baseList=getBaseAmountAlerts();
   var root=MODAL_ROOT;
-  if(!list.length&&!bidList.length){
+  if(!list.length&&!bidList.length&&!baseList.length){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:360px">'+
-      '<h3>⚠ 만료임박 확인</h3><p style="color:var(--muted);font-size:13px">신용평가(7일 이내)·안전보건(1개월 이내) 만료 예정, 일자리 B조건 연1회 재확인, 업체·공고 메모 알람 도달 항목이 없습니다.</p>'+
+      '<h3>⚠ 만료임박 확인</h3><p style="color:var(--muted);font-size:13px">신용평가(7일 이내)·안전보건(1개월 이내) 만료 예정, 일자리 B조건 연1회 재확인, 업체·공고 메모 알람 도달, 기초금액/A값 미입력 임박 항목이 없습니다.</p>'+
       '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
       '</div></div>';
     $('#m-cancel').onclick=function(){root.innerHTML='';};
@@ -3809,6 +3857,11 @@ function showExpiryAlertModal(){
              (item.memo?'<div style="margin-top:3px;padding:5px 7px;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;color:#78350f;white-space:pre-wrap;word-break:break-word">'+esc(item.memo)+'</div>':'')+
            '</td></tr>';
   }).join('');
+  var baseRows=baseList.map(function(item){
+    var dday=item.diffDays===0?'D-day':('D-'+item.diffDays);
+    return '<tr><td style="padding:5px 8px;font-weight:600;color:#0369a1;cursor:pointer;text-decoration:underline" data-scrgo="'+item.screenIndex+'" title="이 공고 화면으로 이동">'+esc(item.공고명)+'</td>'+
+           '<td style="padding:5px 8px;font-size:12px"><span style="color:#b45309;font-weight:700">'+dday+'</span> <span style="color:#6b7280">(협정마감일 '+esc(item.협정마감일)+')</span></td></tr>';
+  }).join('');
   root.innerHTML='<div class="modal-back"><div class="modal" style="width:48vw;min-width:340px;max-width:560px">'+
     '<h3 style="color:#dc2626">⚠ 만료임박 확인</h3>'+
     (list.length?(
@@ -3820,6 +3873,11 @@ function showExpiryAlertModal(){
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">📋 공고 메모 알람 ('+bidList.length+'건)</div>'+
       '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">한줄요약/메모 창에서 지정한 알람 날짜가 지난 공고입니다 · 공고명을 누르면 해당 화면으로 이동, 끄기를 누르면 그 알람만 해제됩니다</p>'+
       '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:50px">끄기</th><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+bidRows+'</tbody></table>'
+    ):'')+
+    (baseList.length?(
+      '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">📐 기초금액/A값 미입력 ('+baseList.length+'건)</div>'+
+      '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">협정마감일이 임박했는데 기초금액과 A값이 모두 비어있는 공고입니다 · 공고명을 누르면 해당 화면으로 이동 · 기초금액 또는 A값을 입력하면 자동으로 알림에서 빠집니다 · 알림 기준(며칠 전부터, 매일 반복 여부)은 설정 &gt; 공고/적격 &gt; 공고문분석에서 조정</p>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+baseRows+'</tbody></table>'
     ):'')+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
     '</div></div>';
@@ -3859,15 +3917,20 @@ function checkExpiryAlertsOnBoot(){
   try{
     var hasAlert=state.db.some(function(c){return !c.만료알림제외&&getExpiryAlerts(c).length>0;});
     var hasBidAlert=getBidMemoAlerts().length>0;
-    if(hasAlert||hasBidAlert)showExpiryAlertModal();
+    var hasBaseAlert=getBaseAmountAlerts().length>0;
+    if(hasAlert||hasBidAlert||hasBaseAlert)showExpiryAlertModal();
   }catch(e){}
 }
 // 2026-08-20: 메모 알람 — 부팅 시점에 이미 도달한 알람은 checkExpiryAlertsOnBoot()가 다른 만료 항목과
 // 함께 이미 한 번 보여주므로, 세션 시작 시 그 시점까지 도달한 알람은 "이미 알림함"으로 표시해두고,
 // 이후 앱을 켜둔 채로 새로 도달하는 알람만 주기적으로 재확인해 팝업으로 알려준다(재확인 시 매번 뜨는 것 방지).
 // 2026-08-31: 공고 메모 알람(협정메세지알람)도 같은 방식으로 재확인 대상에 포함.
+// 2026-09-14: 기초금액/A값 미입력 알람(getBaseAmountAlerts)도 같은 방식으로 포함. 이 알람은 날짜 단위로
+// 매일 새로 "도달"할 수 있으므로(dailyAfter=true), 알림됨 표시 키에 오늘 날짜를 포함시켜 하루 지나면
+// 다시 알리도록 한다(공고당 하루 1회).
 var _메모알람알림됨=new Set();
 var _공고메모알람알림됨=new Set();
+var _기초금액알람알림됨=new Set();
 function initMemoAlarmWatcher(){
   try{
     state.db.forEach(function(c){
@@ -3878,6 +3941,10 @@ function initMemoAlarmWatcher(){
   }catch(e){}
   try{
     getBidMemoAlerts().forEach(function(item){_공고메모알람알림됨.add(item.screenIndex+'|'+item.일시);});
+  }catch(e){}
+  try{
+    var _today0=new Date().toISOString().slice(0,10);
+    getBaseAmountAlerts().forEach(function(item){_기초금액알람알림됨.add(item.screenIndex+'|'+_today0);});
   }catch(e){}
   setInterval(checkMemoAlarmsLive,60*1000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)checkMemoAlarmsLive();});
@@ -3893,9 +3960,14 @@ function checkMemoAlarmsLive(){
     var bidDue=getBidMemoAlerts().filter(function(item){
       return !_공고메모알람알림됨.has(item.screenIndex+'|'+item.일시);
     });
-    if(!due.length&&!bidDue.length)return;
+    var _today0=new Date().toISOString().slice(0,10);
+    var baseDue=getBaseAmountAlerts().filter(function(item){
+      return !_기초금액알람알림됨.has(item.screenIndex+'|'+_today0);
+    });
+    if(!due.length&&!bidDue.length&&!baseDue.length)return;
     due.forEach(function(c){_메모알람알림됨.add(c.업체명+'|'+c.메모알람일시);});
     bidDue.forEach(function(item){_공고메모알람알림됨.add(item.screenIndex+'|'+item.일시);});
+    baseDue.forEach(function(item){_기초금액알람알림됨.add(item.screenIndex+'|'+_today0);});
     showExpiryAlertModal();
   }catch(e){}
 }
@@ -8857,6 +8929,18 @@ function bind(){
                 '<button type="button" class="btn btn-ghost btn-sm" id="skw-기초배율-reset" style="font-size:11px;padding:2px 8px;margin-left:8px">기본값(1.1)</button>'+
               '</div>'+
             '</div>'+
+            '<div style="margin:0 16px 12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
+              '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:6px">기초금액 확인 자동 알람 <span style="font-weight:400;font-size:11px;color:#6b7280">(기초금액 및 A값이 미발표 된 공고의 경우 확인하도록 자동알람 발생)</span></div>'+
+              '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">'+
+                '<span style="font-size:12px;color:#374151">협정마감일 -</span>'+
+                '<input type="number" step="1" min="0" id="skw-기초알람-days" value="'+esc(String((state.settings.기초알람&&state.settings.기초알람.daysBefore!=null)?state.settings.기초알람.daysBefore:5))+'" style="width:60px;text-align:right;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px">'+
+                '<span style="font-size:12px;color:#374151">일 전 am10:00 (기본값 -5일)</span>'+
+                '<button type="button" class="btn btn-sm" id="skw-기초알람-save" style="background:#6366f1">저장</button>'+
+                '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer;margin-left:4px">'+
+                  '<input type="checkbox" id="skw-기초알람-daily" '+((!state.settings.기초알람||state.settings.기초알람.dailyAfter!==false)?'checked':'')+'>이 후 기초금액 입력 전까지 매일 알람'+
+                '</label>'+
+              '</div>'+
+            '</div>'+
             '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
               '공고문분석 시 기본 패턴이 인식 실패할 경우 사용할 <b>추가 키워드</b>를 입력하세요.<br>'+
               '키워드 이후 가까운 숫자를 해당 항목으로 추출합니다. 여러 개는 쉼표로 구분.'+
@@ -9056,6 +9140,20 @@ function bind(){
       if(_skwMultResetBtn)_skwMultResetBtn.onclick=function(){
         if(_skwMultEl)_skwMultEl.value='1.1';
       };
+      (function(){
+        var _daysEl=document.getElementById('skw-기초알람-days');
+        var _dailyEl=document.getElementById('skw-기초알람-daily');
+        var _saveBtn=document.getElementById('skw-기초알람-save');
+        if(!_saveBtn)return;
+        _saveBtn.onclick=function(){
+          if(!state.settings.기초알람)state.settings.기초알람={daysBefore:5,dailyAfter:true};
+          var dv=Number(_daysEl?_daysEl.value:5);
+          state.settings.기초알람.daysBefore=(dv>=0&&!isNaN(dv))?dv:5;
+          state.settings.기초알람.dailyAfter=!!(_dailyEl&&_dailyEl.checked);
+          save();
+          toast('기초금액 확인 자동 알람 설정 저장','ok');
+        };
+      })();
       document.getElementById('skw-save').onclick=function(){
         KW_FIELDS.forEach(function(f){
           var el=document.getElementById('skw-'+f.key);
@@ -10820,6 +10918,16 @@ function boot(){
   // 여기서는 앱을 오래 켜둔 채 자정을 넘기는 경우 대응(30분 주기 + 탭 재활성화 시 즉시 확인).
   setInterval(checkBidScreenExpiryTick,30*60*1000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)checkBidScreenExpiryTick();});
+  // "1. 공고 입력" 패널 sticky 고정용 높이 동기화(공고입력/조합 스크롤 분리) — [[bid_tool_screen_tabbar_separated]] 참고
+  syncTopStickyHeight();
+  (function(){
+    var _tsEl=document.getElementById('top-sticky');
+    if(_tsEl&&typeof ResizeObserver!=='undefined'){
+      new ResizeObserver(syncTopStickyHeight).observe(_tsEl);
+    }else{
+      window.addEventListener('resize',syncTopStickyHeight);
+    }
+  })();
 }
 
 async function initAuthFlow(){
