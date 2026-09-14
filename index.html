@@ -718,7 +718,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[]},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[]},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -3779,6 +3779,7 @@ function getBidMemoAlerts(){
 // - dailyAfter=true(기본): 그 날부터 협정마감일까지 매일 알림(기초금액/A값 둘 중 하나라도 입력되면 자동으로 중단)
 // - am10:00 이전에는 알리지 않음(설정 UI의 "am10:00" 표기와 일치)
 // - 이미 협정마감일이 지난 공고는 autoRemoveExpiredBidScreens()가 자동 삭제 대상이므로 여기서는 제외
+// - excludeJijaUnder30(기본 체크): 적격기준=지자체이면서 추정가격 30억 미만인 공고는 알림 대상에서 제외
 function getBaseAmountAlerts(){
   var out=[];
   try{
@@ -3786,12 +3787,14 @@ function getBaseAmountAlerts(){
     var cfg=(state.settings&&state.settings.기초알람)||{};
     var daysBefore=(cfg.daysBefore!=null&&cfg.daysBefore!==''&&!isNaN(cfg.daysBefore))?Number(cfg.daysBefore):5;
     var dailyAfter=(cfg.dailyAfter!=null)?!!cfg.dailyAfter:true;
+    var excludeJijaUnder30=(cfg.excludeJijaUnder30!=null)?!!cfg.excludeJijaUnder30:true;
     var today=new Date();today.setHours(0,0,0,0);
     (state.bidScreens||[]).forEach(function(scr,i){
       var b=scr&&scr.bid;
       if(!b||!b.협정마감일_YMD)return;
       var missing=(b.기초금액==null||b.기초금액==='')&&(b.A값==null||b.A값==='');
       if(!missing)return;
+      if(excludeJijaUnder30&&b.적격기준==='지자체'&&(Number(b.추정가격)||0)<3000000000)return;
       var d=new Date(b.협정마감일_YMD+'T00:00:00');
       if(isNaN(d.getTime()))return;
       var diffDays=Math.round((d-today)/86400000);
@@ -8940,6 +8943,11 @@ function bind(){
                   '<input type="checkbox" id="skw-기초알람-daily" '+((!state.settings.기초알람||state.settings.기초알람.dailyAfter!==false)?'checked':'')+'>이 후 기초금액 입력 전까지 매일 알람'+
                 '</label>'+
               '</div>'+
+              '<div style="margin-top:6px">'+
+                '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer">'+
+                  '<input type="checkbox" id="skw-기초알람-지자체30억제외" '+((!state.settings.기초알람||state.settings.기초알람.excludeJijaUnder30!==false)?'checked':'')+'>지자체 30억 미만 공고 제외'+
+                '</label>'+
+              '</div>'+
             '</div>'+
             '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
               '공고문분석 시 기본 패턴이 인식 실패할 경우 사용할 <b>추가 키워드</b>를 입력하세요.<br>'+
@@ -9143,13 +9151,15 @@ function bind(){
       (function(){
         var _daysEl=document.getElementById('skw-기초알람-days');
         var _dailyEl=document.getElementById('skw-기초알람-daily');
+        var _jijaExEl=document.getElementById('skw-기초알람-지자체30억제외');
         var _saveBtn=document.getElementById('skw-기초알람-save');
         if(!_saveBtn)return;
         _saveBtn.onclick=function(){
-          if(!state.settings.기초알람)state.settings.기초알람={daysBefore:5,dailyAfter:true};
+          if(!state.settings.기초알람)state.settings.기초알람={daysBefore:5,dailyAfter:true,excludeJijaUnder30:true};
           var dv=Number(_daysEl?_daysEl.value:5);
           state.settings.기초알람.daysBefore=(dv>=0&&!isNaN(dv))?dv:5;
           state.settings.기초알람.dailyAfter=!!(_dailyEl&&_dailyEl.checked);
+          state.settings.기초알람.excludeJijaUnder30=!!(_jijaExEl&&_jijaExEl.checked);
           save();
           toast('기초금액 확인 자동 알람 설정 저장','ok');
         };
