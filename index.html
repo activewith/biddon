@@ -315,7 +315,10 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
 <main>
   <section id="tab-bid">
     <div class="panel">
-      <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span><span id="o-kepco-badge" style="display:none;font-size:11px;font-weight:700;color:#fff;background:#7c3aed;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle">⚡ 한전적격 전용 페이지</span></h2>
+      <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span><span id="o-kepco-badge" style="display:none;font-size:11px;font-weight:700;color:#fff;background:#7c3aed;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle">⚡ 한전적격 전용 페이지</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-bidinput" style="margin-left:auto;font-size:11px;padding:3px 10px" title="공고 입력 내용을 접거나 펼칩니다">숨기기</button>
+      </h2>
+      <div id="bid-input-collapsible">
       <div class="row" style="gap:12px">
         <div class="field" id="field-시평제한"><label>시평제한 (비우면 미적용)</label><input type="text" inputmode="numeric" class="money" id="in-시평제한" placeholder="예: 30,000,000,000"></div>
         <div class="field" id="field-분담시평"><label>분담 시평제한 <span style="font-size:10px;color:#6b7280">(복합공종, 비우면 미적용)</span></label><input type="text" inputmode="numeric" class="money" id="in-분담시평" placeholder="예: 100,000,000" style="background:#f1f5f9;border-color:#94a3b8"></div>
@@ -389,6 +392,7 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
         <div class="stat" id="stat-적격기준" style="background:#d1fae5;border-color:#6ee7b7"><div class="k" style="color:#065f46">적격기준</div><div class="v" style="color:#065f46" id="o-적격기준">미선택</div></div>
         <div class="stat" style="background:#fef3c7;border-color:#fde68a"><div class="k" style="color:#92400e">최소지분율</div><div class="v" style="color:#92400e" id="o-최소지분율">미설정</div></div>
         <div class="stat" style="background:#f5f3ff;border-color:#c4b5fd"><div class="k" style="color:#7c3aed">평균부채/유동(<span id="o-공종-label">전기</span>)</div><div class="v" style="color:#7c3aed;font-size:11px" id="o-업계평균">미입력</div></div>
+      </div>
       </div>
     </div>
 
@@ -1754,6 +1758,32 @@ function syncTopStickyHeight(){
   var el=document.getElementById('top-sticky');
   if(!el)return;
   document.documentElement.style.setProperty('--top-sticky-h',el.offsetHeight+'px');
+}
+// 2026-09-14: "1. 공고 입력" 패널의 상세 내용(입력 필드+요약)을 여닫는 "숨기기/열기" 토글(나라장터
+// 나의방 화면의 접기 버튼 참고 요청으로 추가). sticky 고정과 별개로, 접으면 패널이 제목줄 높이만
+// 남아 조합 목록을 볼 수 있는 공간이 더 늘어남. 마지막 상태는 localStorage에 저장(브라우저별,
+// 로그인 계정과 무관 — 값 자체가 개인 화면 취향이라 계정 데이터로 동기화할 필요는 없다고 판단).
+var BID_INPUT_COLLAPSE_KEY='bidInputCollapsed_v1';
+function applyBidInputCollapse(collapsed){
+  var box=document.getElementById('bid-input-collapsible');
+  var btn=document.getElementById('btn-toggle-bidinput');
+  if(box)box.style.display=collapsed?'none':'';
+  if(btn)btn.textContent=collapsed?'열기':'숨기기';
+  syncTopStickyHeight(); // 접힘/펼침으로 패널 높이가 바뀌어도 sticky 오프셋(헤더 높이)엔 영향 없지만, 관련 리사이즈 타이밍에 맞춰 안전하게 한 번 더 동기화
+}
+function toggleBidInputPanel(){
+  var box=document.getElementById('bid-input-collapsible');
+  var collapsedNow=box&&box.style.display==='none';
+  var next=!collapsedNow;
+  applyBidInputCollapse(next);
+  try{localStorage.setItem(BID_INPUT_COLLAPSE_KEY,next?'1':'0');}catch(e){}
+}
+function initBidInputCollapseUI(){
+  var saved=null;
+  try{saved=localStorage.getItem(BID_INPUT_COLLAPSE_KEY);}catch(e){}
+  applyBidInputCollapse(saved==='1');
+  var btn=document.getElementById('btn-toggle-bidinput');
+  if(btn)btn.onclick=toggleBidInputPanel;
 }
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g,function(c){
@@ -10929,6 +10959,7 @@ function boot(){
   setInterval(checkBidScreenExpiryTick,30*60*1000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)checkBidScreenExpiryTick();});
   // "1. 공고 입력" 패널 sticky 고정용 높이 동기화(공고입력/조합 스크롤 분리) — [[bid_tool_screen_tabbar_separated]] 참고
+  initBidInputCollapseUI();
   syncTopStickyHeight();
   (function(){
     var _tsEl=document.getElementById('top-sticky');
