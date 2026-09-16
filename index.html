@@ -54,7 +54,9 @@ main{padding:12px;max-width:1700px;margin:0 auto}
 /* 2026-09-14: "1. 공고 입력" 패널을 헤더 바로 아래에 고정(position:sticky)해, "2. 조합" 패널을 스크롤해도
    공고 입력 내용이 항상 보이도록 스크롤을 분리한다. top 값은 #top-sticky(헤더+화면탭줄)의 실제 높이를
    JS(syncTopStickyHeight, boot 시점 및 크기 변화 시 갱신)가 --top-sticky-h CSS 변수로 채워 넣는다. */
-#tab-bid>.panel:first-child{position:sticky;top:var(--top-sticky-h,60px);z-index:4;box-shadow:0 4px 10px -6px rgba(0,0,0,.15);background:#eef2fb;border-color:#c7d4ea}
+/* 2026-09-16: 배경색(#eef2fb)이 아래 "2. 조합" 패널(흰색)과 구분이 약하다는 피드백 → 더 진하고 채도 있는
+   인디고 톤(#dbe3fc)과 두꺼운 테두리(2px, #94a3f5)로 변경해 경계를 뚜렷하게 함. */
+#tab-bid>.panel:first-child{position:sticky;top:var(--top-sticky-h,60px);z-index:4;box-shadow:0 6px 14px -6px rgba(30,41,150,.28);background:#dbe3fc;border:2px solid #94a3f5}
 .panel h2{margin:0 0 10px 0;font-size:14px;font-weight:700;color:#0f172a;border-bottom:2px solid var(--border);padding-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .field{display:flex;flex-direction:column;gap:2px}
@@ -72,6 +74,10 @@ button.btn-ghost:hover:not(:disabled){background:#e5e7eb}
   .star-tip[data-tip]:hover::after{opacity:1}
 button.btn-bad{background:var(--bad);color:#fff}
 button.btn-warn{background:var(--warn);color:#fff}
+/* 2026-09-16: "1. 공고 입력" 패널 숨기기/열기 토글 — 기존 btn-ghost(연한 회색)는 패널 배경(파란빛)과
+   대비가 약해 눈에 잘 안 띈다는 피드백 → 진한 인디고 배경의 전용 스타일로 분리해 뚜렷하게 함. */
+button.btn-toggle-bidinput{background:#4338ca;color:#fff;border:1px solid #3730a3}
+button.btn-toggle-bidinput:hover{background:#3730a3}
 table{border-collapse:collapse;width:100%;font-size:12px}
 th,td{border:1px solid var(--border);padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 th{background:#f8fafc;font-weight:600;color:#334155}
@@ -317,7 +323,7 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
   <section id="tab-bid">
     <div class="panel">
       <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span><span id="o-kepco-badge" style="display:none;font-size:11px;font-weight:700;color:#fff;background:#7c3aed;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle">⚡ 한전적격 전용 페이지</span>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-bidinput" style="margin-left:auto;font-size:11px;padding:3px 10px" title="공고 입력 내용을 접거나 펼칩니다">숨기기</button>
+        <button type="button" class="btn btn-toggle-bidinput btn-sm" id="btn-toggle-bidinput" style="margin-left:auto;font-size:11px;padding:3px 10px;font-weight:700" title="공고 입력 내용을 접거나 펼칩니다">숨기기</button>
       </h2>
       <div id="bid-input-collapsible">
       <div class="row" style="gap:12px">
