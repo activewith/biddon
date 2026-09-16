@@ -410,7 +410,7 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
         <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="체크 시 조합결과TXT의 모든 조합 우측에 시평 합산액을 표시">
           <input type="checkbox" id="chk-표시시평합">시평합
         </label>
-        <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="체크 시 모든 조합의 확정메세지 메모칸에 현재 적격기준(설정>공고/적격>적격(발주처)메모에 등록한 안내(URL))을 채워 넣습니다. 해제해도 이미 채워진 메모 내용은 지워지지 않습니다">
+        <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="체크 시 모든 조합의 확정메세지 메모칸에 현재 적격기준(설정>공고/적격>적격(발주처)메모에 등록한 안내(URL))을 채워 넣습니다. 해제하면 그 메모칸을 비웁니다(단, 해당 조합의 개별표시가 켜져 있으면 유지)">
           <input type="checkbox" id="chk-표시안내URL">안내(URL)
         </label>
         <button class="btn btn-ghost btn-sm" id="btn-clear-combos">전체 조합 비우기</button>
@@ -3278,6 +3278,19 @@ function syncGuideUrlToCombo(ci){
 }
 function syncGuideUrlToAllCombos(){
   (state.combos||[]).forEach(function(c,ci){syncGuideUrlToCombo(ci);});
+}
+// 2026-09-16: 전체표시(state.bid.표시안내URL) 또는 개별표시(combo.표시안내URL) 체크를 해제할 때 확정메모를
+// 비워달라는 요청 — 단, 두 체크 중 하나라도(OR) 여전히 켜져 있으면 아직 표시 대상이므로 그대로 둔다.
+function clearGuideUrlFromCombo(ci){
+  var combo=state.combos&&state.combos[ci];
+  if(!combo)return;
+  if(state.bid.표시안내URL||combo.표시안내URL)return; // 다른 쪽 표시가 아직 켜져 있으면 유지
+  combo.확정메모='';
+  var input=document.querySelector('.combo-confirm-memo[data-ci="'+ci+'"]');
+  if(input)input.value='';
+}
+function clearGuideUrlFromAllCombos(){
+  (state.combos||[]).forEach(function(c,ci){clearGuideUrlFromCombo(ci);});
 }
 // 다운로드. pickFolder=true면(그리고 브라우저가 지원하면) 저장 위치를 직접 고르는 대화상자를 띄우고,
 // 미지원 브라우저이거나 pickFolder=false면 일반 다운로드(브라우저 기본 다운로드 폴더)로 대체한다.
@@ -7835,7 +7848,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           (comboCalc.isKEPCO?'':'<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 시평 합산액을 표시(전체표시와 무관하게 적용)">'+
             '<input type="checkbox" class="combo-sipyung-chk" data-ci="'+ci+'"'+(combo.표시시평합?' checked':'')+'>시평합'+
           '</label>')+
-          '<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합의 확정메세지 메모칸에 현재 적격기준의 안내(URL)을 채워 넣습니다(이 조합에만 적용, 전체표시와 무관). 해제해도 이미 채워진 메모 내용은 지워지지 않습니다">'+
+          '<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합의 확정메세지 메모칸에 현재 적격기준의 안내(URL)을 채워 넣습니다(이 조합에만 적용, 전체표시와 무관). 해제하면 메모칸을 비웁니다(단, 전체표시가 켜져 있으면 유지)">'+
             '<input type="checkbox" class="combo-guideurl-chk" data-ci="'+ci+'"'+(combo.표시안내URL?' checked':'')+'>안내(URL)'+
           '</label>'+
           '<input type="text" class="combo-confirm-memo" data-ci="'+ci+'" placeholder="확정메세지 메모(40byte)" value="'+esc(combo.확정메모||'')+'" style="width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit" title="확정 버튼을 누르면 메세지 맨 끝에 [메모내용]으로 추가됩니다(40byte 이내 — 한글 20자 또는 영문 40자)">'+
@@ -8343,7 +8356,7 @@ function bind(){
     var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합'),_cu=$('#chk-표시안내URL');
     if(_cj)_cj.addEventListener('change',function(){state.bid.표시실적합=this.checked;save();});
     if(_cs)_cs.addEventListener('change',function(){state.bid.표시시평합=this.checked;save();});
-    if(_cu)_cu.addEventListener('change',function(){state.bid.표시안내URL=this.checked;if(this.checked)syncGuideUrlToAllCombos();save();});
+    if(_cu)_cu.addEventListener('change',function(){state.bid.표시안내URL=this.checked;if(this.checked)syncGuideUrlToAllCombos();else clearGuideUrlFromAllCombos();save();});
   })();
 
   // 저장된 값을 inputs에 복원
@@ -8584,11 +8597,12 @@ function bind(){
       state.combos[Number(t.dataset.ci)].표시시평합=t.checked;save();return;
     }
     // 조합별 안내(URL) 개별표시 체크박스 — 체크 시 이 조합의 확정메모를 현재 적격기준의 안내(URL)로 채움(전체표시와는 OR 조건).
-    // 해제해도 이미 채워진 메모 내용은 지우지 않음(표시실적합/표시시평합과 동일하게 비파괴적으로 동작).
+    // 2026-09-16: 해제하면 확정메모를 비움 — 단, 전체표시(state.bid.표시안내URL)가 켜져 있으면 OR 조건상 여전히
+    // 표시 대상이므로 clearGuideUrlFromCombo 내부에서 지우지 않고 유지함.
     if(t.classList.contains('combo-guideurl-chk')){
       var gci=Number(t.dataset.ci);
       state.combos[gci].표시안내URL=t.checked;
-      if(t.checked)syncGuideUrlToCombo(gci);
+      if(t.checked)syncGuideUrlToCombo(gci);else clearGuideUrlFromCombo(gci);
       save();return;
     }
     // 확정메세지 전용 메모 — 확정 버튼(showConfirmPop)을 누르면 메세지 맨 끝에 "[메모내용]"으로 추가됨.
