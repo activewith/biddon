@@ -5380,6 +5380,7 @@ function openCompanyModal(idx){
           '<input type="checkbox" id="m-일자리B" style="cursor:pointer" '+((Number(c.일자리가점||0)===0.5||Number(c.일자리가점||0)===3.0)?'checked':'')+'>'+
           '<span><b>B조건</b> · 전년도 급여액 증가 <b style="color:#166534">+0.5점</b></span>'+
           '<span style="font-size:10px;color:#9ca3af;margin-left:4px" title="매년 4/1부터 재확인이 필요합니다. 이 화면에서 저장하면 확인 완료로 처리되며, 4/15까지 저장하지 않으면 이 체크는 자동으로 해제됩니다">(연1회 4/1~4/15 재확인)</span>'+
+          '<span style="font-size:9px;color:#9ca3af;margin-left:6px;white-space:nowrap">※ 공사원가명세서 급여(일용급여 및 퇴직급여 제외)를 합산</span>'+
         '</span>'+
         '<div style="font-size:11px;color:#6b7280;margin-top:3px">합산: <span id="m-일자리합계">'+Number(c.일자리가점||0).toFixed(1)+'</span>점 (A+B 동시 가능)</div>'+
       '</div>'+
