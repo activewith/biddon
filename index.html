@@ -405,11 +405,6 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
 
     <div class="panel">
       <h2>2. 조합 (기본 2개 · 필요 시 추가, 슬롯은 최대 5)
-        <span class="small" style="font-weight:400;color:#6b7280;margin-left:4px">
-          <span class="badge type-지역">지역</span> = 선택 지역 업체 &nbsp;
-          <span class="badge type-실적">실적</span> = 실적업체 플래그 &nbsp;
-          <span class="badge type-자사">자사</span> = 자사 플래그
-        </span>
         <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:auto" title="체크 시 조합결과TXT의 모든 조합 우측에 실적 합산액을 표시">
           <input type="checkbox" id="chk-표시실적합">실적합
         </label>
@@ -7655,11 +7650,11 @@ function renderSlotRow(ci,si,r,calc,forceAllocOn){
   var typeSelHtml=
     '<select class="grp-sel" data-grp="'+ci+'-'+si+'" style="flex:0 0 52px;width:52px;font-size:11px;padding:2px 3px;border:1px solid '+bd+';border-radius:3px;font-family:inherit;font-weight:700;background:'+bg+'">'+
       '<option value="지역" '+(grp==='지역'?'selected':'')+'>지역</option>'+
-      '<option value="실적" '+(grp==='실적'?'selected':'')+'>실적</option>'+
       '<option value="필요" '+(grp==='필요'?'selected':'')+' title="이 슬롯이 채워야 할 필요값(실적/시평/지분율)을 단독으로 충족하는 업체만 표시">필요</option>'+
+      '<option value="실적" '+(grp==='실적'?'selected':'')+'>실적</option>'+
       '<option value="검색" '+(grp==='검색'?'selected':'')+'>검색</option>'+
-      '<option value="1회" '+(grp==='1회'?'selected':'')+'>1회</option>'+
       '<option value="'+_damOptVal+'" '+(grp===_damOptVal?'selected':'')+'>'+_damOptLabel+'</option>'+
+      '<option value="1회" '+(grp==='1회'?'selected':'')+'>1회</option>'+
     '</select>';
   var compSelHtml;
   if(grp==='검색'){
