@@ -601,6 +601,11 @@ const FMT_EOK=function(n){if(n==null||n===''||isNaN(n))return '-';return TRIMDEC
 const _EOK_FLOOR=function(krw){var v=Math.floor((Number(krw)||0)/10000000)/10;var s=v.toFixed(1);return s.slice(-2)==='.0'?s.slice(0,-2):s;};
 // 레거시 공종 값(소방/전기+통신/전기+소방) → 복합(전기+분담)으로 통합. 2026-07-28 공종 옵션 단순화(전기/통신/복합(전기+분담)).
 const normGongjong=function(g){return(g==='전기+통신'||g==='전기+소방')?'복합(전기+분담)':g;}; // 소방은 단독 옵션 유지(2026-07-28 정정)
+// 2026-09-21: 한전도 복합(전기+통신)/복합(전기+소방)을 지원하면서 "복합 여부" 판정과 분담 라벨을 한 곳에서 관리.
+// - isComplexGongjong: 복합(전기+분담)/복합(전기+통신)/복합(전기+소방) 어느 것이든 true (한전 실적제한 UI/계산의 분담행 표시 기준).
+// - kepcoDamLabel: 한전 실적제한/실적비율 표시에서 '분담' 행 이름 — 내부 저장 키(한전실적입력.분담_pct, 한전분담E6['분담'])는 그대로 '분담'.
+const isComplexGongjong=function(g){return g==='복합(전기+분담)'||g==='복합(전기+통신)'||g==='복합(전기+소방)';};
+const kepcoDamLabel=function(g){return g==='복합(전기+통신)'?'통신':g==='복합(전기+소방)'?'소방':'분담';};
 // 확정/조합결과TXT의 Func 표기: 철도기술점수(FuncNumeric)는 [기술_값], 그 외 수동입력값은 [값]. 2026-07-28 추가.
 function funcSuffixText(row){
   if(row==null||row.Func==null||row.Func==='')return '';
@@ -2158,8 +2163,10 @@ function updateRegionNoteTooltips(){
   var o=document.getElementById('o-지역선택');
   if(o)o.title=parts.length?('📝 '+parts.join(' / ')):'';
 }
-// 한전(한국전력공사)은 공종이 전기/복합(전기+분담) 2가지만 존재(통신/소방 없음) — 다른 기관에서는
-// 전기/통신/소방/복합(전기+통신)/복합(전기+소방) 5개를 유지한다. 2026-08-14: 일반(비한전) 기관 대상
+// 한전(한국전력공사)은 공종이 전기/복합(전기+통신)/복합(전기+소방)/복합(전기+분담) 4가지(단독 통신/소방은 없음) — 다른 기관에서는
+// 전기/통신/소방/복합(전기+통신)/복합(전기+소방) 5개를 유지한다. 2026-09-21: 한전에도 복합(전기+통신)/(전기+소방) 추가
+// (분담 슬롯이 일반 기관처럼 통신/소방 업체 DB 선택형으로 동작). 복합(전기+분담)은 통신/소방이 아닌 분담 업종용 + 기존 저장데이터 호환용으로 유지.
+// 2026-08-14: 일반(비한전) 기관 대상
 // "복합(전기+분담)"을 복합(전기+통신)/복합(전기+소방) 2개로 분리(카테고리별 업체 선택 지원, [[bid_tool_complex_type_split]] 참고).
 // 단, 이미 저장된 기존 조합이 레거시 값 "복합(전기+분담)"을 쓰고 있으면(비한전이어도) 데이터 손실 없이
 // 계속 표시되도록 그 경우에 한해 허용목록에 임시로 포함시킨다.
@@ -2169,7 +2176,7 @@ function updateGongjongOptions(적격기준){
   var isKEPCO=(적격기준==='한전');
   var allOpts=[['전기','전기'],['통신','통신'],['소방','소방'],['복합(전기+통신)','복합(전기+통신)'],['복합(전기+소방)','복합(전기+소방)'],['복합(전기+분담)','복합(전기+분담)']];
   var cur=sel.value||state.bid.공종;
-  var allow=isKEPCO?['전기','복합(전기+분담)']:['전기','통신','소방','복합(전기+통신)','복합(전기+소방)'];
+  var allow=isKEPCO?['전기','복합(전기+통신)','복합(전기+소방)','복합(전기+분담)']:['전기','통신','소방','복합(전기+통신)','복합(전기+소방)'];
   if(!isKEPCO&&cur==='복합(전기+분담)')allow=allow.concat(['복합(전기+분담)']);
   sel.innerHTML=allOpts.filter(function(o){return allow.indexOf(o[0])>=0;})
     .map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
@@ -2980,14 +2987,17 @@ const 적격기준_철도공단 = {
 // 쓰는데, 그건 원래도 그랬던 것이라 이번에 손대지 않았다.
 const 적격기준_한전 = {
   // calcSlot()의 "else if(calc.isKEPCO)" 블록 그대로 이동 — 항상 적격:false, 문구도 동일.
-  judge: function(합산실적,ROW,한전분담E6,E6){
+  // 2026-09-21: 복합(전기+통신)/(전기+소방) 지원 — 키 '분담'은 grp가 분담/통신/소방인 슬롯을 모두 합산하고,
+  // 표시 라벨은 분담라벨(통신/소방/분담)로 대체한다(5번째 인자, 생략 시 기존과 동일하게 키 이름 그대로).
+  judge: function(합산실적,ROW,한전분담E6,E6,분담라벨){
     var 적격사유;
     if(한전분담E6){
       var kepco상세=Object.keys(한전분담E6).map(function(k){
-        var amt=(k==='전기')?합산실적:ROW.filter(function(r){return r.grp===k;}).reduce(function(a,r){return a+(r.지분환산실적||0);},0);
+        var amt=(k==='전기')?합산실적:ROW.filter(function(r){return k==='분담'?(r.grp==='분담'||r.grp==='통신'||r.grp==='소방'):r.grp===k;}).reduce(function(a,r){return a+(r.지분환산실적||0);},0);
         var e6k=한전분담E6[k];
         var pct=e6k>0?(amt/e6k*100):0;
-        return k+' '+pct.toFixed(1)+'%('+FMT_NUM(Math.round(amt))+'/'+FMT_NUM(Math.round(e6k))+')';
+        var lbl=(k==='분담'&&분담라벨)?분담라벨:k;
+        return lbl+' '+pct.toFixed(1)+'%('+FMT_NUM(Math.round(amt))+'/'+FMT_NUM(Math.round(e6k))+')';
       });
       적격사유='실적비율 '+kepco상세.join(' · ')+' (참고용 · 적격판정 미적용)';
     } else {
@@ -4091,7 +4101,7 @@ function calcBid(){
   // 2026-08-13 재변경(사용자 확정): 배수는 전기/분담 공통 1개(개별입력 아님). 비율(%)만 항목별로 수기입력.
   var 한전분담E6=null;
   if(isKEPCO){
-    var isComplexGJ=(normGongjong(b.공종)==='복합(전기+분담)');
+    var isComplexGJ=isComplexGongjong(normGongjong(b.공종)); // 2026-09-21: 복합(전기+통신)/(전기+소방)도 복합으로 취급(분담 키 '분담' 그대로 사용)
     var _한전입력=b.한전실적입력||{};
     var _한전배수=Number(_한전입력.배수)||0;
     var _kKeys=isComplexGJ?['전기','분담']:['전기'];
@@ -4448,7 +4458,7 @@ function calcSlot(combo,calc){
   } else if(calc.적격모듈===적격기준_한전){
     // 한전(한국전력공사): 기초금액 대비 5년실적 비율만 계산·표시. 시평/신인도를 포함한 적격·부적격 판정은
     // 하지 않음(2026-08-12 사용자 요청). (적격기준_한전.judge 참고)
-    var _kjd=적격기준_한전.judge(합산실적,ROW,calc.한전분담E6,calc.E6);
+    var _kjd=적격기준_한전.judge(합산실적,ROW,calc.한전분담E6,calc.E6,kepcoDamLabel(calc.공종));
     적격=_kjd.적격;적격사유=_kjd.적격사유;
   } else {
     // ② 실적·시평은 충족하는데 경영상태비율(①) 기준 신인도만 부족한 경우, 감점업체 신용등급이
@@ -6238,13 +6248,11 @@ function extractBidFields(t){
   // ── 한전(한국전력공사) 전용 후처리 ──────────────────────────────────
   // (a) "지역제한 전국" 문구가 있으면 본문 다른 곳의 지역명(발주처 주소 등) 오탐지를 무시하고 '전국'으로 확정
   // (b) "공동도급"/"분담이행" + "업종명(비율%)" 목록이 있으면 업종별 분담비율을 저장해 실적제한을 업종별로 나눠 계산
-  // (c) 2026-08-18: 위 공종 감지(5048행 부근)는 일반 기관 기준 신규 옵션 "복합(전기+통신)"/"복합(전기+소방)"으로
-  // 판정하지만, 한전은 여전히 "전기"/"복합(전기+분담)" 2가지만 지원한다([[bid_tool_kepco_criteria]]).
-  // 정정하지 않으면 공고문분석모달의 isComplex 판정(===복합(전기+분담))이 실패해 분담률이 검출됐는데도
-  // "전기 100%(자동)" 단일행으로만 표시되고, updateGongjongOptions의 한전 허용목록에도 없어 나중에
-  // 공종이 '전기'로 강제 리셋되며 분담률 자체가 유실되는 버그가 있었다 — 여기서 즉시 정규화한다.
+  // (c) 2026-08-18~2026-09-20: 한전은 "전기"/"복합(전기+분담)"만 지원해서 위 공종 감지 결과(복합(전기+통신)/(전기+소방))를
+  // 여기서 복합(전기+분담)으로 뭉뚱그렸다. 2026-09-21 사용자 요청으로 이 정규화를 제거 — 한전도 일반 기관과 동일하게
+  // 복합(전기+통신)/복합(전기+소방) 그대로 유지한다(updateGongjongOptions 한전 허용목록·isComplexGongjong 기반
+  // 실적제한 UI/계산·분담 슬롯 통신/소방 DB 선택이 이 값을 전제로 동작).
   if(r.적격기준==='한전'){
-    if(r.공종==='복합(전기+통신)'||r.공종==='복합(전기+소방)')r.공종='복합(전기+분담)';
     if(/지\s*역\s*제\s*한[^\n]{0,15}전\s*국/.test(t)){
       r.지역선택=['전국'];
     }
@@ -6407,7 +6415,7 @@ function extractBidFields(t){
 // 배수는 항상 빈칸(자동으로 채우지 않음, 2026-08-13 사용자 확정).
 function _kepcoPerfInputBlockHtml(found){
   if(found.적격기준!=='한전')return'';
-  var isComplex=(normGongjong(found.공종)==='복합(전기+분담)');
+  var isComplex=isComplexGongjong(normGongjong(found.공종));
   var existing=state.bid.한전실적입력||{};
   var hb=found.한전분담비율||{};
   var hbKeys=Object.keys(hb);
@@ -6431,7 +6439,7 @@ function _kepcoPerfInputBlockHtml(found){
     '</div>'+
     (isComplex?(
       '<div style="display:flex;align-items:center;gap:6px;margin-top:3px">'+
-        '<span style="font-weight:700;width:32px;color:#5b21b6;font-size:12px">분담</span>'+
+        '<span style="font-weight:700;width:32px;color:#5b21b6;font-size:12px">'+kepcoDamLabel(normGongjong(found.공종))+'</span>'+
         '<input type="number" step="0.01" min="0" max="100" id="m-kperf-pct-분담" value="'+esc(String(분담pctVal))+'" style="'+st+'">%'+
         '<span style="color:#6b7280;font-size:12px">=</span>'+
         '<b id="m-kperf-calc-분담" style="color:#059669;font-size:12px">-</b>'+
@@ -6443,7 +6451,7 @@ function _kepcoPerfInputBlockHtml(found){
 // _kepcoPerfInputBlockHtml의 입력칸이 바뀔 때마다(또는 공종이 바뀌어 블록 자체가 다시 그려질 때) 계산값(<b>)만 갱신.
 // found.기초금액(없으면 추정가격×1.1)을 base로 사용 — calcBid()의 한전분담E6 산식과 동일(base×비율%×배수).
 function _updateKepcoPerfPreview(found){
-  var isComplex=(normGongjong(found.공종)==='복합(전기+분담)');
+  var isComplex=isComplexGongjong(normGongjong(found.공종));
   var base=(found.기초금액!=null&&found.기초금액!==''&&!isNaN(found.기초금액))?Number(found.기초금액):
     ((found.추정가격!=null&&found.추정가격!==''&&!isNaN(found.추정가격))?Number(found.추정가격)*getBaseMult():0);
   var multEl=document.getElementById('m-kperf-mult');
@@ -8056,7 +8064,7 @@ function fmtEok(n,suffix){
 // 배수는 전기/분담 공통 1개(2026-08-13 사용자 확정, 개별입력 아님). 계산값은 calcBid()가 반환한
 // c.한전분담E6[k](=기초금액×비율%×공통배수)를 그대로 표시.
 function kepcoPerfRowsHtml(c){
-  var isComplex=(c.공종==='복합(전기+분담)');
+  var isComplex=isComplexGongjong(c.공종);
   var 입력=state.bid.한전실적입력||{};
   var keys=isComplex?['전기','분담']:['전기'];
   var multRow='<div style="display:flex;align-items:center;gap:4px;font-size:11px">'+
@@ -8070,7 +8078,7 @@ function kepcoPerfRowsHtml(c){
       ?('<input type="number" step="0.01" min="0" max="100" data-kperf-pct="'+k+'" value="'+(pctVal!=null?pctVal:'')+'" placeholder="%" style="width:54px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #c4b5fd;border-radius:4px">%')
       :('<span style="font-weight:700;font-size:11px">100%<span style="font-size:9px;color:#6b7280;font-weight:400"> (자동)</span></span>');
     return '<div style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap">'+
-      '<span style="font-weight:700;width:24px;color:#5b21b6">'+k+'</span>'+
+      '<span style="font-weight:700;width:24px;color:#5b21b6">'+(k==='분담'?kepcoDamLabel(c.공종):k)+'</span>'+
       pctField+
       '<span style="color:#6b7280">=</span>'+
       '<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>'+
@@ -8660,7 +8668,16 @@ function bind(){
         var _raw일자리=Number(cc.일자리가점)||0;
         var _일자리적용=(_type==='6')?Math.round(_raw일자리/3*100)/100:(_type==='DoRo6'||_type==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_raw일자리,_type==='DoRo6'):(_type==='KW6'||_type==='KW7A')?적격기준_수자원공사.jobBonusRatio(_raw일자리,_type==='KW6'):(_type==='LH6'||_type==='LH7A')?((_raw일자리>=2.5?1.0:0)+(_raw일자리===0.5||_raw일자리===3.0?0.5:0)):(_type==='철도6')?Math.round(_raw일자리*0.3*100)/100:(_type==='철도7A')?Math.round(_raw일자리*(0.5/3)*100)/100:_raw일자리;
         var _sinindo=(_type==='LH6'||_type==='LH7A')?Math.min(_일자리적용+_sb,1.5):_일자리적용+_sb; // LH cap +1.5
-        var _eff6=getEffectiveDeduction(cc,_calc);var _pdc=getCompPerfData(cc,effPerfGongjong(oldGrp,_calc));state.combos[pci].slots[psi]={업체명:cc.업체명,신인도:_sinindo,감점:_eff6.value,실적:(_calc.use3yr?(_pdc.실적3||0):(_pdc.실적5||0)),시평액:_pdc.시평액||0,지분율:old지분,grp:oldGrp,isRec:false,개별최대지분율:cc.개별최대지분율!=null?cc.개별최대지분율:null,Func:(oldGrp==='통신'||oldGrp==='소방')?oldGrp:undefined};
+        var _eff6=getEffectiveDeduction(cc,_calc);var _pdc=getCompPerfData(cc,effPerfGongjong(oldGrp,_calc));
+        // 2026-09-21: 한전은 통신/소방 슬롯의 실적을 "지분율×실적"으로 통신/소방 필요실적과 비교해 실적비율을 표시하므로
+        // (적격기준_한전.judge), 지분율이 0이면 항상 0%로 나옴 — 한전에서만 지분율 미입력(0) 상태의 통신/소방 슬롯에 100을 기본값으로 채움
+        // (같은 조합에 이미 지분율이 있는 같은 종류 슬롯이 있으면 0 유지). 수정 가능. 비한전은 기존과 동일(분담계열 지분율 무관).
+        var _새지분=old지분;
+        if(_calc.isKEPCO&&(oldGrp==='통신'||oldGrp==='소방')&&!old지분){
+          var _동종있음=state.combos[pci].slots.some(function(_s2,_i2){return _i2!==psi&&_s2.grp===oldGrp&&(_s2.업체명||'').trim()!==''&&(Number(_s2.지분율)||0)>0;});
+          if(!_동종있음)_새지분=100;
+        }
+        state.combos[pci].slots[psi]={업체명:cc.업체명,신인도:_sinindo,감점:_eff6.value,실적:(_calc.use3yr?(_pdc.실적3||0):(_pdc.실적5||0)),시평액:_pdc.시평액||0,지분율:_새지분,grp:oldGrp,isRec:false,개별최대지분율:cc.개별최대지분율!=null?cc.개별최대지분율:null,Func:(oldGrp==='통신'||oldGrp==='소방')?oldGrp:undefined};
         });
       }else{state.combos[pci].slots[psi].업체명=name;}
     }else{state.combos[pci].slots[psi]=Object.assign(emptySlot(),{grp:oldGrp});}
