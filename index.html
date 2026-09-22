@@ -4170,17 +4170,27 @@ function getOneLineSummary(b, c, hideLHNote) {
     else if(c.E5>=LIMIT_50)기준='지자체50';
     else if(c.E5>=LIMIT_30)기준='지자체30';
   }
-  var 지역=getRegionStr()||'?';
+  var 지역=getRegionStr()||(b.적격기준==='한전'?'전국':'?');
   var 의무='';if(b.지역의무지분!=null&&b.지역의무지분!=='')의무='의무'+Number(b.지역의무지분)+'%';
   var 시평str='';
   if(c.E3!=null&&c.E3>0){var 시평억=Math.ceil(c.E3/10000000)/10;시평str='시평'+시평억.toFixed(1)+'억';}
-  var 실적억=c.E6>0?Math.ceil(c.E6/10000000)/10:0;
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
   var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정)':'');
-  var 실적str='실적'+실적억.toFixed(1)+'억'+실적기준sfx;
+  var 실적str;
+  if(b.적격기준==='한전'&&isComplexGongjong(normGongjong(b.공종))&&c.한전분담E6){
+    var _kDamLbl=kepcoDamLabel(normGongjong(b.공종));
+    var _kE=c.한전분담E6['전기']||0,_kD=c.한전분담E6['분담']||0;
+    var _kEokE=(Math.ceil(_kE/10000000)/10).toFixed(1);
+    var _kEokD=(Math.ceil(_kD/10000000)/10).toFixed(1);
+    실적str='실적(전기'+_kEokE+'억+'+_kDamLbl+_kEokD+'억)'+실적기준sfx;
+  } else {
+    var 실적억=c.E6>0?Math.ceil(c.E6/10000000)/10:0;
+    실적str='실적'+실적억.toFixed(1)+'억'+실적기준sfx;
+  }
   var n=Number(b.구성업체수)||2;
   var 최소str=(b.최소지분율!=null&&b.최소지분율!==''&&!isNaN(b.최소지분율))?Number(b.최소지분율)+'%':'';
   var 구성str=n+'인'+(n<=2?'':(최소str||''));
+  if(isComplexGongjong(normGongjong(b.공종)))구성str+='(분담)';
   
   var parts=[];
   var 마감str='';
@@ -4225,6 +4235,7 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
   var n=Number(b.구성업체수)||2;
   var 최소str=(b.최소지분율!=null&&b.최소지분율!==''&&!isNaN(b.최소지분율))?Number(b.최소지분율)+'%':'';
   var 구성str=n+'인'+(n<=2?'':(최소str||''));
+  if(isComplexGongjong(normGongjong(b.공종)))구성str+='(분담)';
   function _eokTrim(krw){ // 억 단위 변환(올림, 소수1자리), 유효숫자만 표시(끝자리 .0 제거)
     var v=Math.ceil(krw/10000000)/10;
     var s=v.toFixed(1);
@@ -8138,22 +8149,22 @@ function kepcoPerfRowsHtml(c){
       '<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>'+
     '</div>';
   }).join('');
-  return '<div style="display:flex;flex-direction:column;gap:3px">'+multRow+itemRows+kepcoPerfEokLineHtml(c,keys)+'</div>';
+  return '<div style="display:flex;flex-direction:column;gap:3px">'+kepcoPerfEokLineHtml(c,keys)+multRow+itemRows+'</div>';
 }
 // 실적제한(한전분담E6) 값을 기초가격 등 다른 금액표시와 통일된 그레이 소형 "(억)" 표기로 요약.
-// 전기/통신(분담) 두 항목이 한 박스 안에 같이 표시되므로 항목명을 괄호 안에 함께 표기한다
-// (예: "(전기 26.4억) (통신 13.5억)"). data-kperf-pct/mult change 시 전체 재렌더 없이
-// 이 줄만 다시 만들어 교체할 수 있도록 별도 함수로 분리(kepcoPerfRowsHtml 및 bind()의
-// change 핸들러 양쪽에서 공용으로 사용).
+// 전기/통신(분담) 두 항목이 한 박스 안에 같이 표시되므로 항목명 첫 글자만 괄호 안에 "+"로 묶어 표기한다
+// (예: "(전26.4억+통13.5억)", 2026-09-22: 위치를 실적제한 타이틀 바로 밑으로, 표기도 축약형으로 변경).
+// data-kperf-pct/mult change 시 전체 재렌더 없이 이 줄만 다시 만들어 교체할 수 있도록 별도 함수로
+// 분리(kepcoPerfRowsHtml 및 bind()의 change 핸들러 양쪽에서 공용으로 사용).
 function kepcoPerfEokLineHtml(c,keys){
   var parts=keys.map(function(k){
     var calcVal=(c.한전분담E6&&c.한전분담E6[k]!=null)?c.한전분담E6[k]:0;
     if(!calcVal||calcVal<=0)return '';
-    var lbl=(k==='분담'?kepcoDamLabel(c.공종):k);
+    var lbl=(k==='분담'?kepcoDamLabel(c.공종):k).charAt(0);
     var rounded=Math.ceil(calcVal/10000000)*10000000;
-    return '('+lbl+' '+(rounded/100000000).toFixed(1)+'억)';
-  }).filter(Boolean).join(' ');
-  return '<div data-kperf-eokline style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600">'+parts+'</div>';
+    return lbl+(rounded/100000000).toFixed(1)+'억';
+  }).filter(Boolean).join('+');
+  return '<div data-kperf-eokline style="font-size:10px;color:#6b7280;font-weight:600">'+(parts?'('+parts+')':'')+'</div>';
 }
 function refreshBidStats(){
   var c=calcBid();
@@ -10680,15 +10691,20 @@ function switchBidScreen(idx){
 // 적격기준은 이 페이지에서는 항상 '한전'으로 고정되며, 다른 기관(조달청/LH 등)의 일반 화면탭(bidScreens)과는
 // 완전히 분리된 저장공간을 쓰므로 서로 데이터가 섞이지 않는다.
 function enterKepcoPage(){
-  if(state.kepcoModeActive)return;
-  syncActiveBidScreen(); // 현재 보고 있던 일반 화면(조달청 등)의 데이터를 먼저 안전하게 저장
-  state.kepcoModeActive=true;
-  state.bid=state.kepcoBid;
-  state.combos=state.kepcoCombos;
-  state.bid.적격기준='한전';
-  restoreBidInputsFromState();
-  refreshBidStats();
-  refreshCombos();
+  // 2026-09-22 수정: 기존에는 state.kepcoModeActive가 true이면(=이미 한전모드로 전환된 적이 있으면)
+  // 곧바로 return 해버려서, 한전모드 상태에서 업체DB관리 등 "다른 화면탭"으로 이동한 뒤 다시 '한전'
+  // 버튼을 눌러도 화면(tab-bid 표시)이 갱신되지 않는 문제가 있었음(데이터 바꿔치기는 이미 되어있는데
+  // 화면 표시만 안 따라옴). → 데이터 바꿔치기(최초 진입시 1회만 필요)와 화면 표시 갱신(항상 필요)을 분리.
+  if(!state.kepcoModeActive){
+    syncActiveBidScreen(); // 현재 보고 있던 일반 화면(조달청 등)의 데이터를 먼저 안전하게 저장
+    state.kepcoModeActive=true;
+    state.bid=state.kepcoBid;
+    state.combos=state.kepcoCombos;
+    state.bid.적격기준='한전';
+    restoreBidInputsFromState();
+    refreshBidStats();
+    refreshCombos();
+  }
   document.querySelectorAll('header nav button[data-tab]').forEach(function(b){b.classList.remove('active');});
   document.querySelectorAll('section[id^="tab-"]').forEach(function(s){s.classList.toggle('hidden',s.id!=='tab-bid');});
   var _tb=document.getElementById('bid-screen-tabs');if(_tb)_tb.classList.add('hidden');
