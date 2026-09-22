@@ -8135,6 +8135,7 @@ function kepcoPerfRowsHtml(c){
   var multRow='<div style="display:flex;align-items:center;gap:4px;font-size:11px">'+
     '<span style="color:#6b7280">배수</span>'+
     '<input type="number" step="0.01" min="0" data-kperf-mult value="'+(입력.배수!=null?입력.배수:'')+'" placeholder="예:1" style="width:48px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #c4b5fd;border-radius:4px">'+
+    '<span style="margin-left:auto">'+kepcoPerfEokLineHtml(c,keys)+'</span>'+
   '</div>';
   var itemRows=keys.map(function(k){
     var calcVal=(c.한전분담E6&&c.한전분담E6[k]!=null)?c.한전분담E6[k]:0;
@@ -8149,11 +8150,11 @@ function kepcoPerfRowsHtml(c){
       '<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>'+
     '</div>';
   }).join('');
-  return '<div style="display:flex;flex-direction:column;gap:3px">'+kepcoPerfEokLineHtml(c,keys)+multRow+itemRows+'</div>';
+  return '<div style="display:flex;flex-direction:column;gap:3px">'+multRow+itemRows+'</div>';
 }
 // 실적제한(한전분담E6) 값을 기초가격 등 다른 금액표시와 통일된 그레이 소형 "(억)" 표기로 요약.
 // 전기/통신(분담) 두 항목이 한 박스 안에 같이 표시되므로 항목명 첫 글자만 괄호 안에 "+"로 묶어 표기한다
-// (예: "(전26.4억+통13.5억)", 2026-09-22: 위치를 실적제한 타이틀 바로 밑으로, 표기도 축약형으로 변경).
+// (예: "(전26.4억+통13.5억)", 2026-09-22: 별도 줄로 안 빼고 "배수" 행 우측(margin-left:auto)에 붙임).
 // data-kperf-pct/mult change 시 전체 재렌더 없이 이 줄만 다시 만들어 교체할 수 있도록 별도 함수로
 // 분리(kepcoPerfRowsHtml 및 bind()의 change 핸들러 양쪽에서 공용으로 사용).
 function kepcoPerfEokLineHtml(c,keys){
