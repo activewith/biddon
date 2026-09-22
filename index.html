@@ -4233,7 +4233,22 @@ function getOneLineSummary(b, c, hideLHNote) {
 // damLabel: 해당 조합의 분담 슬롯 업체명 앞 괄호표기(예: "(창호)알에프티"→"창호")가 있으면
 // "복합(전기+분담)" 표기의 "분담"을 이 라벨로 치환해서 보여주기 위한 값 (2026-07-29)
 function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
-  if(b.적격기준==='한전') return '';
+  // 2026-09-22: 한전은 적격판정(부적격 여부) 자체가 없어 기존엔 체크리스트를 아예 생략했으나,
+  // 확정메세지에도 다른 기관처럼 "- 적격 -" 요약(업종별 비율%·실적억 병기)을 넣어달라는 요청으로 전용 분기 추가.
+  // _eokTrim은 아래 function 선언으로 정의되지만 함수 선언은 호이스팅되어 여기서도 바로 사용 가능.
+  if(b.적격기준==='한전'){
+    var _isComplexK=isComplexGongjong(normGongjong(b.공종));
+    var _입력K=b.한전실적입력||{};
+    var _keysK=_isComplexK?['전기','분담']:['전기'];
+    var _linesK=_keysK.map(function(k,idxK){
+      var _lblK=(k==='분담'?kepcoDamLabel(normGongjong(b.공종)):k);
+      var _pctK=_isComplexK?(Number(_입력K[k+'_pct'])||0):100;
+      var _valK=(c.한전분담E6&&c.한전분담E6[k]!=null)?c.한전분담E6[k]:0;
+      var _eokK=_valK>0?_eokTrim(_valK):'0';
+      return (idxK+1)+'. '+_lblK+' '+TRIMDEC(_pctK)+'% ('+_eokK+'억)';
+    });
+    return '- 적격 -\n'+_linesK.join('\n');
+  }
   if(b.적격기준==='지자체' && !(c.E5>=LIMIT_30) && !(c.E3!=null&&c.E3>0)) return '';
   var 의무=(b.지역의무지분!=null&&b.지역의무지분!=='')?'의무 '+Number(b.지역의무지분)+'%':'';
   var n=Number(b.구성업체수)||2;
@@ -10165,7 +10180,15 @@ function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
     // 2026-08-13: 지분율(%) 표시를 폐지하고 Func 입력값으로 대체 — 다른 기관과 동일한 funcSuffixText 규칙(수동입력값은 대괄호 표기) 적용
     if(_globalCalc.isKEPCO){
       var _acct=dbEntry&&dbEntry.계좌정보?dbEntry.계좌정보:'';
-      var _funcTxt=funcSuffixText(s);
+      // 2026-09-22: 복합(전기+통신)/(전기+소방)의 통신/소방(분담) 슬롯은 다른 기관과 동일하게
+      // "[공종_분담]" 형태로 표시(기존엔 "[통신]"처럼 _분담 접미사가 빠져 있었음). Func가 비어있으면 grp명을 기본값으로 사용.
+      var _funcTxt;
+      if(s.grp==='소방'||s.grp==='통신'){
+        var _catTxtK=(s.Func!=null&&s.Func!=='')?String(s.Func):s.grp;
+        _funcTxt='['+_catTxtK+'_분담]';
+      }else{
+        _funcTxt=funcSuffixText(s);
+      }
       var _kLines=[s.업체명+(_funcTxt?' '+_funcTxt:'')];
       if(bizno)_kLines.push('('+bizno+')');
       if(_acct)_kLines.push('('+_acct+')');
