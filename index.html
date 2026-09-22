@@ -123,8 +123,12 @@ tr.hover:hover{background:#f8fafc}
 .stat{background:#f8fafc;border:1px solid var(--border);border-radius:4px;padding:5px 6px;text-align:center}
 /* 2026-09-22: 실적제한 박스(한전 복합공종 전기/통신·소방 실적금액 병기)는 다른 요약박스보다 내용이 길어
    min-width 확대만으로는 그리드 트랙 폭이 늘지 않고 값이 박스 밖으로 흘러넘쳤음 — 2개 트랙을 차지하도록
-   span으로 실제 폭을 넓히고, 다른 박스들은 위 minmax 기준을 줄여 상대적으로 폭을 줄임. */
-#stat-실적제한{grid-column:span 2;max-width:80%}
+   span으로 실제 폭을 넓히고, 다른 박스들은 위 minmax 기준을 줄여 상대적으로 폭을 줄임.
+   (2026-09-22 재수정: max-width:80%를 추가했더니 이 박스는 2트랙 영역 중 80%만 차지하고 남은 20%가
+   빈 공간으로 남아 다음 박스와의 간격만 유독 벌어지는 문제가 발생 — 이 요약박스 줄은 모든 적격기준
+   화면(조달청/LH/지자체/철도공단/한전 등)이 공유하는 마크업이라 모든 화면에서 동일하게 나타남.
+   박스 간격을 균등하게 유지하려면 이 아이템이 자신의 그리드 영역을 100% 채워야 하므로 max-width 제거.) */
+#stat-실적제한{grid-column:span 2}
 .stat .k{font-size:10px;color:var(--muted);font-weight:600}
 .stat .v{font-size:13px;font-weight:700;color:#0f172a}
 @keyframes blinkBaseWarnBg{0%,49%{background:#fee2e2;border-color:#ef4444;box-shadow:0 0 0 0 rgba(220,38,38,.6)}50%,100%{background:#dc2626;border-color:#7f1d1d;box-shadow:0 0 18px 6px rgba(220,38,38,.85)}}
@@ -8150,7 +8154,7 @@ function kepcoPerfRowsHtml(c){
       '<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>'+
     '</div>';
   }).join('');
-  return '<div style="display:flex;flex-direction:column;gap:3px">'+multRow+itemRows+'</div>';
+  return '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">'+multRow+itemRows+'</div>';
 }
 // 실적제한(한전분담E6) 값을 기초가격 등 다른 금액표시와 통일된 그레이 소형 "(억)" 표기로 요약.
 // 전기/통신(분담) 두 항목이 한 박스 안에 같이 표시되므로 항목명 첫 글자만 괄호 안에 "+"로 묶어 표기한다
