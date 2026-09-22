@@ -2553,15 +2553,30 @@ function updateSettingsAlertBadge(){
   var d=document.getElementById('settings-alert-dot');
   if(d)d.style.display=isCompanyAvgStale()?'block':'none';
 }
-function calcEconScore(dbEntry,calc){
+// 2026-09-22: 공종Override 매개변수 추가 — 복합공종(복합(전기+통신)/(전기+소방))의 통신/소방 슬롯은
+// 그동안 이 함수가 항상 calc.공종(공고 전체 공종, 예: "복합(전기+통신)")을 기준으로 부채/유동 만점강제
+// 여부·공사업등록일(영업기간)·업계평균을 가져와, 실제로는 업체DB의 통신/소방 전용 필드(통신_부채만점,
+// 통신_공사업등록일 등)가 아니라 전기 기준 필드를 잘못 참조하는 문제가 있었다(실적/시평은 이미
+// effPerfGongjong으로 올바르게 분리돼 있었는데 경영상태만 빠져 있었음, 사용자가 실제 사례로 확인).
+// 공종Override에 '통신'/'소방'을 넘기면 그 업종 전용 필드와 그 업종의 업계평균(activeCompanyAvg)을
+// 쓰고, 생략하면(비복합/전기 슬롯 등) 기존과 동일하게 calc.공종·state.bid에 동기화된 업계평균을 쓴다.
+function calcEconScore(dbEntry,calc,공종Override){
   var E5=calc?calc.E5:0;
   var isJija=calc?calc.isJija:false;
   var jijaTier=calc?calc.jijaTier:0;
-  var avgD=Number(state.bid.업계평균부채비율)||0;
-  var avgU=Number(state.bid.업계평균유동비율)||0;
+  var _econGJ=공종Override||(calc&&calc.공종)||'전기';
+  var avgD,avgU;
+  if(공종Override==='통신'||공종Override==='소방'){
+    var _caOv=activeCompanyAvg();
+    avgD=Number(_caOv[공종Override+'_평균부채'])||0;
+    avgU=Number(_caOv[공종Override+'_평균유동'])||0;
+  } else {
+    avgD=Number(state.bid.업계평균부채비율)||0;
+    avgU=Number(state.bid.업계평균유동비율)||0;
+  }
   if(!avgD||!avgU)return null;
   // 만점 강제: 부채만점=true → rD=0(A급), 유동만점=true → rU=9999(A급)
-  var _pd=getCompPerfData(dbEntry,calc&&calc.공종||'전기');
+  var _pd=getCompPerfData(dbEntry,_econGJ);
   var hasD=_pd.부채만점||_pd.부채비율!=null;
   var hasU=_pd.유동만점||_pd.유동비율!=null;
   if(!hasD||!hasU)return null;
@@ -2626,10 +2641,11 @@ function getCreditDeduction(c){
   return{grade:cr.grade,expiry:cr.expiry,deduction:deduction,score:econScore};
 }
 // 실효 감점: DB 감점 vs 신용평가 감점 중 더 낮은 것
-function getEffectiveDeduction(c,calc){
+// 공종Override: calcEconScore와 동일 — 복합공종 통신/소방 슬롯의 경영상태 감점을 그 업종 기준으로 계산하려면 전달.
+function getEffectiveDeduction(c,calc,공종Override){
   var credit=getCreditDeduction(c);
   // calc가 주어지면 calcSlot과 동일하게 부채/유동비율 기반 경영상태 감점(별표6/7A, 50억 기준 반영)을 우선 사용
-  var econ=calc?calcEconScore(c,calc):null;
+  var econ=calc?calcEconScore(c,calc,공종Override):null;
   var raw=econ?Math.max(0,Math.round((15-econ.score)*1000)/1000):Math.abs(Number(c.감점)||0);
   // 신용평가는 경영상태비율 감점(raw>0)이 있을 때만 비교 적용
   if(raw>0&&credit!==null&&credit.deduction<raw)return{value:credit.deduction,method:'credit',grade:credit.grade,expiry:credit.expiry};
@@ -4303,8 +4319,10 @@ function calcSlot(combo,calc){
     }
     var 개별최대=s.개별최대지분율!=null&&!isNaN(s.개별최대지분율)?Number(s.개별최대지분율):null;
     var 최하지분율_pct=Number(state.bid.최소지분율)||0;
-    // 경영상태
-    var econ=dbEntry?calcEconScore(dbEntry,calc):null;
+    // 경영상태 — 복합공종의 통신/소방 슬롯(grpS)은 그 업종 전용 DB필드·업계평균을 쓰도록 effPerfGongjong으로
+    // 넘김(위 실적/시평 라이브갱신과 동일 기준). 2026-09-22 수정 전에는 항상 calc.공종(전기 기준)으로
+    // 계산되어, 통신/소방 업체의 통신_공사업등록일·통신_부채만점 등이 무시되고 있었음.
+    var econ=dbEntry?calcEconScore(dbEntry,calc,effPerfGongjong(grpS,calc)):null;
     // 신인도·감점 동기화: DB 업체면 현재 기준(신용평가 만료 등)으로 재계산
     // 적용 우선순위: ① 경영상태비율(재무비율) 감점을 최우선 적용 → 적격이면 그대로 확정
     //             ② ①로 부적격일 때만, 감점업체 중 신용등급이 재무비율보다 유리한 경우에 한해 신용등급으로 대체(2차 패스, 아래 recomputeWithCredit)
@@ -4620,7 +4638,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
       var _기2=calc.isLH&&calc.lh지분율기준?calc.lh지분율기준:calc.E7;
       var _pd6=getCompPerfData(c,effPerfGongjong(grp,calc));
       var maxPct=calc.isLH&&calc.lh지분율기준?Math.floor((Number(_pd6.시평액)/_기2)*1000)/10:FLOOR1((Number(_pd6.시평액)/_기2)*100);
-      var _effDed=getEffectiveDeduction(c,calc);
+      var _effDed=getEffectiveDeduction(c,calc,effPerfGongjong(grp,calc));
       if(calc.isJija){
         // 지자체 모드: 지분율 + 경영상태 감점 표시 (재무비율/신용평가 중 유리한 값)
         var _jed3=jijaEffectiveDeduction(c,calc);
@@ -4646,8 +4664,10 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
         label+=' ('+TRIMDEC(maxPct)+'% | '+_신인도str+(_gradeSufN?' '+_gradeSufN:'')+')';
       }
     } else if(calc&&!calc.isJija){
-      // showPct=false(도로공사 등)여도 신인도/신용평가등급은 표시
-      var _effDed2=getEffectiveDeduction(c,calc);
+      // showPct=false(도로공사·한전 등)여도 신인도/신용평가등급은 표시
+      // 2026-09-22: 한전 복합공종의 통신/소방 드롭다운("복합" 유형)에서 이 경영상태 감점이 항상 전기
+      // 기준으로 계산돼, 통신_공사업등록일 등이 무시되고 "(-1)" 같은 잘못된 감점이 라벨에 붙던 문제 수정.
+      var _effDed2=getEffectiveDeduction(c,calc,effPerfGongjong(grp,calc));
       var _raw2=Number(c.일자리가점!=null?c.일자리가점:(c.신인도||0));
       // 2026-09-04: 이 사본엔 'DoRo6'(도로공사 50억+) 케이스가 빠져 있어, 도로공사 50억+ 업체 드롭다운
       // 라벨에서만 일자리가점이 ×0.3 축소 없이 표시되던 기존 버그를 여기서 함께 바로잡음(다른 계산 경로는
@@ -8024,7 +8044,10 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
     var _rj=Number(cc.일자리가점)||0;
     var _ja=(_type==='6')?Math.round(_rj/3*100)/100:(_type==='DoRo6'||_type==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_rj,_type==='DoRo6'):(_type==='KW6'||_type==='KW7A')?적격기준_수자원공사.jobBonusRatio(_rj,_type==='KW6'):(_type==='LH6'||_type==='LH7A')?((_rj>=2.5?1.0:0)+(_rj===0.5||_rj===3.0?0.5:0)):(_type==='철도6')?Math.round(_rj*0.3*100)/100:(_type==='철도7A')?Math.round(_rj*(0.5/3)*100)/100:_rj;
     var _sinindo=(_type==='LH6'||_type==='LH7A')?Math.min(_ja+_sb,1.5):_ja+_sb;
-    var _eff=getEffectiveDeduction(cc,calc);var _pdc=getCompPerfData(cc,calc.공종||'전기');
+    // 2026-09-22: 이 함수는 grp를 인자로 받으면서도 실적/시평/경영상태 계산에는 안 쓰고 있었음 — 지금은
+    // 검색(grp='검색') 슬롯에만 쓰여 문제가 없었지만, effPerfGongjong으로 통일해 통신/소방 grp로 호출돼도
+    // 올바르게 동작하도록 함.
+    var _eff=getEffectiveDeduction(cc,calc,effPerfGongjong(grp,calc));var _pdc=getCompPerfData(cc,effPerfGongjong(grp,calc));
     return{업체명:cc.업체명,신인도:_sinindo,감점:_eff.value,실적:(calc.use3yr?(_pdc.실적3||0):(_pdc.실적5||0)),시평액:_pdc.시평액||0,지분율:지분율,grp:grp,isRec:true,개별최대지분율:cc.개별최대지분율!=null?cc.개별최대지분율:null};
   }
 
@@ -8719,7 +8742,10 @@ function bind(){
         var _raw일자리=Number(cc.일자리가점)||0;
         var _일자리적용=(_type==='6')?Math.round(_raw일자리/3*100)/100:(_type==='DoRo6'||_type==='DoRo7A')?적격기준_도로공사.jobBonusRatio(_raw일자리,_type==='DoRo6'):(_type==='KW6'||_type==='KW7A')?적격기준_수자원공사.jobBonusRatio(_raw일자리,_type==='KW6'):(_type==='LH6'||_type==='LH7A')?((_raw일자리>=2.5?1.0:0)+(_raw일자리===0.5||_raw일자리===3.0?0.5:0)):(_type==='철도6')?Math.round(_raw일자리*0.3*100)/100:(_type==='철도7A')?Math.round(_raw일자리*(0.5/3)*100)/100:_raw일자리;
         var _sinindo=(_type==='LH6'||_type==='LH7A')?Math.min(_일자리적용+_sb,1.5):_일자리적용+_sb; // LH cap +1.5
-        var _eff6=getEffectiveDeduction(cc,_calc);var _pdc=getCompPerfData(cc,effPerfGongjong(oldGrp,_calc));
+        // 2026-09-22: 실적/시평(_pdc)은 이미 effPerfGongjong(oldGrp,_calc)로 통신/소방 슬롯 전용 필드를
+        // 쓰고 있었는데 감점(_eff6)만 빠져 있어, 업체를 고르는 순간 슬롯에 잘못된(전기 기준) 감점이
+        // 저장되던 문제 수정 — 실적과 동일 기준(oldGrp)으로 통일.
+        var _eff6=getEffectiveDeduction(cc,_calc,effPerfGongjong(oldGrp,_calc));var _pdc=getCompPerfData(cc,effPerfGongjong(oldGrp,_calc));
         // 2026-09-21: 한전은 통신/소방 슬롯의 실적을 "지분율×실적"으로 통신/소방 필요실적과 비교해 실적비율을 표시하므로
         // (적격기준_한전.judge), 지분율이 0이면 항상 0%로 나옴 — 한전에서만 지분율 미입력(0) 상태의 통신/소방 슬롯에 100을 기본값으로 채움
         // (같은 조합에 이미 지분율이 있는 같은 종류 슬롯이 있으면 0 유지). 수정 가능. 비한전은 기존과 동일(분담계열 지분율 무관).
