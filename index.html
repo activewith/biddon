@@ -233,6 +233,7 @@ body.role-user #m-memo-txt{pointer-events:none;background:#f3f4f6}
 body.role-user #btn-railtech-add,
 body.role-user .railtech-delcompany,
 body.role-user .railtech-delrow,
+body.role-user .railtech-movewrap,
 body.role-user [data-rtaddrow]{display:none!important}
 body.role-user .railtech-name,
 body.role-user .railtech-memo,
@@ -533,7 +534,8 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
   <section id="tab-railtech" class="hidden">
     <div class="panel">
       <h2>🚄 철도기술점수 <span class="small" style="font-weight:400;color:#6b7280;margin-left:4px">업체별 경력기술자 총합산점수 계산 · DB로 계속 누적 관리</span>
-        <input type="text" id="railtech-search" placeholder="업체명 검색…" style="margin-left:auto;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:180px">
+        <button class="btn btn-sm" id="btn-railtech-xlsx-all" style="margin-left:auto;background:#fff;color:#dc2626;border:1px solid #dc2626" title="등록된 전체 업체를 업체별 시트로 xlsx 저장 (체크된 인원만 포함)">xlsx 저장(전체)</button>
+        <input type="text" id="railtech-search" placeholder="업체명 검색…" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:180px">
         <button class="btn btn-sm" id="btn-railtech-add">＋ 업체 추가</button>
       </h2>
       <div class="help" style="margin-bottom:10px">
@@ -2308,6 +2310,7 @@ function renderRailTechCard(entry){
       '<div style="position:relative;width:170px"><input type="text" class="railtech-name" autocomplete="off" data-rtid="'+id+'" value="'+esc(entry.업체명||'')+'" placeholder="업체명 검색…" style="font-weight:700;font-size:13px;width:100%;box-sizing:border-box;padding:4px 6px;border:1px solid var(--border);border-radius:4px">'+
         '<div class="search-drop" data-rtndrop="'+id+'"></div></div>'+
       '<input type="text" class="railtech-memo" data-rtid="'+id+'" value="'+esc(entry.참고||'')+'" placeholder="참고사항" style="flex:1;min-width:140px;font-size:11px;color:#6b7280;padding:4px 6px;border:1px solid var(--border);border-radius:4px">'+
+      '<button type="button" class="btn btn-sm railtech-xlsx" data-rtxlsx="'+id+'" style="background:#fff;color:#dc2626;border:1px solid #dc2626;padding:2px 8px" title="이 업체를 xlsx로 저장 (체크된 인원만 포함)">xlsx저장</button>'+
       '<span class="small" style="color:#9ca3af;white-space:nowrap" data-rtmeta="'+id+'">'+(entry.수정일?('최종수정 '+railTechFmtDate(entry.수정일)):'')+'</span>'+
       '<span class="small" data-rtcount="'+id+'" title="체크된 인원/전체 인원 (체크 해제된 인원은 점수 계산에서만 제외되고 목록에는 유지됩니다)">인원 '+checkedN+'/'+totalN+'명</span>'+
       '<span style="font-weight:700;color:#0369a1;font-size:13px" data-rttotal="'+id+'">총합산점수 '+total.toFixed(3)+'</span>'+
@@ -2315,7 +2318,7 @@ function renderRailTechCard(entry){
     '</div>'+
     '<div class="railtech-body" data-rtbody="'+id+'" style="'+(collapsed?'display:none;':'')+'padding:8px;overflow-x:auto">'+
       '<table><thead><tr>'+
-        '<th class="c" style="width:36px">번호</th><th class="c" style="width:34px" data-rtheadcount="'+id+'" title="체크된 인원/전체 인원 (체크 해제 시 이번 계산에서 제외, 삭제되지 않고 목록에 유지)">'+checkedN+'/'+totalN+'</th><th class="l">이름</th><th>등급</th>'+
+        '<th class="c" style="width:36px">번호</th><th class="c" style="width:34px" data-rtheadcount="'+id+'" title="체크된 인원/전체 인원 (체크 해제 시 이번 계산에서 제외, 삭제되지 않고 목록에 유지)">'+checkedN+'/'+totalN+'</th><th class="c">소속이동</th><th class="l">이름</th><th>등급</th>'+
         '<th>참여일수<br><span style="font-size:9px;font-weight:400">(본사제외)</span></th><th>환산<br>년수</th><th>경력<br>계수</th>'+
         '<th>소장/대리인<br>참여일수</th><th>환산<br>년수</th><th>관리<br>계수</th>'+
         '<th>점수</th><th></th>'+
@@ -2326,11 +2329,19 @@ function renderRailTechCard(entry){
 }
 function renderRailTechRow(id,ri,row){
   var c=railTechRowCalc(row);
+  // 2026-09-23 소속이동: 다른 철도기술점수 업체로 인원 이동
+  var others=(state.railTechDB||[]).filter(function(e){return e.id!==id;});
+  var mopts='<option value="">이동할 업체…</option>'+others.map(function(e){return '<option value="'+e.id+'">'+esc(e.업체명||'(업체명 미입력)')+'</option>';}).join('');
+  var moveCell=others.length
+    ?'<span class="railtech-movewrap" style="display:inline-flex;gap:2px;align-items:center"><select class="railtech-move" data-rtmove="'+id+'-'+ri+'" style="width:110px;padding:2px 2px;font-size:11px">'+mopts+'</select>'+
+      '<button type="button" class="btn btn-sm btn-ghost railtech-movebtn" data-rtmovebtn="'+id+'-'+ri+'" style="padding:1px 6px;font-size:11px" title="선택한 업체로 이 인원을 이동">이동</button></span>'
+    :'<span class="small" style="color:#9ca3af">-</span>';
   var included=row.포함!==false;
   var gopts=['특급','고급','중급','초급'].map(function(g){return '<option value="'+g+'"'+(row.등급===g?' selected':'')+'>'+g+'</option>';}).join('');
   return '<tr'+(included?'':' style="opacity:.45"')+'>'+
     '<td class="c">'+(ri+1)+'</td>'+
     '<td class="c"><input type="checkbox" class="railtech-incl" data-rtincl="'+id+'-'+ri+'" title="체크 해제 시 점수 계산에서 제외(목록에는 유지)"'+(included?' checked':'')+'></td>'+
+    '<td class="c">'+moveCell+'</td>'+
     '<td><input type="text" class="railtech-field" data-rtfield="'+id+'-'+ri+'-이름" value="'+esc(row.이름||'')+'" style="width:80px;padding:2px 4px"></td>'+
     '<td><select class="railtech-field" data-rtfield="'+id+'-'+ri+'-등급" style="width:64px;padding:2px 2px">'+gopts+'</select></td>'+
     '<td><input type="number" class="railtech-field" data-rtfield="'+id+'-'+ri+'-참여일수" value="'+(row.참여일수||0)+'" min="0" style="width:72px;text-align:right;padding:2px 4px"></td>'+
@@ -2351,12 +2362,12 @@ function refreshRailTechRowCalc(rid,ri){
   var tr=nameInp&&nameInp.closest('tr');
   if(!tr)return;
   var tds=tr.querySelectorAll('td');
-  if(tds.length<11)return;
-  tds[5].textContent=c.yr1+'년';
-  tds[6].textContent=c.careerCoef.toFixed(2);
-  tds[8].textContent=c.yr2+'년';
-  tds[9].textContent=c.mgmtCoef.toFixed(2);
-  tds[10].textContent=c.score.toFixed(3);
+  if(tds.length<12)return;
+  tds[6].textContent=c.yr1+'년';
+  tds[7].textContent=c.careerCoef.toFixed(2);
+  tds[9].textContent=c.yr2+'년';
+  tds[10].textContent=c.mgmtCoef.toFixed(2);
+  tds[11].textContent=c.score.toFixed(3);
 }
 function refreshRailTechCompanyTotal(rid){
   var entry=(state.railTechDB||[]).find(function(x){return x.id===rid;});
@@ -2393,6 +2404,123 @@ function refreshRailTechCount(rid){
   if(el)el.textContent='인원 '+checkedN+'/'+totalN+'명';
   var hEl=document.querySelector('[data-rtheadcount="'+rid+'"]');
   if(hEl)hEl.textContent=checkedN+'/'+totalN;
+}
+// 2026-09-23 소속이동: rid 업체의 ri번째 인원을 toId 업체로 이동(체크상태 포함 그대로 이동)
+function railTechMoveRow(rid,ri,toId){
+  var src=(state.railTechDB||[]).find(function(x){return x.id===rid;});
+  var dst=(state.railTechDB||[]).find(function(x){return x.id===toId;});
+  if(!src||!dst||!src.rows[ri])return false;
+  var row=src.rows.splice(ri,1)[0];
+  if(src.rows.length===0)src.rows.push(railTechNewRow());
+  // 대상 업체에 빈 인원(이름/일수 모두 없음) 1줄만 있으면 그 자리를 대체
+  if(dst.rows.length===1){var b=dst.rows[0];if(!(b.이름||'').trim()&&!Number(b.참여일수)&&!Number(b.소장참여일수))dst.rows=[];}
+  dst.rows.push(row);
+  railTechTouch(src);railTechTouch(dst);
+  return true;
+}
+// ── 철도기술점수 xlsx 저장 (사용자 제공 양식: 철도기술점수계산임시.xlsx 기준) ──
+// 체크(포함)된 인원만 출력. 등급계수/경력계수/관리계수/점수/총합산점수는 엑셀 수식으로 넣고 계산값도 함께 저장.
+function _railTechSheetName(name,used){
+  var n=String(name||'').replace(/[\\\/\?\*\[\]:]/g,'').trim().slice(0,31)||'업체';
+  var base=n,k=2;
+  while(used[n]){var suf='('+k+')';n=base.slice(0,31-suf.length)+suf;k++;}
+  used[n]=true;return n;
+}
+function _buildRailTechSheet(wb,entry,sheetName){
+  var ws=wb.addWorksheet(sheetName);
+  ws.columns=[{width:5.5},{width:9},{width:9},{width:8},{width:10},{width:8},{width:8},{width:11},{width:6},{width:9},{width:9}];
+  var thin={style:'thin'};var bAll={top:thin,left:thin,bottom:thin,right:thin};
+  var center={horizontal:'center',vertical:'middle',wrapText:true};
+  var fillOf=function(argb){return{type:'pattern',pattern:'solid',fgColor:{argb:argb}};};
+  var rows=((entry&&entry.rows)||[]).filter(function(r){return r.포함!==false;});
+  var n=rows.length;
+  var totalRow=5+n, cTop=totalRow+3;
+  var gR=cTop+1, cR=cTop+4, mR=cTop+7; // 계수 값 행
+  // 1행 제목
+  ws.mergeCells(1,1,1,11);
+  var t=ws.getCell(1,1);t.value='철도 기술능력 평가';t.font={bold:true,size:14};t.alignment={horizontal:'center',vertical:'middle'};
+  ws.getRow(1).height=21;
+  // 3행 업체명
+  ws.mergeCells(3,1,3,11);
+  var cn=ws.getCell(3,1);cn.value=entry.업체명||'(업체명 미입력)';cn.font={bold:true,size:12};
+  cn.alignment={horizontal:'left',vertical:'middle'};cn.fill=fillOf('FFFFC000');
+  for(var cc=1;cc<=11;cc++)ws.getCell(3,cc).border=bAll;
+  ws.getRow(3).height=18;
+  // 4행 헤더
+  var hdr=['번호','이름','등급','등급계수','참여일수\n(본사제외)','환산\n년수','경력\n계수','소장/대리인\n참여일수','환산\n년수','관리능력\n계수','점수'];
+  hdr.forEach(function(h,i){var c=ws.getCell(4,i+1);c.value=h;c.alignment=center;c.border=bAll;c.fill=fillOf('FFD9D9D9');c.font={bold:true};});
+  ws.getRow(4).height=33;
+  // 인원 행
+  var gRef='$D$'+gR+':$G$'+gR, cRef='$D$'+cR+':$H$'+cR, mRef='$D$'+mR+':$G$'+mR;
+  var sum=0;
+  rows.forEach(function(row,i){
+    var r=5+i, k=railTechRowCalc(row);sum+=k.score;
+    var v=[i+1,row.이름||'',row.등급||'',
+      {formula:'IF(C'+r+'="특급",INDEX('+gRef+',1),IF(C'+r+'="고급",INDEX('+gRef+',2),IF(C'+r+'="중급",INDEX('+gRef+',3),IF(C'+r+'="초급",INDEX('+gRef+',4),0))))',result:k.gradeCoef},
+      Number(row.참여일수)||0,
+      {formula:'ROUNDDOWN(E'+r+'/365,0)',result:k.yr1},
+      {formula:'IF(F'+r+'>=12,INDEX('+cRef+',1),IF(F'+r+'>=9,INDEX('+cRef+',2),IF(F'+r+'>=5,INDEX('+cRef+',3),IF(F'+r+'>=3,INDEX('+cRef+',4),INDEX('+cRef+',5)))))',result:k.careerCoef},
+      Number(row.소장참여일수)||0,
+      {formula:'ROUNDDOWN(H'+r+'/365,0)',result:k.yr2},
+      {formula:'IF(I'+r+'>=9,INDEX('+mRef+',1),IF(I'+r+'>=6,INDEX('+mRef+',2),IF(I'+r+'>=3,INDEX('+mRef+',3),INDEX('+mRef+',4))))',result:k.mgmtCoef},
+      {formula:'D'+r+'*G'+r+'*J'+r,result:k.score}];
+    var fmts=[null,null,null,'0.00','#,##0','0','0.00','#,##0','0','0.00','0.000'];
+    v.forEach(function(val,ci){
+      var c=ws.getCell(r,ci+1);c.value=val;c.alignment=center;c.border=bAll;
+      if(fmts[ci])c.numFmt=fmts[ci];
+      if(ci===2||ci===4||ci===7)c.fill=fillOf('FFFFFF00'); // 입력칸(노란색)
+    });
+    ws.getCell(r,3).dataValidation={type:'list',allowBlank:true,formulae:['"특급,고급,중급,초급"']};
+    ws.getRow(r).height=18;
+  });
+  // 총합산점수 행
+  ws.mergeCells(totalRow,1,totalRow,10);
+  var tl=ws.getCell(totalRow,1);tl.value='총합산점수';tl.alignment=center;tl.font={bold:true};
+  var tv=ws.getCell(totalRow,11);
+  tv.value=n?{formula:'ROUNDDOWN(SUM(K5:K'+(totalRow-1)+'),3)',result:Math.floor(sum*1000)/1000}:0;
+  tv.numFmt='0.000';tv.alignment=center;tv.font={bold:true};
+  for(var c2=1;c2<=11;c2++){var tc=ws.getCell(totalRow,c2);tc.border=bAll;tc.fill=fillOf('FFFFF2CC');}
+  // 계수표
+  ws.getCell(cTop,2).value='계수';ws.getCell(cTop,2).font={bold:true};ws.getCell(cTop,2).alignment=center;
+  var tbl=[
+    {top:cTop,label:'등급',heads:['특급','고급','중급','초급'],vals:[1,0.75,0.5,0.25],merge:false},
+    {top:cTop+3,label:'경력',heads:['12년','9년','5년','3년이상','3년미만'],vals:[1.2,1.15,1.1,1,0],merge:true},
+    {top:cTop+6,label:'관리',heads:['9년','6년','3년','3년미만'],vals:[1.2,1.15,1.1,1],merge:true}
+  ];
+  tbl.forEach(function(tb){
+    var lc=ws.getCell(tb.top,3);lc.value=tb.label;lc.alignment=center;
+    if(tb.merge)ws.mergeCells(tb.top,3,tb.top+1,3);
+    ws.getCell(tb.top,3).border=bAll;ws.getCell(tb.top+1,3).border=bAll;
+    tb.heads.forEach(function(h,i){
+      var hc=ws.getCell(tb.top,4+i);hc.value=h;hc.alignment=center;hc.border=bAll;hc.fill=fillOf('FFF2F2F2');
+      var vc=ws.getCell(tb.top+1,4+i);vc.value=tb.vals[i];vc.numFmt='0.00';vc.alignment=center;vc.border=bAll;
+    });
+  });
+  ws.pageSetup={paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0};
+  return ws;
+}
+function _railTechDateStr(){
+  var d=new Date(),p=function(x){return(x<10?'0':'')+x;};
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate());
+}
+function exportRailTechXlsx(entries,fname){
+  if(typeof ExcelJS==='undefined'){toast('엑셀 생성 라이브러리(ExcelJS) 로드 실패 — 네트워크를 확인하세요','err');return;}
+  if(!entries||!entries.length){toast('저장할 업체가 없습니다','bad');return;}
+  var wb=new ExcelJS.Workbook();
+  wb.calcProperties={fullCalcOnLoad:true};
+  var used={};
+  entries.forEach(function(e){_buildRailTechSheet(wb,e,_railTechSheetName(e.업체명,used));});
+  wb.xlsx.writeBuffer().then(function(buf){
+    var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=fname;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+    toast('xlsx 저장 완료: '+fname,'ok');
+  }).catch(function(err){
+    toast('엑셀 생성 실패: '+(err&&err.message?err.message:err),'err');
+  });
 }
 // 조합의 각 슬롯 업체명과 철도기술점수 DB(업체명) 매칭 → 일치하는 업체의 총합산점수를 Func 칸에 자동 입력
 function applyRailTechToCombo(ci){
@@ -10005,9 +10133,38 @@ function bind(){
     });
     var searchEl=document.getElementById('railtech-search');
     if(searchEl)searchEl.addEventListener('input',function(){refreshRailTechTab();});
+    var xlsxAllBtn=document.getElementById('btn-railtech-xlsx-all');
+    if(xlsxAllBtn)xlsxAllBtn.addEventListener('click',function(){
+      exportRailTechXlsx((state.railTechDB||[]).slice(),'철도기술점수_전체_'+_railTechDateStr()+'.xlsx');
+    });
     var listEl=document.getElementById('railtech-list');
     if(!listEl)return;
     listEl.addEventListener('click',function(e){
+      var xb=e.target.closest('.railtech-xlsx');
+      if(xb){
+        var xentry=(state.railTechDB||[]).find(function(x){return x.id===xb.dataset.rtxlsx;});
+        if(xentry)exportRailTechXlsx([xentry],'철도기술점수_'+(String(xentry.업체명||'업체').replace(/[\\\/:*?"<>|]/g,'').trim()||'업체')+'_'+_railTechDateStr()+'.xlsx');
+        return;
+      }
+      var mvb=e.target.closest('.railtech-movebtn');
+      if(mvb){
+        if(!canManageCompanyDB()){toast('등록/수정 권한이 없습니다','bad');return;}
+        var mk=mvb.dataset.rtmovebtn;
+        var sel=listEl.querySelector('.railtech-move[data-rtmove="'+mk+'"]');
+        var toId=sel?sel.value:'';
+        if(!toId){toast('이동할 업체를 선택하세요','bad');return;}
+        var mparts=mk.split('-');var mrid=mparts[0],mri=Number(mparts[1]);
+        var msrc=(state.railTechDB||[]).find(function(x){return x.id===mrid;});
+        var mdst=(state.railTechDB||[]).find(function(x){return x.id===toId;});
+        if(!msrc||!mdst||!msrc.rows[mri])return;
+        var pname=msrc.rows[mri].이름||'(이름 미입력)';
+        if(!confirm(pname+' 님을 ['+(msrc.업체명||'업체명 미입력')+'] → ['+(mdst.업체명||'업체명 미입력')+'](으)로 이동할까요?'))return;
+        if(railTechMoveRow(mrid,mri,toId)){
+          save();refreshRailTechTab();
+          toast(pname+' → '+(mdst.업체명||'업체명 미입력')+' 이동 완료','ok');
+        }
+        return;
+      }
       var tgl=e.target.closest('.railtech-toggle');
       if(tgl){
         var tid=tgl.dataset.rtid;
