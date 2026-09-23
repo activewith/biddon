@@ -2198,19 +2198,25 @@ function updateGongjongOptions(적격기준){
 // 제공되지 않아 기존 실적/시평/신인도 개별 게이트 방식으로 폴백.
 // 가정: (1) 낙찰방법은 1.1(B)(적격심사 경쟁입찰) 기준으로 처리 — 이 도구는 1.1(A) 최저가낙찰 여부를 판별할 수 없음.
 //       (2) "설계금액"은 추정가격(E5)으로 근사.
-//       2.시공계획적정성은 사용자 요청에 따라 항상 만점(고정) 처리.
+//       2.시공계획적정성은 T1(50억 이상)만 항상 만점(20점) 고정 처리, T2/T3(50억 미만)는 별표3상 평가 제외(0점) — 2026-09-23 정정.
 // 철도공단 100점 배점제 구간표 — 2026-09-04: if/else 하드코딩을 데이터 테이블로 분리
 // (적격기준모듈 다운로드/업로드로 편집 가능하게 하기 위함, 값·판정순서·반환형태는 기존과 완전히 동일).
 // min/max는 [min,max) 반구간(min 이상 ~ max 미만)이며, 배열 순서대로 첫 매치를 사용(기존 if/else 순서와 동일).
+// 2026-09-23: 별표3(전기·정보통신공사의 평가기준) 원문 확인 결과, "2.시공계획의 적정성평가(20점)"는
+// 추정가격 100억 미만~50억 이상 구간(T1)에만 적용되고 그 미만 구간(T2/T3, 50억 미만)은 전부 "평가 제외".
+// 종전 코드는 모든 구간에서 시공계획을 20점 만점 고정으로 더해, 50억 미만 구간에서 가격cap(65)+시공계획(20)=85점이
+// 기술/경영/신인도 입력 여부와 무관하게 먼저 확보되어 95점 문턱을 사실상 무력화하는 문제가 있었음.
+// T2/T3는 시공계획을 배점표에서 제거(시공계획:0, 시공계획적용:false)하여 100점 만점 구성을 30(수행능력)+70(가격)=100으로
+// 맞춤(T1은 30+20+50=100 그대로 유지). "4.해당공사 수행능력 결격여부(-10, [붙임12])"는 사용자 요청에 따라 미구현 유지.
 var RAIL_SCORE_TIERS=[
   {tier:'T1',label:'추정가격 100억 미만 ~ 50억 이상',min:LIMIT_50,max:LIMIT_100,
-    실적배점:10,실적N:2,기술배점:5,경영배점:15,신인도한도:0.9,시공계획:20,
+    실적배점:10,실적N:2,기술배점:5,경영배점:15,신인도한도:0.9,시공계획:20,시공계획적용:true,
     가격배점:50,가격계수:2,가격cap비율:0.925,가격cap점수:45},
   {tier:'T2',label:'추정가격 50억 미만 ~ 10억 이상',min:1000000000,max:LIMIT_50,
-    실적배점:10,실적N:1,기술배점:5,경영배점:15,신인도한도:0.5,시공계획:20,
+    실적배점:10,실적N:1,기술배점:5,경영배점:15,신인도한도:0.5,시공계획:0,시공계획적용:false,
     가격배점:70,가격계수:4,가격cap비율:0.9125,가격cap점수:65},
   {tier:'T3',label:'추정가격 10억 미만 ~ 3억 이상',min:300000000,max:1000000000,
-    실적배점:10,실적N:0.5,기술배점:5,경영배점:15,신인도한도:0.5,시공계획:20,
+    실적배점:10,실적N:0.5,기술배점:5,경영배점:15,신인도한도:0.5,시공계획:0,시공계획적용:false,
     가격배점:70,가격계수:20,가격cap비율:0.9025,가격cap점수:65}
 ];
 function railScoreTier(E5){
@@ -2220,7 +2226,7 @@ function railScoreTier(E5){
     var t=RAIL_SCORE_TIERS[i];
     if(v>=t.min&&v<t.max){
       return{tier:t.tier,label:t.label,
-        실적배점:t.실적배점,실적N:t.실적N,기술배점:t.기술배점,경영배점:t.경영배점,신인도한도:t.신인도한도,시공계획:t.시공계획,
+        실적배점:t.실적배점,실적N:t.실적N,기술배점:t.기술배점,경영배점:t.경영배점,신인도한도:t.신인도한도,시공계획:t.시공계획,시공계획적용:t.시공계획적용,
         가격배점:t.가격배점,가격계수:t.가격계수,가격cap비율:t.가격cap비율,가격cap점수:t.가격cap점수};
     }
   }
@@ -2259,7 +2265,7 @@ function railSoloScore(c,calc){
   var 안전=calcSafetyBonus(c.안전보건시스템||'',srType);
   var 순신인도=ROUND3(일자리+안전-eff.value);
   var rail신인도점수=Math.max(-tier.신인도한도,Math.min(tier.신인도한도,순신인도));
-  var rail시공계획점수=tier.시공계획; // 항상 만점 고정(기존 조합 계산과 동일 가정)
+  var rail시공계획점수=tier.시공계획적용?tier.시공계획:0; // 2026-09-23: 50억 미만(T2/T3)은 별표3상 평가 제외 → 0점, 50억 이상(T1)만 20점 고정
   var 투찰금액=calc.A값?(calc.예정가격-calc.A값)*calc.H7+calc.A값:calc.예정가격*calc.H7;
   var rail가격비율=calc.예정가격>0?(투찰금액/calc.예정가격):null; // 참고용으로만 계산·보관(점수에는 미반영)
   // 2026-09-02(사용자 확정): 예비가격을 알 수 없는 사전 판정 단계에서는 가격점수를 예상 투찰률로
@@ -2980,7 +2986,7 @@ const 적격기준_철도공단 = {
     var rail기술점수=rail기술등급정보?rail기술등급정보.point:0;
     var rail경영상태점수=Math.max(0,railTier.경영배점-감점환산);
     var rail신인도점수=Math.max(-railTier.신인도한도,Math.min(railTier.신인도한도,신인도환산));
-    var rail시공계획점수=railTier.시공계획; // 사용자 요청: 항상 만점 고정 처리
+    var rail시공계획점수=railTier.시공계획적용?railTier.시공계획:0; // 2026-09-23: 50억 미만(T2/T3)은 별표3상 평가 제외 → 0점, 50억 이상(T1)만 20점 고정
     var 투찰금액3=A값?(예정가격-A값)*H7+A값:예정가격*H7;
     var rail가격비율=예정가격>0?(투찰금액3/예정가격):null; // 참고용으로만 계산·보관(점수에는 미반영)
     // 예비가격을 알 수 없는 사전 판정 단계에서는 가격점수를 캡값(railScoreTier의 가격cap점수)으로 보수적 고정.
@@ -3001,7 +3007,7 @@ const 적격기준_철도공단 = {
       }
     }
     var 적격사유=적격?'적격 ('+rail총점.toFixed(2)+'점)':'부적격 ('+rail총점.toFixed(2)+'점 / 95점 미달)';
-    var railData={rail티어:railTier.tier,rail티어명:railTier.label,rail실적점수:rail실적점수,rail기술점수:rail기술점수,rail기술등급:(rail기술등급정보&&rail기술등급정보.grade)||null,rail경영상태점수:rail경영상태점수,rail신인도점수:rail신인도점수,rail시공계획점수:rail시공계획점수,rail가격점수:rail가격점수,rail가격비율:rail가격비율,rail총점:rail총점};
+    var railData={rail티어:railTier.tier,rail티어명:railTier.label,rail실적점수:rail실적점수,rail기술점수:rail기술점수,rail기술등급:(rail기술등급정보&&rail기술등급정보.grade)||null,rail경영상태점수:rail경영상태점수,rail신인도점수:rail신인도점수,rail시공계획점수:rail시공계획점수,rail시공계획적용:railTier.시공계획적용,rail가격점수:rail가격점수,rail가격비율:rail가격비율,rail총점:rail총점};
     return{적격:적격,적격사유:적격사유,감점환산:감점환산,순신인도:순신인도,railData:railData};
   }
 };
@@ -7818,7 +7824,7 @@ function buildScoreFootHtml(calc,result){
   if(calc.isRail&&result.rail총점!=null){
     var _rtScore=result.기술점수합계||0;
     html+='<div class="item" style="grid-column:1/-1"><span class="k">철도 점수 상세 ('+esc(result.rail티어명||'')+')</span><span class="v" style="font-size:11px">'+
-      '실적 '+result.rail실적점수.toFixed(2)+'pt | 기술 '+result.rail기술점수.toFixed(1)+'pt'+(result.rail기술등급?'('+result.rail기술등급+'등급, 합산 '+_rtScore.toFixed(3)+')':'(합산 '+_rtScore.toFixed(3)+', 미달)')+' | 경영 '+result.rail경영상태점수.toFixed(2)+'pt | 신인도 '+(result.rail신인도점수>=0?'+':'')+TRIM3(result.rail신인도점수)+'pt | 시공계획 '+result.rail시공계획점수.toFixed(1)+'pt(만점고정) | 가격 '+result.rail가격점수.toFixed(2)+'pt(보수적 고정'+(result.rail가격비율!=null?', 참고비율 '+(result.rail가격비율*100).toFixed(2)+'%':'')+')'+' = <b>'+result.rail총점.toFixed(2)+'pt</b> / 95pt'+
+      '실적 '+result.rail실적점수.toFixed(2)+'pt | 기술 '+result.rail기술점수.toFixed(1)+'pt'+(result.rail기술등급?'('+result.rail기술등급+'등급, 합산 '+_rtScore.toFixed(3)+')':'(합산 '+_rtScore.toFixed(3)+', 미달)')+' | 경영 '+result.rail경영상태점수.toFixed(2)+'pt | 신인도 '+(result.rail신인도점수>=0?'+':'')+TRIM3(result.rail신인도점수)+'pt | 시공계획 '+(result.rail시공계획적용===false?'평가제외':result.rail시공계획점수.toFixed(1)+'pt(만점고정)')+' | 가격 '+result.rail가격점수.toFixed(2)+'pt(보수적 고정'+(result.rail가격비율!=null?', 참고비율 '+(result.rail가격비율*100).toFixed(2)+'%':'')+')'+' = <b>'+result.rail총점.toFixed(2)+'pt</b> / 95pt'+
       '</span></div>';
   } else if(calc.isRail&&!railScoreTier(calc.E5)){
     var _rtScore2=result.기술점수합계||0;
