@@ -4314,7 +4314,7 @@ function getOneLineSummary(b, c, hideLHNote) {
   var 시평str='';
   if(c.E3!=null&&c.E3>0){var 시평억=Math.ceil(c.E3/10000000)/10;시평str='시평'+시평억.toFixed(1)+'억';}
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
-  var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정)':'');
+  var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정*'+TRIM3(getBaseMult())+')':'');
   var 실적str;
   if(b.적격기준==='한전'&&isComplexGongjong(normGongjong(b.공종))&&c.한전분담E6){
     var _kDamLbl=kepcoDamLabel(normGongjong(b.공종));
@@ -4412,7 +4412,7 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
   if(c.분담시평!=null&&c.분담시평>0)시평parts.push('분담시평'+_eokTrim(c.분담시평)+'억');
   var 시평str=시평parts.join(' / ');
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
-  var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정)':'');
+  var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정*'+TRIM3(getBaseMult())+')':'');
   var 실적str='실적 '+(c.E6>0?_eokTrim(c.E6):'0')+'억'+실적기준sfx;
   if(lhGap부족.indexOf('실적')!==-1)실적str+=' (합산'+_eokFloor(lhGapInfo.합산실적)+'억)';
   var lines=[];
