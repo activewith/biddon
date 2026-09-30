@@ -10309,7 +10309,60 @@ function bind(){
 
 
 // ████ SECTION: 확정 팝업 ████
-function showConfirmPop(ci){ return withLegacyDBIfNeeded(function(){
+// ████ 확정메세지 진입 게이트 (2026-09-30) ████
+// 적격기준을 통과하지 못하는 조합(부적격·시평/실적 미달·LH 1순위 기준 부족 등)의 "확정" 버튼은 "강제 확정"으로 보고,
+// 부적격 내용을 먼저 팝업으로 보여준 뒤 사용자가 "그래도 확정"을 눌렀을 때만 실제 확정메세지(_showConfirmPopCore)를 연다.
+// 한전은 적격 판정 자체가 없으므로(실적비율만 표시) 게이트를 적용하지 않는다.
+// CONFIRM_WARN_ON_DEDUCTION=true 로 바꾸면 "적격이지만 감점 업체가 있는 조합"도 경고 대상에 포함된다.
+var CONFIRM_WARN_ON_DEDUCTION=false;
+function getConfirmBlockReasons(ci){ return withLegacyDBIfNeeded(function(){
+  var combo=state.combos[ci];
+  if(!combo)return null;
+  var g=calcBid();
+  if(g.isKEPCO)return null;
+  var cc=comboCalcFor(combo,g);
+  var r=calcSlot(combo,cc);
+  if(!r.used)return null; // 슬롯에 업체가 없으면 코어가 기존대로 안내(toast)
+  var reasons=[];
+  if(!r.적격){
+    reasons.push('부적격: '+(r.적격사유||'적격기준 미충족'));
+  }else if(g.isLH&&r.LH점수모드){
+    reasons.push('LH 1순위 기준 부족('+((r.LH부족목록||[]).join('·')||'-')+') — 95점제 점수판정으로 적격'+(r.lh총점!=null?' ('+Number(r.lh총점).toFixed(2)+'점)':''));
+  }
+  // 감점 업체(주공종 슬롯만 — 한전 외 기관은 분담/소방/통신 슬롯이 적격판정 대상 아님)
+  var dedRows=r.ROW.filter(function(s){
+    if((s.업체명||'').trim()==='')return false;
+    if(s.grp==='소방'||s.grp==='통신'||s.grp==='분담')return false;
+    return (Number(s.감점)||0)>0;
+  });
+  if(dedRows.length&&(reasons.length||CONFIRM_WARN_ON_DEDUCTION)){
+    reasons.push('감점 업체: '+dedRows.map(function(s){return (s.업체명||'').trim()+' (-'+TRIM3(Number(s.감점))+')';}).join(', '));
+  }
+  if(g.isLH&&combo.강제할당&&!r.적격)reasons.push('LH 강제할당이 적용된 조합입니다.');
+  return reasons.length?reasons:null;
+}); }
+function showConfirmPop(ci){
+  var reasons=getConfirmBlockReasons(ci);
+  if(!reasons){_showConfirmPopCore(ci);return;}
+  var mr=MODAL_ROOT;
+  mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:380px;max-width:96vw;padding:0;overflow:hidden">'+
+    '<div style="padding:12px 16px 8px;border-bottom:2px solid #dc2626;font-weight:700;font-size:15px;color:#b91c1c">⚠ 적격기준 미충족 — 조합 #'+(ci+1)+'</div>'+
+    '<div style="padding:12px 16px 14px">'+
+      '<ul style="margin:0 0 10px 18px;padding:0;font-size:13px;line-height:1.7;color:#1e293b">'+
+        reasons.map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+
+      '</ul>'+
+      '<div style="font-size:13px;font-weight:600;color:#111827">위 내용을 확인했으며, 그래도 확정메세지를 만드시겠습니까?</div>'+
+      '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:12px">'+
+        '<button class="btn btn-ghost" id="m-cfw-no" style="padding:3px 12px;font-size:12px">아니오</button>'+
+        '<button class="btn" id="m-cfw-yes" style="background:#dc2626;color:#fff;padding:3px 12px;font-size:12px">예, 확정</button>'+
+      '</div>'+
+    '</div>'+
+  '</div></div>';
+  document.getElementById('m-cfw-no').onclick=function(){mr.innerHTML='';};
+  document.getElementById('m-cfw-yes').onclick=function(){mr.innerHTML='';_showConfirmPopCore(ci);};
+  mr.querySelector('.modal-back').addEventListener('click',function(ev){if(ev.target===this)mr.innerHTML='';});
+}
+function _showConfirmPopCore(ci){ return withLegacyDBIfNeeded(function(){
   var combo=state.combos[ci];
   if(!combo)return;
   // 신인도/감점/신용등급 적용 결과(경영상태비율 최우선 → 부적격일 때만 신용등급 대체)를
