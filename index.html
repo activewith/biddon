@@ -4811,6 +4811,13 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
     list.forEach(function(c){if(isShareShort(c,grp,calc)){_shortList.push(c);_shortNames.add(c.업체명);}else _keptList.push(c);});
     list=_keptList;
   }
+  // 2026-09-30: 지역업체로 단독입찰이 가능한(감점없음+실적·시평 충족) 업체는 '지역' 유형에서만 노출 — '필요'/'실적' 유형 목록에서는 제외
+  // 자사 고정칸(⭐자사)에도 동일하게 적용(사용자 확정 2026-09-30)
+  var _지역들S=getRegionList();
+  function _isRegionSolo(c){return _지역들S.length>0&&_지역들S.indexOf(NFC(c.지역))>=0&&regionExclusionReason(c)==='단독가능';}
+  if(grp==='필요'||grp==='실적'){
+    list=list.filter(function(c){return !_isRegionSolo(c);});
+  }
   var usedEl=currentCi!=null?getUsedElsewhere(currentCi):new Set();
   var html='<option value="">— 업체 선택 —</option>';
   var showPct=calc&&!calc.isDoRo&&!calc.isKEPCO&&(calc.E7>0||(calc.isLH&&calc.lh지분율기준));
@@ -4912,7 +4919,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
   //   업체만 표시 — list가 이미 그 필터를 통과한 목록이므로 여기서는 is자사로만 한 번 더 거른다.
   var pinnedNames=new Set();
   if(grp==='실적'||grp==='필요'){
-    var pinnedList=(grp==='실적')?state.db.filter(function(c){return c.is자사;}):list.filter(function(c){return c.is자사;});
+    var pinnedList=((grp==='실적')?state.db.filter(function(c){return c.is자사&&!_isRegionSolo(c);}):list.filter(function(c){return c.is자사;}));
     if(pinnedList.length>0){
       html+='<optgroup label="⭐ 자사">';
       pinnedList.forEach(function(c){html+=makeOpt(c);pinnedNames.add(c.업체명);});
