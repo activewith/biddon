@@ -480,9 +480,9 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
         <label class="small"><input type="checkbox" id="db-filter-자사"> 자사만</label>
         <label class="small" title="어떤 공종에도 참여(실적/시평 데이터)가 없는 업체만 표시"><input type="checkbox" id="db-filter-미참여"> 미참여</label>
         <span style="margin-left:8px;font-size:12px;color:#6b7280">공종:</span>
-        <label class="small"><input type="checkbox" id="db-filter-전기"> 전기</label>
-        <label class="small"><input type="checkbox" id="db-filter-통신"> 통신</label>
-        <label class="small"><input type="checkbox" id="db-filter-소방"> 소방</label>
+        <label class="small"><input type="checkbox" id="db-filter-전기" checked> 전기</label>
+        <label class="small"><input type="checkbox" id="db-filter-통신" checked> 통신</label>
+        <label class="small"><input type="checkbox" id="db-filter-소방" checked> 소방</label>
         &nbsp;&nbsp;
         <label class="small" title="참여 중인 공종(전기/통신/소방) 중 시평액이 0이거나 비어 있는 것이 있는 업체만 표시"><input type="checkbox" id="db-filter-시평없음"> 시평 미등록</label>
       </div>
@@ -5176,15 +5176,16 @@ function refreshDB(){
     var _ti=companyTradeInfo(c);
     if(only시평없음&&!isJongMissingSipyung(c,_ti))return;
     if(onlyExpiring&&getExpiryAlerts(c).length===0)return;
-    if(only미참여||fE||fT||fS){
-      if(only미참여&&(_ti.hasE||_ti.hasT||_ti.hasS))return;
-      if(fE||fT||fS){
-        var matched=(fE&&_ti.hasE)||(fT&&_ti.hasT)||(fS&&_ti.hasS);
-        if(!matched)return;
-        if(!fE&&_ti.hasE)return;
-        if(!fT&&_ti.hasT)return;
-        if(!fS&&_ti.hasS)return;
-      }
+    // 2026-09-30: 공종 체크 3개(기본값 모두 체크) — 3개 모두 체크=공종 필터 없음(전체, 미참여 업체 포함).
+    // 일부만 체크하면 '체크된 공종만 가진 업체'(예: 전기 해제→통신/소방 업체, 전기·통신 해제→소방만 있는 업체). 미참여 체크 시엔 공종 체크와 무관하게 미참여 업체만.
+    if(only미참여){
+      if(_ti.hasE||_ti.hasT||_ti.hasS)return;
+    } else if(!(fE&&fT&&fS)&&(fE||fT||fS)){
+      var matched=(fE&&_ti.hasE)||(fT&&_ti.hasT)||(fS&&_ti.hasS);
+      if(!matched)return;
+      if(!fE&&_ti.hasE)return;
+      if(!fT&&_ti.hasT)return;
+      if(!fS&&_ti.hasS)return;
     }
     // 선택된 그룹 중 이 업체가 실제로 속한 첫 번째 그룹(activeGrps 순서 기준) — 다중선택 시 그룹별 재배열에 사용
     var _grpMatch=null;
@@ -7632,15 +7633,16 @@ function getVisibleDbCompanies(){
     var _ti=companyTradeInfo(c);
     if(only시평없음&&!isJongMissingSipyung(c,_ti))return;
     if(onlyExpiring&&getExpiryAlerts(c).length===0)return;
-    if(only미참여||fE||fT||fS){
-      if(only미참여&&(_ti.hasE||_ti.hasT||_ti.hasS))return;
-      if(fE||fT||fS){
-        var matched=(fE&&_ti.hasE)||(fT&&_ti.hasT)||(fS&&_ti.hasS);
-        if(!matched)return;
-        if(!fE&&_ti.hasE)return;
-        if(!fT&&_ti.hasT)return;
-        if(!fS&&_ti.hasS)return;
-      }
+    // 2026-09-30: 공종 체크 3개(기본값 모두 체크) — 3개 모두 체크=공종 필터 없음(전체, 미참여 업체 포함).
+    // 일부만 체크하면 '체크된 공종만 가진 업체'(예: 전기 해제→통신/소방 업체, 전기·통신 해제→소방만 있는 업체). 미참여 체크 시엔 공종 체크와 무관하게 미참여 업체만.
+    if(only미참여){
+      if(_ti.hasE||_ti.hasT||_ti.hasS)return;
+    } else if(!(fE&&fT&&fS)&&(fE||fT||fS)){
+      var matched=(fE&&_ti.hasE)||(fT&&_ti.hasT)||(fS&&_ti.hasS);
+      if(!matched)return;
+      if(!fE&&_ti.hasE)return;
+      if(!fT&&_ti.hasT)return;
+      if(!fS&&_ti.hasS)return;
     }
     var _grpMatch=null;
     if(activeGrps.length){
