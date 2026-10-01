@@ -4025,6 +4025,7 @@ function getBaseAmountAlerts(){
 // 협정마감일 1일 전(D-1, am10:00 이후)부터 "[업체명]의 투찰 금액을 산출하세요." 알림을 띄운다.
 // - 대표사 판정은 sortComboRowsForDisplay와 동일: 조합 슬롯 중 분담/소방/통신 유형을 뺀 업체 중 지분율 최댓값(동률이면 앞 슬롯)
 // - 공고(화면)당 업체 1건으로 중복 제거(여러 조합에서 같은 업체가 대표사여도 1줄)
+// - 시작일은 협정마감일-1일이되, 토/일이면 직전 금요일로 앞당김(2026-10-01, 주말만 처리·공휴일 미고려)
 // - 입력 시점에 이미 D-1 이내(D-day 포함)이면 즉시 대상 — 정확히 D-1에만 뜨면 늦게 입력한 공고는 영영 안 뜨기 때문
 // - 협정마감일 지난 공고(diffDays<0)는 제외. 별도 끄기 버튼 없음(마감일 경과 시 자동 소멸, 업체 체크 해제 시 중단)
 // - 한전적격 페이지(별도 보관함 kepcoBid/kepcoCombos)는 bidScreens 대상이 아니므로 제외
@@ -4042,7 +4043,11 @@ function getCalcAlarmAlerts(){
       var d=new Date(b.협정마감일_YMD+'T00:00:00');
       if(isNaN(d.getTime()))return;
       var diffDays=Math.round((d-today)/86400000);
-      if(diffDays<0||diffDays>1)return;
+      if(diffDays<0)return;
+      // 시작일 = 협정마감일-1일. 그 날이 토/일이면 직전 금요일로 앞당김(공휴일은 고려하지 않음)
+      var st=new Date(d.getTime());st.setDate(st.getDate()-1);
+      while(st.getDay()===0||st.getDay()===6)st.setDate(st.getDate()-1);
+      if(today<st)return;
       var seen={};
       (scr.combos||[]).forEach(function(combo){
         var rest=((combo&&combo.slots)||[]).filter(function(r){
@@ -4146,7 +4151,7 @@ function showExpiryAlertModal(){
     ):'')+
     (calcList.length?(
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">🧮 투찰금액 산출 ('+calcList.length+'건)</div>'+
-      '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">업체등록의 [산출]을 체크한 업체가 대표사로 조합된 공고입니다 · 협정마감일 1일 전부터 표시 · 공고명을 누르면 해당 화면으로 이동 · 알림을 멈추려면 업체등록에서 [산출] 체크 해제</p>'+
+      '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">업체등록의 [산출]을 체크한 업체가 대표사로 조합된 공고입니다 · 협정마감일 1일 전(주말이면 직전 금요일)부터 표시 · 공고명을 누르면 해당 화면으로 이동 · 알림을 멈추려면 업체등록에서 [산출] 체크 해제</p>'+
       '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+calcRows+'</tbody></table>'
     ):'')+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
