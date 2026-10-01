@@ -7720,29 +7720,64 @@ function buildJobScoreGroups(companies){
     };
   });
 }
-var JOBSCORE_HEADERS=['상호','사업자등록번호','공사업','시공능력공시액','3년실적','5년실적','부채비율(%)','유동비율(%)','신용평가(만료일)','안전보건경영시스템(ISO)','급여가점','일자리가점'];
-function exportJobScoreXlsx(groups,monthLabel,groupSegments){
+// 2026-10-01: 항목명 간소화 + 다운로드 전 항목 선택 팝업. key는 buildJobScoreGroups 결과의 필드명.
+// scope='co'는 업체 단위(공사업 행이 여러 개여도 세로 병합), 'tr'은 공사업 행 단위.
+var JOBSCORE_COLS=[
+  {id:'name',  header:'상호',          width:18,scope:'co',def:true},
+  {id:'bizno', header:'사업자번호',     width:16,scope:'co',def:false},
+  {id:'trade', header:'공사업',         width:8, scope:'tr',def:false},
+  {id:'sipyung',header:'시평액',        width:16,scope:'tr',def:false},
+  {id:'perf3', header:'3년실적',        width:16,scope:'tr',def:false},
+  {id:'perf5', header:'5년실적',        width:16,scope:'tr',def:false},
+  {id:'debt',  header:'부채(%)',        width:10,scope:'co',def:false},
+  {id:'liq',   header:'유동(%)',        width:10,scope:'co',def:false},
+  {id:'credit',header:'신용평가(만료)', width:18,scope:'co',def:true},
+  {id:'safety',header:'안전보건경영(만료)',width:20,scope:'co',def:true},
+  {id:'salary',header:'급여',           width:9, scope:'co',def:true},
+  {id:'job',   header:'일자리',         width:9, scope:'co',def:true}
+];
+function _jsColValue(col,g,tr){
+  switch(col.id){
+    case 'name':return g.업체명;
+    case 'bizno':return g.사업자번호;
+    case 'trade':return tr.공사업;
+    case 'sipyung':return Number(tr.시평액)||0;
+    case 'perf3':return Number(tr.실적3)||0;
+    case 'perf5':return Number(tr.실적5)||0;
+    case 'debt':return g.부채비율;
+    case 'liq':return g.유동비율;
+    case 'credit':return g.신용평가;
+    case 'safety':return g.안전보건;
+    case 'salary':return g.급여가점;
+    case 'job':return g.일자리가점;
+  }
+  return '';
+}
+function exportJobScoreXlsx(groups,monthLabel,groupSegments,cols){
   if(typeof ExcelJS==='undefined'){toast('엑셀 생성 라이브러리(ExcelJS) 로드 실패 — 네트워크를 확인하세요','err');return;}
+  cols=cols&&cols.length?cols:JOBSCORE_COLS.filter(function(c){return c.def;});
+  var NC=cols.length;
+  // 공사업/시평액/3년실적/5년실적 중 하나라도 선택됐을 때만 공사업별 행으로 펼침. 아니면 업체당 1행.
+  var perTrade=cols.some(function(c){return c.scope==='tr';});
   var wb=new ExcelJS.Workbook();
   var ws=wb.addWorksheet('신인도가점');
-  ws.columns=[{width:18},{width:16},{width:8},{width:16},{width:16},{width:16},{width:10},{width:10},{width:18},{width:20},{width:9},{width:9}];
-  ws.mergeCells(1,1,1,JOBSCORE_HEADERS.length);
+  ws.columns=cols.map(function(c){return{width:c.width};});
+  if(NC>1)ws.mergeCells(1,1,1,NC);
   var titleCell=ws.getCell(1,1);
   titleCell.value='신인도 가점 '+monthLabel+' 투찰 기준';
   titleCell.font={bold:true,size:14};
   titleCell.alignment={horizontal:'center',vertical:'middle'};
   ws.getRow(1).height=24;
   var headerRow=ws.getRow(2);
-  JOBSCORE_HEADERS.forEach(function(h,i){
+  cols.forEach(function(c,i){
     var cell=headerRow.getCell(i+1);
-    cell.value=h;
+    cell.value=c.header;
     cell.font={bold:true};
     cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
     cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF3F4F6'}};
   });
   headerRow.height=20;
-  // 그룹 다중선택(2개 이상) 시 DB관리 화면과 동일하게 "그룹: A (N개)" 구분행을 그룹 시작 위치마다 삽입.
-  var _groupStartAt={}; // groups 배열 인덱스 → {group,count}
+  var _groupStartAt={};
   var _dividerRows=[];
   if(groupSegments&&groupSegments.length){
     var _gi=0;
@@ -7752,9 +7787,9 @@ function exportJobScoreXlsx(groups,monthLabel,groupSegments){
   groups.forEach(function(g,gIdx){
     if(_groupStartAt[gIdx]){
       var seg=_groupStartAt[gIdx];
-      ws.mergeCells(r,1,r,JOBSCORE_HEADERS.length);
+      if(NC>1)ws.mergeCells(r,1,r,NC);
       var hdrCell=ws.getCell(r,1);
-      hdrCell.value='그룹: '+seg.group+' ('+seg.count+'개)';
+      hdrCell.value='그룹: '+seg.group; // 2026-10-01: 개수 표시 제거
       hdrCell.font={bold:true,color:{argb:'FF1D4ED8'}};
       hdrCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEFF6FF'}};
       hdrCell.alignment={horizontal:'left',vertical:'middle'};
@@ -7762,51 +7797,37 @@ function exportJobScoreXlsx(groups,monthLabel,groupSegments){
       _dividerRows.push(r);
       r++;
     }
-    var n=g.rows.length;
+    var trs=perTrade?g.rows:[g.rows[0]];
+    var n=trs.length;
     var startRow=r;
-    g.rows.forEach(function(tr){
-      var row=ws.getRow(r);
-      row.getCell(3).value=tr.공사업;
-      row.getCell(3).alignment={horizontal:'center'};
-      row.getCell(4).value=Number(tr.시평액)||0;
-      row.getCell(5).value=Number(tr.실적3)||0;
-      row.getCell(6).value=Number(tr.실적5)||0;
-      [4,5,6].forEach(function(ci){row.getCell(ci).numFmt='#,##0';row.getCell(ci).alignment={horizontal:'right'};});
+    trs.forEach(function(tr){
+      cols.forEach(function(c,ci){
+        if(c.scope!=='tr')return;
+        var cell=ws.getCell(r,ci+1);
+        cell.value=_jsColValue(c,g,tr);
+        if(c.id==='trade')cell.alignment={horizontal:'center'};
+        else{cell.numFmt='#,##0';cell.alignment={horizontal:'right'};}
+      });
       r++;
     });
-    if(n>1){
-      ws.mergeCells(startRow,1,startRow+n-1,1);
-      ws.mergeCells(startRow,2,startRow+n-1,2);
-      ws.mergeCells(startRow,7,startRow+n-1,7);
-      ws.mergeCells(startRow,8,startRow+n-1,8);
-      ws.mergeCells(startRow,9,startRow+n-1,9);
-      ws.mergeCells(startRow,10,startRow+n-1,10);
-      ws.mergeCells(startRow,11,startRow+n-1,11);
-      ws.mergeCells(startRow,12,startRow+n-1,12);
-    }
-    ws.getCell(startRow,1).value=g.업체명;
-    ws.getCell(startRow,2).value=g.사업자번호;
-    ws.getCell(startRow,7).value=g.부채비율;
-    ws.getCell(startRow,8).value=g.유동비율;
-    ws.getCell(startRow,9).value=g.신용평가;
-    ws.getCell(startRow,10).value=g.안전보건;
-    ws.getCell(startRow,11).value=g.급여가점;
-    ws.getCell(startRow,12).value=g.일자리가점;
-    [1,2,7,8,9,10,11,12].forEach(function(ci){
-      ws.getCell(startRow,ci).alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    cols.forEach(function(c,ci){
+      if(c.scope!=='co')return;
+      if(n>1)ws.mergeCells(startRow,ci+1,startRow+n-1,ci+1);
+      var cell=ws.getCell(startRow,ci+1);
+      cell.value=_jsColValue(c,g,null);
+      cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+      if(c.id==='name')cell.font={bold:true};
+      if(c.id==='job')cell.font={bold:true,color:{argb:'FFDC2626'}};
     });
-    ws.getCell(startRow,1).font={bold:true};
-    ws.getCell(startRow,12).font={bold:true,color:{argb:'FFDC2626'}};
   });
   var lastRow=r-1;
   for(var rr=2;rr<=lastRow;rr++){
-    for(var cc=1;cc<=JOBSCORE_HEADERS.length;cc++){
+    for(var cc=1;cc<=NC;cc++){
       ws.getCell(rr,cc).border={top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
     }
   }
-  // 구분행은 위쪽 경계선을 화면(border-top:2px solid #bfdbfe)과 맞춰 더 두껍게 표시
   _dividerRows.forEach(function(dr){
-    for(var cc2=1;cc2<=JOBSCORE_HEADERS.length;cc2++){
+    for(var cc2=1;cc2<=NC;cc2++){
       ws.getCell(dr,cc2).border={top:{style:'medium',color:{argb:'FFBFDBFE'}},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
     }
   });
@@ -7821,13 +7842,37 @@ function exportJobScoreXlsx(groups,monthLabel,groupSegments){
     toast('엑셀 생성 실패: '+(err&&err.message?err.message:err),'err');
   });
 }
+// 2026-10-01: 버튼 클릭 시 바로 생성하지 않고 항목 선택 팝업을 먼저 띄운다(기본 체크: 상호/신용평가/안전보건경영/급여/일자리).
 function generateJobScoreReport(){
   var companies=getVisibleDbCompanies();
   if(!companies.length){toast('표시할 업체가 없습니다 (검색/필터 조건을 확인하세요)','err');return;}
-  var groups=buildJobScoreGroups(companies);
-  var monthLabel=(new Date().getMonth()+1)+'월';
-  exportJobScoreXlsx(groups,monthLabel,companies._groupSegments);
-  toast('신인도가점표 xlsx 저장 완료 ('+groups.length+'개 업체)','ok');
+  var root=MODAL_ROOT;
+  var boxes=JOBSCORE_COLS.map(function(c){
+    return '<label style="display:flex;align-items:center;gap:6px;padding:4px 2px;font-size:13px;cursor:pointer">'+
+      '<input type="checkbox" class="js-col-cb" data-id="'+c.id+'" '+(c.def?'checked':'')+'> '+esc(c.header)+'</label>';
+  }).join('');
+  root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:320px;max-width:380px">'+
+    '<h3>📊 신인도가점표 항목 선택</h3>'+
+    '<p style="font-size:12px;color:var(--muted);margin:4px 0 8px">엑셀에 넣을 항목을 선택하세요. ('+companies.length+'개 업체)</p>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">'+boxes+'</div>'+
+    '<div style="margin-top:8px;font-size:12px"><a href="#" id="js-all" style="margin-right:10px">전체 선택</a><a href="#" id="js-def">기본값</a></div>'+
+    '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="js-cancel">취소</button> <button class="btn" id="js-go">다운로드</button></div>'+
+    '</div></div>';
+  function cbs(){return Array.prototype.slice.call(root.querySelectorAll('.js-col-cb'));}
+  $('#js-all').onclick=function(e){e.preventDefault();cbs().forEach(function(cb){cb.checked=true;});};
+  $('#js-def').onclick=function(e){e.preventDefault();cbs().forEach(function(cb){
+    var c=JOBSCORE_COLS.filter(function(x){return x.id===cb.dataset.id;})[0];cb.checked=!!(c&&c.def);});};
+  $('#js-cancel').onclick=function(){root.innerHTML='';};
+  $('#js-go').onclick=function(){
+    var sel=cbs().filter(function(cb){return cb.checked;}).map(function(cb){return cb.dataset.id;});
+    if(!sel.length){toast('항목을 1개 이상 선택하세요','err');return;}
+    var cols=JOBSCORE_COLS.filter(function(c){return sel.indexOf(c.id)>=0;});
+    root.innerHTML='';
+    var groups=buildJobScoreGroups(companies);
+    var monthLabel=(new Date().getMonth()+1)+'월';
+    exportJobScoreXlsx(groups,monthLabel,companies._groupSegments,cols);
+    toast('신인도가점표 xlsx 저장 완료 ('+groups.length+'개 업체)','ok');
+  };
 }
 
 function exportTemplateXlsx(){
