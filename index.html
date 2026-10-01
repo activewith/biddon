@@ -11351,6 +11351,36 @@ function bindLoginUI(){
 }
 
 // ████ SECTION: BOOT (앱 초기화 진입점) ████
+// 2026-10-01: 매월 첫 앱 실행(로그인 후 boot) 시 "기준월 확인" 알림. 달마다 1회(브라우저별 localStorage 키에 'YYYY-MM' 기록).
+// 기준월(#in-기준월, state.bid._기준월)은 일자리가점/신용평가/안전보건 재계산 기준이라 월이 바뀌면 재확인이 필요함.
+// MODAL_ROOT를 쓰지 않고 별도 오버레이로 띄움 — 만료임박 모달(MODAL_ROOT.innerHTML 교체 방식)과 서로 덮어쓰지 않도록.
+var REFYM_NOTICE_KEY='bid_refym_notice_done';
+function checkRefYMNoticeOnBoot(){
+  try{
+    var now=new Date();
+    var today=currentYM(now);
+    var done='';try{done=localStorage.getItem(REFYM_NOTICE_KEY)||'';}catch(e){}
+    if(done===today)return;
+    setTimeout(function(){
+      if(document.getElementById('refym-notice-back'))return;
+      var cur=(state.bid&&state.bid._기준월)||'(미입력)';
+      var back=document.createElement('div');back.id='refym-notice-back';back.className='modal-back';back.style.zIndex=99999;
+      back.innerHTML='<div class="modal" style="min-width:340px;max-width:440px">'+
+        '<h3>📅 기준월 확인</h3>'+
+        '<p style="font-size:13px;line-height:1.6;margin:6px 0">이번 달(<b>'+today+'</b>) 첫 실행입니다. 공고 입력의 <b>기준월</b>을 확인하세요.</p>'+
+        '<p style="font-size:12px;color:var(--muted);line-height:1.6;margin:6px 0">현재 화면의 기준월: <b style="color:#0891b2">'+esc(String(cur))+'</b><br>'+
+        '일자리가점·신용평가·안전보건 재계산이 이 값을 기준으로 하며, 이미 만들어 둔 다른 공고 탭의 기준월은 자동으로 바뀌지 않습니다.</p>'+
+        '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="refym-go">기준월 칸으로 이동</button> <button class="btn" id="refym-ok">확인</button></div></div>';
+      document.body.appendChild(back);
+      function close(){try{localStorage.setItem(REFYM_NOTICE_KEY,today);}catch(e){}back.remove();}
+      document.getElementById('refym-ok').onclick=close;
+      document.getElementById('refym-go').onclick=function(){
+        close();
+        try{var inp=document.getElementById('in-기준월');if(inp){inp.scrollIntoView({block:'center'});inp.focus();}}catch(e){}
+      };
+    },600);
+  }catch(e){}
+}
 function boot(){
   load();
   applyEligTablesFromSettings(); // load()도 자체 호출하지만, 안전하게 한 번 더(멱등)
@@ -11380,6 +11410,7 @@ function boot(){
   gistPull();
   startGistAutoPush();
   checkExpiryAlertsOnBoot();
+  checkRefYMNoticeOnBoot();
   initMemoAlarmWatcher();
   initBackupOnBoot();
   enableModalDrag();
