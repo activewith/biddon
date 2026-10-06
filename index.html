@@ -3,6 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+/* 2026-10-06 조회 전용(모바일/태블릿) 판별 — 터치 기기이면서 폭 1024px 미만이면 html.view-only.
+   '편집(PC 화면)' 전환은 sessionStorage(jodal_viewmode='pc')로 탭 단위 유지, 이때 viewport 폭을 1280으로 지정해
+   기존 @media(뷰포트 폭 기준) 규칙이 PC 레이아웃으로 적용되게 한다. PC 브라우저(비터치)는 항상 기존 동작. */
+(function(){
+  var KEY='jodal_viewmode';window.__VM_KEY=KEY;
+  var ov='';try{ov=sessionStorage.getItem(KEY)||'';}catch(e){}
+  var ua=navigator.userAgent||'';
+  var touch=false;
+  try{touch=window.matchMedia('(pointer:coarse)').matches;}catch(e){}
+  if(!touch&&/Android|iPhone|iPad|iPod|Mobile/i.test(ua))touch=true;
+  if(!touch&&/Macintosh/.test(ua)&&(navigator.maxTouchPoints||0)>1)touch=true;
+  var w=window.innerWidth||(document.documentElement&&document.documentElement.clientWidth)||(window.screen&&window.screen.width)||9999;
+  window.__TOUCH=touch;
+  var viewOnly=touch&&(ov==='view'||(ov!=='pc'&&w<1024));
+  window.__VIEW_ONLY=viewOnly;
+  if(viewOnly)document.documentElement.classList.add('view-only');
+  if(touch&&ov==='pc'){
+    var sw=Math.min((window.screen&&window.screen.width)||9999,(window.screen&&window.screen.height)||9999);
+    if(sw<1280){var m=document.querySelector('meta[name="viewport"]');var fit=Math.min(1,w/1280);if(m)m.setAttribute('content','width=1280, initial-scale='+fit.toFixed(3));}
+  }
+})();
+</script>
 <title>입찰 적격심사 도구 v6.24</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
@@ -283,6 +306,53 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
   .combo-actions-row .actions{width:100%;justify-content:flex-start;margin-left:0}
   .settings-table td:first-child{width:auto;min-width:90px}
 }
+/* ── 2026-10-06 조회 전용 모드(html.view-only: 터치 기기 + 폭 1024px 미만) ──
+   메뉴: 입찰적격판정/업체DB관리만. 허용 동작: 공고검색·화면탭 선택·DB 검색/필터/정렬·패널 접기/펼치기.
+   입력칸/편집 버튼은 숨기거나 pointer-events:none, 추가로 JS 캡처 가드가 클릭을 막는다. */
+html.view-only #btn-nav-kepco,
+html.view-only header nav button[data-tab="railtech"],
+html.view-only #btn-nav-analyzer,
+html.view-only #btn-nav-analyzer2,
+html.view-only #btn-settings,
+html.view-only #settings-alert-dot,
+html.view-only #btn-gist-sync,
+html.view-only #btn-mypw,
+html.view-only #btn-nav-alert,
+html.view-only #btn-add-bid-screen,
+html.view-only .bid-del-btn,
+html.view-only #btn-paste-text,
+html.view-only #btn-reset-bid,
+html.view-only #btn-msg-summary,
+html.view-only #btn-add-region,
+html.view-only #btn-clear-combos,
+html.view-only #btn-export-xlsx,
+html.view-only #btn-add-combo,
+html.view-only .combo-actions-row .actions,
+html.view-only #btn-import-xlsx,
+html.view-only #import-mode,
+html.view-only #btn-export-db,
+html.view-only #btn-export-jobscore,
+html.view-only #btn-template-xlsx,
+html.view-only #btn-add-company,
+html.view-only #btn-import-cert,
+html.view-only #btn-exp-alert,
+html.view-only #btn-edit-avg,
+html.view-only .db-edit-btn,
+html.view-only .db-del-btn,
+html.view-only #tab-db .help,
+html.view-only #db-group-toolbar>span:last-child{display:none!important}
+html.view-only #bid-input-collapsible :is(input,select,textarea,button,label),
+html.view-only #tab-bid>.panel:not(:first-child) :is(input,select,textarea,button,label,a){pointer-events:none}
+html.view-only .star-tip{pointer-events:auto}
+html.view-only .star-tip.tip-open[data-tip]::after{opacity:1;white-space:normal;width:200px;left:0;transform:none}
+html.view-only #tab-bid>.panel:first-child{position:static;box-shadow:none}
+html.view-only #db-table{min-width:700px!important}
+html.view-only #db-table th:nth-child(9),html.view-only #db-table td:nth-child(9),
+html.view-only #db-table th:nth-child(12),html.view-only #db-table td:nth-child(12),
+html.view-only #db-table th:nth-child(14),html.view-only #db-table td:nth-child(14),
+html.view-only #db-table th:nth-child(15),html.view-only #db-table td:nth-child(15),
+html.view-only #db-table th:nth-child(16),html.view-only #db-table td:nth-child(16),
+html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(17){display:none}
 </style>
 </head>
 <!-- SECTION: HTML-레이아웃 (헤더/메인/탭 구조) -->
@@ -306,6 +376,10 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
     <a href="https://bid.activewith.net" style="font-size:10px;color:#94a3b8;text-decoration:none">https://bid.activewith.net</a>
   </div>
   <span class="small" style="color:#94a3b8">v6.26</span>
+  <span id="viewmode-box" style="display:none;align-items:center;gap:4px">
+    <button type="button" id="btn-view-refresh" class="btn btn-sm" style="background:#334155;color:#fff;display:none" title="클라우드에서 최신 데이터를 다시 받습니다">↻ 새로고침</button>
+    <button type="button" id="btn-viewmode" class="btn btn-sm" style="background:#0f766e;color:#fff;font-weight:700" title="조회 전용 ↔ PC 화면(편집) 전환"></button>
+  </span>
 
   <button id="btn-gist-sync" title="GitHub Gist 클라우드 동기화"><span class="gist-icon">☁</span> <span id="gist-lbl">Gist</span></button>
   <span style="position:relative;display:inline-flex">
@@ -908,6 +982,8 @@ async function mergeRemoteBidScreensBeforePush(){
   }catch(e){console.warn('merge pull 실패, 로컬 상태로 push 진행',e);}
 }
 async function gistPushNow(){
+  if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용 모드에서는 어떤 경로로도 Push 하지 않음(PC 데이터 덮어쓰기 방지)
+  window._gistLastPushOk=false;
   gistStatus('syncing');
   try{
     syncActiveBidScreen();
@@ -929,6 +1005,7 @@ async function gistPushNow(){
     });
     if(!r.ok){gistStatus('err','Push '+r.status);return;}
     try{localStorage.setItem(GIST_LAST_PUSH_KEY,formatGistPushTs(new Date()));}catch(e){}
+    window._gistLastPushOk=true;
     gistStatus('ok','☁ Push 완료');
     setTimeout(function(){gistStatus('');},2500);
   }catch(e){gistStatus('err','Push 오류');console.warn('gistPush',e);}
@@ -1402,6 +1479,7 @@ function scheduleBackupTimer(){
   }
 }
 async function initBackupOnBoot(){
+  if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용: 부팅 팝업/알람/백업 생략
   await restoreBackupHandle();
   var bs=getBackupSettings();
   if(backupDirHandle&&bs.autoOnLaunch){
@@ -3751,6 +3829,7 @@ function checkLegacySnapshotExpiry(){
 // 만료 시 자동으로 값을 초기화/삭제하고, 아직 유예기간 내인 경우는 알림만 표시하는 전체 유지보수 루틴.
 // boot() 및 gistApplyData() 직후 1회씩 호출. 반환값 true면 state가 변경되어 save()가 필요함.
 function runExpiryMaintenance(){
+  if(window.__VIEW_ONLY)return false; // 2026-10-06 조회 전용: 만료 자동초기화/재무초기화 확인창 등 데이터 변경 루틴 생략
   var changed=false;
   if(seedLegacyDBSnapshotIfNeeded())changed=true; // (0) 이번 버전 최초 로드 시 갱신전(7/30) 스냅샷 1회 심기
   var today=new Date();today.setHours(0,0,0,0);
@@ -4281,6 +4360,7 @@ function showSyncSizeModal(){
   $('#m-sync-close').onclick=function(){MODAL_ROOT.innerHTML='';};
 }
 function checkSyncSizeOnBoot(){
+  if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용: 부팅 팝업/알람/백업 생략
   try{
     var info=getSyncPayloadInfo();
     if(info.ratio<SYNC_WARN_RATIO)return;
@@ -4406,6 +4486,7 @@ function showTempCompanyModal(){
   });
 }
 function checkTempCompanyAlertOnBoot(){
+  if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용: 부팅 팝업/알람/백업 생략
   try{
     if(!getTempCompanyAlerts().length)return;
     var tries=0;
@@ -4417,6 +4498,7 @@ function checkTempCompanyAlertOnBoot(){
   }catch(e){}
 }
 function checkExpiryAlertsOnBoot(){
+  if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용: 부팅 팝업/알람/백업 생략
   try{
     var hasAlert=state.db.some(function(c){return !c.만료알림제외&&getExpiryAlerts(c).length>0;});
     var hasBidAlert=getBidMemoAlerts().length>0;
@@ -4437,6 +4519,7 @@ var _공고메모알람알림됨=new Set();
 var _기초금액알람알림됨=new Set();
 var _산출알람알림됨=new Set(); // 키=screenIndex|업체명|YYYY-MM-DD (하루 1회)
 function initMemoAlarmWatcher(){
+  if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용: 부팅 팝업/알람/백업 생략
   try{
     state.db.forEach(function(c){
       if(!c.메모알람on||!c.메모알람일시)return;
@@ -11729,6 +11812,7 @@ function bindLoginUI(){
 // MODAL_ROOT를 쓰지 않고 별도 오버레이로 띄움 — 만료임박 모달(MODAL_ROOT.innerHTML 교체 방식)과 서로 덮어쓰지 않도록.
 var REFYM_NOTICE_KEY='bid_refym_notice_done';
 function checkRefYMNoticeOnBoot(){
+  if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용: 부팅 팝업/알람/백업 생략
   try{
     var now=new Date();
     var today=currentYM(now);
@@ -11864,6 +11948,75 @@ function enableModalDrag(){
     if(drag){drag.box.classList.remove('dragging');drag=null;}
   });
 }
+
+// ████ SECTION: 조회 전용 모드(모바일/태블릿) — 2026-10-06 ████
+// <head> 스크립트가 터치 기기 + 폭 1024px 미만이면 html.view-only / window.__VIEW_ONLY 를 지정한다.
+// 허용: 공고검색·화면탭 선택·DB 검색/필터/정렬·패널 접기/펼치기. 입력칸/편집 버튼은 CSS로 숨김/비활성 + 아래 가드로 차단.
+(function(){
+  var VM_KEY=window.__VM_KEY||'jodal_viewmode';
+  var VIEW_ONLY=window.__VIEW_ONLY===true,TOUCH=window.__TOUCH===true;
+  var box=document.getElementById('viewmode-box');
+  var btn=document.getElementById('btn-viewmode');
+  var rbtn=document.getElementById('btn-view-refresh');
+  if(box&&TOUCH){
+    box.style.display='inline-flex';
+    if(btn)btn.textContent=VIEW_ONLY?'✏ 편집(PC 화면)':'📱 조회 모드';
+    if(rbtn&&VIEW_ONLY)rbtn.style.display='';
+  }
+  async function switchMode(target){
+    if(!VIEW_ONLY){
+      // 편집 → 조회: 아직 Push 안 된 변경이 있으면 먼저 동기화(새로고침 시 부팅 Pull이 로컬 변경을 덮어쓰므로)
+      try{
+        if(typeof _gistDirty!=='undefined'&&_gistDirty){
+          _gistDirty=false;
+          window._gistLastPushOk=false;
+          await gistPushNow();
+          if(!window._gistLastPushOk){
+            if(!confirm('클라우드 동기화(Push)에 실패했습니다.\n지금 전환하면 저장되지 않은 변경이 사라질 수 있습니다. 그래도 전환할까요?'))return;
+          }
+        }
+      }catch(e){}
+    }
+    try{sessionStorage.setItem(VM_KEY,target);}catch(e){}
+    location.reload();
+  }
+  if(btn)btn.addEventListener('click',function(){
+    if(VIEW_ONLY){
+      if(!confirm('PC 화면(편집 모드)으로 전환합니다.\n- 화면이 PC 기준 크기로 표시됩니다(확대/축소로 조작).\n- 편집한 내용은 PC와 동일하게 클라우드에 동기화됩니다.\n- 이 탭을 닫으면 다시 조회 모드로 시작합니다.\n계속할까요?'))return;
+      switchMode('pc');
+    }else{
+      switchMode('view');
+    }
+  });
+  if(rbtn)rbtn.addEventListener('click',function(){gistPull();});
+  if(!VIEW_ONLY)return;
+  var SCOPE='#tab-bid,#tab-db,#bid-screen-tabs';
+  var DENY='.bid-del-btn,#btn-add-bid-screen';
+  var ALLOW='#btn-toggle-bidinput,#bid-screen-tabs .bid-screen-tab-wrap,#db-search,#db-region-filter,#db-group-toolbar,#tab-db .toolbar input[type="checkbox"],#tab-db .toolbar label,#db-table th.sort-hd';
+  function stop(e){e.preventDefault();e.stopPropagation();}
+  function guard(e){
+    var t=e.target;if(!t||!t.closest||!t.closest(SCOPE))return;
+    var tip=t.closest('.star-tip');
+    if(tip){
+      if(e.type==='click'){
+        var was=tip.classList.contains('tip-open');
+        document.querySelectorAll('.star-tip.tip-open').forEach(function(x){x.classList.remove('tip-open');});
+        if(!was)tip.classList.add('tip-open');
+      }
+      stop(e);return;
+    }
+    if(t.closest(DENY)){stop(e);return;}
+    if(t.closest(ALLOW))return;
+    stop(e);
+  }
+  document.addEventListener('click',guard,true);
+  document.addEventListener('dblclick',guard,true);
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Enter'&&e.key!==' ')return;
+    var t=e.target;
+    if(t&&t.closest&&t.closest(SCOPE)&&!t.closest(ALLOW))stop(e);
+  },true);
+})();
 
 initAuthFlow();
 </script>
