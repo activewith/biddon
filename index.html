@@ -964,7 +964,9 @@ function openGistModal(){
     +'<label for="gist-interval-select" style="font-size:12px;color:#374151">자동 Push 주기</label>'
     +'<select id="gist-interval-select" class="btn btn-ghost" style="padding:4px 8px">'+_gistIntervalOptsHtml+'</select>'
     +'</div>'
+    +'<div id="gist-size-line" style="font-size:12px;margin-bottom:10px"></div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button class="btn btn-ghost" id="gist-btn-size">용량 확인</button>'
     +'<button class="btn btn-ghost" id="gist-btn-pull">수동 Pull</button>'
     +'<button class="btn btn-ghost" id="gist-btn-push">수동 Push</button>'
     +'<button class="btn btn-ghost" id="gist-btn-close" style="margin-left:auto">닫기</button>'
@@ -976,6 +978,11 @@ function openGistModal(){
   function msg(t,col){var m=document.getElementById('gist-msg');if(m){m.textContent=t;m.style.color=col||'#059669';}}
 
   document.getElementById('gist-btn-close').onclick=function(){bk.remove();};
+  try{
+    var _si=getSyncPayloadInfo(),_sc=_si.ratio>=SYNC_DANGER_RATIO?'#dc2626':_si.ratio>=SYNC_WARN_RATIO?'#d97706':'#059669';
+    document.getElementById('gist-size-line').innerHTML='동기화 데이터 <b style="color:'+_sc+'">'+_kb(_si.total)+'</b> / 약 '+_kb(SYNC_LIMIT_BYTES)+' ('+Math.round(_si.ratio*100)+'%)';
+  }catch(e){}
+  document.getElementById('gist-btn-size').onclick=function(){bk.remove();showSyncSizeModal();};
   var _gistIntervalSel=document.getElementById('gist-interval-select');
   if(_gistIntervalSel)_gistIntervalSel.onchange=function(){
     var v=setGistAutoPushIntervalMin(_gistIntervalSel.value);
@@ -4060,7 +4067,7 @@ function getCalcAlarmAlerts(){
         var rep=rest[0],repPct=-Infinity;
         rest.forEach(function(r){var p=Number(r.지분율)||0;if(p>repPct){repPct=p;rep=r;}});
         var nm=(rep.업체명||'').trim();
-        if(flagged[nm]&&!seen[nm]){
+        if(flagged[nm]&&!seen[nm]&&(b.산출알람제외||[]).indexOf(nm)<0){ // 2026-10-06: 이미 산출해 [제외] 체크한 공고·업체는 알림 제외
           seen[nm]=true;
           out.push({screenIndex:i,공고명:(b.공고명||scr.name||'(제목없음)'),협정마감일:b.협정마감일_YMD,diffDays:diffDays,업체명:nm});
         }
@@ -4131,7 +4138,8 @@ function showExpiryAlertModal(){
   }).join('');
   var calcRows=calcList.map(function(item){
     var dday=item.diffDays===0?'D-day':('D-'+item.diffDays);
-    return '<tr><td style="padding:5px 8px;font-weight:600;color:#0369a1;cursor:pointer;text-decoration:underline" data-scrgo="'+item.screenIndex+'" title="이 공고 화면으로 이동">'+esc(item.공고명)+'</td>'+
+    return '<tr><td style="padding:5px 8px;text-align:center"><input type="checkbox" class="calc-exclude-cb" data-scridx="'+item.screenIndex+'" data-comp="'+esc(item.업체명)+'" title="이미 산출함 — 체크하면 이 공고의 이 업체 산출 알림이 다음부터 뜨지 않습니다"></td>'+
+           '<td style="padding:5px 8px;font-weight:600;color:#0369a1;cursor:pointer;text-decoration:underline" data-scrgo="'+item.screenIndex+'" title="이 공고 화면으로 이동">'+esc(item.공고명)+'</td>'+
            '<td style="padding:5px 8px;font-size:12px"><span style="color:#b45309;font-weight:700">'+esc(item.업체명)+'의 투찰 금액을 산출하세요.</span> <span style="color:#6b7280">('+dday+' · 협정마감일 '+esc(item.협정마감일)+')</span></td></tr>';
   }).join('');
   // 2026-09-21: 알림창 가로폭 +30%(48vw→62vw, 최대 560px→728px) — 상세/최종수정 컬럼이 잘려 가로 스크롤이 생기던 문제 완화
@@ -4154,8 +4162,8 @@ function showExpiryAlertModal(){
     ):'')+
     (calcList.length?(
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">🧮 투찰금액 산출 ('+calcList.length+'건)</div>'+
-      '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">업체등록의 [산출]을 체크한 업체가 대표사로 조합된 공고입니다 · 협정마감일 1일 전(주말이면 직전 금요일)부터 표시 · 공고명을 누르면 해당 화면으로 이동 · 알림을 멈추려면 업체등록에서 [산출] 체크 해제</p>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+calcRows+'</tbody></table>'
+      '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">업체등록의 [산출]을 체크한 업체가 대표사로 조합된 공고입니다 · 협정마감일 1일 전(주말이면 직전 금요일)부터 표시 · 이미 산출했으면 [제외] 체크 · 공고명을 누르면 해당 화면으로 이동 · 알림을 멈추려면 업체등록에서 [산출] 체크 해제</p>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+calcRows+'</tbody></table>'
     ):'')+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
     '</div></div>';
@@ -4175,6 +4183,19 @@ function showExpiryAlertModal(){
       }
     };
   });
+  root.querySelectorAll('.calc-exclude-cb').forEach(function(cb){
+    cb.onchange=function(){
+      var idx=Number(this.dataset.scridx),nm=this.dataset.comp;
+      var scr=state.bidScreens&&state.bidScreens[idx];
+      if(!scr||!scr.bid)return;
+      var arr=Array.isArray(scr.bid.산출알람제외)?scr.bid.산출알람제외:(scr.bid.산출알람제외=[]);
+      var at=arr.indexOf(nm);
+      if(this.checked){if(at<0)arr.push(nm);}else if(at>=0)arr.splice(at,1);
+      save();
+      var tr=this.closest('tr');
+      if(tr)Array.prototype.forEach.call(tr.children,function(td,k){if(k>0){td.style.color=cb.checked?'#9ca3af':'';td.style.textDecoration=cb.checked?'line-through':'';}});
+    };
+  });
   root.querySelectorAll('.bid-memo-alarm-off').forEach(function(btn){
     btn.onclick=function(){
       var idx=Number(this.dataset.scridx);
@@ -4190,6 +4211,90 @@ function showExpiryAlertModal(){
       selectBidScreenTab(idx);
     };
   });
+}
+// ████ SECTION: 동기화 데이터 용량 경고 (2026-10-06) ████
+// Gist Push/Pull은 약 730~750KB부터 응답이 잘려 데이터가 손실됨(2026-08-14 실측). Push 본문(gistPushNow의 _pushState,
+// bidScreens/activeBidScreenIndex 제외)과 동일한 구성으로 크기를 재서, 한도의 80% 이상이면 정리 방법과 함께 경고한다.
+var SYNC_LIMIT_BYTES=730*1000;
+var SYNC_WARN_RATIO=0.8;   // 584KB 이상: 하루 1회 경고
+var SYNC_DANGER_RATIO=0.9; // 657KB 이상: 앱 실행 때마다 경고
+function _utf8Len(str){
+  try{return new TextEncoder().encode(str).length;}catch(e){return unescape(encodeURIComponent(str)).length;}
+}
+function getSyncPayloadInfo(){
+  var parts=[],total=2;
+  for(var k in state){
+    if(!Object.prototype.hasOwnProperty.call(state,k))continue;
+    if(k==='bidScreens'||k==='activeBidScreenIndex')continue;
+    var js;try{js=JSON.stringify(state[k]);}catch(e){continue;}
+    if(js===undefined)continue;
+    var b=_utf8Len(js)+_utf8Len(JSON.stringify(k))+2;
+    parts.push({key:k,bytes:b});total+=b;
+  }
+  parts.sort(function(a,b){return b.bytes-a.bytes;});
+  var myScreens=0,otherScreens=0,accounts=0;
+  try{
+    var sess=getSession();
+    Object.keys(state.bidScreensByUser||{}).forEach(function(uid){
+      var n=((state.bidScreensByUser[uid]||{}).screens||[]).length;
+      accounts++;
+      if(sess&&uid===sess.id)myScreens=n;else otherScreens+=n;
+    });
+  }catch(e){}
+  return{total:total,parts:parts,ratio:total/SYNC_LIMIT_BYTES,dbCount:(state.db||[]).length,
+    tempCount:(state.db||[]).filter(function(c){return c&&c.is임시;}).length,myScreens:myScreens,otherScreens:otherScreens,accounts:accounts};
+}
+function _kb(n){return (n/1000).toFixed(0)+'KB';}
+var _SYNC_PART_LABEL={db:'업체DB',bidScreensByUser:'입찰적격판정 화면(탭) — 계정별 합계',extApps:'외부앱',usageGuide:'사용법(설명서)',jobScoreHistory:'일자리가점 히스토리',combos:'조합',kepcoCombos:'한전 조합',railTechDB:'철도기술 DB',settings:'설정'};
+function syncAdviceHTML(info){
+  var items=[];
+  var top=info.parts.slice(0,4).map(function(x){return x.key;});
+  var has=function(k){return top.indexOf(k)>=0;};
+  if(has('db'))items.push('<b>업체DB를 줄여주세요.</b> 사용하지 않는 업체를 삭제하세요. 업체DB 관리에서 <b>미참여</b> 체크, <b>1회성(임시)</b> 체크(현재 '+info.tempCount+'개)로 걸러서 정리하면 빠릅니다. 삭제 전에 DB→xlsx 백업을 받아두세요.');
+  if(has('bidScreensByUser'))items.push('<b>사용하지 않는 공고 탭을 삭제해 주세요.</b> 내 계정 탭 '+info.myScreens+'개'+(info.otherScreens?(', 다른 계정 탭 합계 '+info.otherScreens+'개(계정 '+info.accounts+'개)'):'')+'가 저장돼 있습니다. 끝난 공고·테스트용 탭을 닫고, 다른 계정 사용자에게도 정리를 요청하세요.');
+  if(has('extApps'))items.push('<b>외부앱을 정리해 주세요.</b> 설정>외부앱에서 쓰지 않는 앱을 삭제하거나 더 작은 파일로 교체하세요(현재 '+_kb((info.parts.filter(function(x){return x.key==='extApps';})[0]||{bytes:0}).bytes)+').');
+  if(has('usageGuide'))items.push('<b>사용법(설명서) 파일 용량을 줄여주세요.</b> 설정 탭바의 사용법UPLOAD로 이미지가 작은 파일로 교체하세요.');
+  if(has('jobScoreHistory')||has('expiryFieldHistory'))items.push('일자리가점/만료필드 히스토리가 큽니다. 오래된 기준월 기록 정리를 요청해 주세요.');
+  items.push('정리 전에 <b>로컬 백업</b>을 먼저 받아두세요(설정의 로컬 폴더 백업). 정리 후 ☁ 수동 Push로 새 크기를 반영하세요.');
+  items.push('한도(약 '+_kb(SYNC_LIMIT_BYTES)+')를 넘으면 Push/Pull 응답이 잘려 <b>데이터가 손실</b>될 수 있습니다. 90%를 넘기면 앱을 열 때마다 이 경고가 표시됩니다.');
+  return '<ul style="margin:6px 0 0 18px;padding:0;font-size:12.5px;line-height:1.6">'+items.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul>';
+}
+function showSyncSizeModal(){
+  var info=getSyncPayloadInfo();
+  var pct=Math.round(info.ratio*100);
+  var col=info.ratio>=SYNC_DANGER_RATIO?'#dc2626':info.ratio>=SYNC_WARN_RATIO?'#d97706':'#059669';
+  var barW=Math.min(100,pct);
+  var rows=info.parts.slice(0,6).map(function(x){
+    return '<tr><td style="padding:3px 8px">'+esc(_SYNC_PART_LABEL[x.key]||x.key)+'</td><td style="padding:3px 8px;text-align:right">'+_kb(x.bytes)+'</td><td style="padding:3px 8px;text-align:right;color:#6b7280">'+Math.round(x.bytes/info.total*100)+'%</td></tr>';
+  }).join('');
+  var title=info.ratio>=SYNC_WARN_RATIO?'⚠ 동기화 데이터 용량 경고':'☁ 동기화 데이터 용량';
+  MODAL_ROOT.innerHTML='<div class="modal-back"><div class="modal" style="width:62vw;min-width:340px;max-width:640px">'+
+    '<h3 style="color:'+col+'">'+title+'</h3>'+
+    '<div style="font-size:13px;margin:6px 0 4px">현재 Push 데이터 <b style="color:'+col+'">'+_kb(info.total)+'</b> / 안전 한도 약 '+_kb(SYNC_LIMIT_BYTES)+' (<b style="color:'+col+'">'+pct+'%</b>) · 업체 '+info.dbCount+'개</div>'+
+    '<div style="height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden"><div style="height:100%;width:'+barW+'%;background:'+col+'"></div></div>'+
+    '<div style="font-weight:700;font-size:13px;margin:12px 0 2px">용량이 큰 항목</div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tbody>'+rows+'</tbody></table>'+
+    '<div style="font-weight:700;font-size:13px;margin:12px 0 2px">'+(info.ratio>=SYNC_WARN_RATIO?'대응 방법':'참고')+'</div>'+
+    syncAdviceHTML(info)+
+    '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-sync-close">닫기</button></div>'+
+    '</div></div>';
+  $('#m-sync-close').onclick=function(){MODAL_ROOT.innerHTML='';};
+}
+function checkSyncSizeOnBoot(){
+  try{
+    var info=getSyncPayloadInfo();
+    if(info.ratio<SYNC_WARN_RATIO)return;
+    var today=_ymdLocal(new Date());
+    if(info.ratio<SYNC_DANGER_RATIO){
+      try{if(localStorage.getItem('jodal_sync_warn_day')===today)return;}catch(e){}
+    }
+    var tries=0;
+    (function tryShow(){
+      if(MODAL_ROOT.innerHTML.trim()){if(tries++<900)setTimeout(tryShow,2000);return;}
+      try{localStorage.setItem('jodal_sync_warn_day',today);}catch(e){}
+      showSyncSizeModal();
+    })();
+  }catch(e){}
 }
 // ████ SECTION: 1회성(임시) 업체 — 90일 미사용 시 삭제/유지 확인 알림 (2026-10-06) ████
 // - 업체 레코드 필드: is임시(분류), 임시지정일(체크한 날), 최근조합일(마지막으로 조합 슬롯에 들어 있던 날), 임시확인일("유지" 선택한 날)
@@ -11679,6 +11784,7 @@ function boot(){
   startGistAutoPush();
   checkExpiryAlertsOnBoot();
   checkTempCompanyAlertOnBoot();
+  checkSyncSizeOnBoot();
   checkRefYMNoticeOnBoot();
   initMemoAlarmWatcher();
   initBackupOnBoot();
