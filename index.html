@@ -8525,6 +8525,18 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
       save();refreshCombos();
       return;
     }
+    // 2026-10-06: 우선협정업체가 이미 이 조합에 있으면 새 슬롯을 추가하지 않고 그 슬롯의 지분만 갱신(중복 방지).
+    // 같은 업체가 이미 여러 슬롯에 중복돼 있으면 첫 슬롯만 남기고 나머지는 비움.
+    var _dupSi=[];
+    combo.slots.forEach(function(s3,si3){if(si3!==지역si&&(s3.업체명||'').trim()===우선협정명)_dupSi.push(si3);});
+    if(_dupSi.length){
+      combo.slots[_dupSi[0]].지분율=Math.max(0,100-val);
+      combo.slots[_dupSi[0]].isRec=true;
+      for(var _k=1;_k<_dupSi.length;_k++)combo.slots[_dupSi[_k]]=emptySlot();
+      toast('자동분배 완료 (우선협정업체 이미 있음 — 지분만 갱신)','ok');
+      save();refreshCombos();
+      return;
+    }
     var emptySi=-1;
     combo.slots.forEach(function(s2,si2){if(si2!==지역si&&(s2.업체명||'').trim()===''&&emptySi<0)emptySi=si2;});
     if(emptySi<0){
