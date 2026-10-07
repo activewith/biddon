@@ -155,6 +155,8 @@ tr.hover:hover{background:#f8fafc}
 .stat .k{font-size:10px;color:var(--muted);font-weight:600}
 .stat .v{font-size:13px;font-weight:700;color:#0f172a}
 @keyframes blinkBaseWarnBg{0%,49%{background:#fee2e2;border-color:#ef4444;box-shadow:0 0 0 0 rgba(220,38,38,.6)}50%,100%{background:#dc2626;border-color:#7f1d1d;box-shadow:0 0 18px 6px rgba(220,38,38,.85)}}
+@keyframes blinkMainProc{0%,49%{background:#fee2e2;color:#991b1b;border-color:#ef4444;box-shadow:0 0 0 0 rgba(220,38,38,.6)}50%,100%{background:#dc2626;color:#fff;border-color:#7f1d1d;box-shadow:0 0 14px 4px rgba(220,38,38,.8)}}
+.main-proc-warn{margin-left:auto;align-self:center;padding:8px 16px;border:2px solid #ef4444;border-radius:8px;font-size:15px;font-weight:800;white-space:nowrap;animation:blinkMainProc .5s steps(1,end) infinite}
 @keyframes blinkBaseWarnFg{0%,49%{color:#7f1d1d}50%,100%{color:#fff}}
 .stat.base-warn{animation:blinkBaseWarnBg .5s steps(1,end) infinite;position:relative;z-index:2}
 .stat.base-warn .k{animation:blinkBaseWarnFg .5s steps(1,end) infinite}
@@ -470,6 +472,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
         <button class="btn" id="btn-paste-text" title="스캔 PDF 등 직접 추출이 안 될 때 텍스트를 붙여넣어 분석" style="background:#2563eb;color:#fff;border-color:#1d4ed8">📋 공고문분석(텍스트)</button>
         <button class="btn" id="btn-reset-bid" style="background:#111827;color:#fff;border-color:#111827">공고 초기화</button>
         <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 메모 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 한줄요약/메모</button>
+        <div id="o-주공정기간" class="main-proc-warn" style="display:none" title="공고문분석에서 추출한 주공정 작업 예정기간"></div>
       </div>
       <!-- 업계평균 입력은 DB탭에서 관리 -->
       <div class="summary" style="margin-top:10px">
@@ -6907,6 +6910,18 @@ function extractBidFields(t){
         if(Object.keys(_bmPairs).length>=2)r.한전분담비율=_bmPairs;
       }
     }
+    // 2026-10-07: 주공정 작업 예정기간 추출 — "주공정(작업) 예정기간 : 2026. 10. 19 ~ 2026. 12. 13" 및 유사 형식
+    (function(){
+      var _D='(\\d{4})\\s*[.\\-/년]\\s*(\\d{1,2})\\s*[.\\-/월]\\s*(\\d{1,2})\\s*[일.]?';
+      var _re=new RegExp('주\\s*공\\s*정[^\\d]{0,20}?예\\s*정[^\\d]{0,6}?기\\s*간[^\\d]{0,20}'+_D+'\\s*(?:[~∼～〜\\-–—]|부터)\\s*'+_D);
+      var _mp=t.match(_re);
+      if(_mp){
+        var _y1=+_mp[1],_m1=+_mp[2],_d1=+_mp[3],_y2=+_mp[4],_m2=+_mp[5],_d2=+_mp[6];
+        if(_m1>=1&&_m1<=12&&_d1>=1&&_d1<=31&&_m2>=1&&_m2<=12&&_d2>=1&&_d2<=31){
+          r.주공정예정기간=_y1+'. '+_m1+'. '+_d1+' ~ '+_y2+'. '+_m2+'. '+_d2;
+        }
+      }
+    })();
     delete r.시평제한;delete r.분담시평;
   }
   m=t.match(/실적\s*배수\s*[：:\s]?\s*(\d(?:\.\d+)?)\s*배/);
@@ -7222,7 +7237,7 @@ function showPdfResultModal(found,preview){
       var k=el.dataset.pdfManual;
       var raw=(el.value||'').trim();
       if(!raw)return;
-      if(k==='공종'||k==='적격기준'){found[k]=raw;}
+      if(k==='공종'||k==='적격기준'||k==='주공정예정기간'){found[k]=raw;}
       else{var num=Number(raw.replace(/,/g,''));if(!isNaN(num))found[k]=num;}
     });
     var _regSel=Array.prototype.map.call(document.querySelectorAll('[data-pdf-region-idx]'),function(e){return e.value.trim();}).filter(Boolean);
@@ -7256,6 +7271,9 @@ function showPdfResultModal(found,preview){
       return '<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">'+_cells2+
         '<button type="button" data-pdf-region-add style="font-size:11px;padding:2px 6px;line-height:1;border:1px solid #93c5fd;border-radius:3px;background:#eff6ff;color:#1d4ed8;cursor:pointer">＋</button>'+
       '</div>';
+    }
+    if(k==='주공정예정기간'){
+      return '<input type="text" data-pdf-manual="'+k+'" value="'+esc(String(found[k]||''))+'" placeholder="예: 2026. 10. 19 ~ 2026. 12. 13" style="'+st+'">';
     }
     var numAttrs={추정가격:'min="0" step="1"',기초금액:'min="0" step="1"',시평제한:'min="0" step="1"',분담시평:'min="0" step="1"',A값:'min="0" step="1"',lh지분율기준:'min="0" step="1"',lh순공사원가:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"',배수:'min="0" step="0.1"'};
     var ph=_pdfPlaceholder(k,found);
@@ -7401,6 +7419,7 @@ function showPdfResultModal(found,preview){
     if(found.등록마감일)state.bid.마감일=found.등록마감일;
     if(found.협정마감일_YMD)state.bid.협정마감일_YMD=found.협정마감일_YMD; // 탭 자동삭제 기준일(연도 포함, autoRemoveExpiredBidScreens 참고)
     if(found.한전분담비율)state.bid.한전분담비율=found.한전분담비율; // 참고용 원본 보존
+    if(found.적격기준==='한전'&&!found.주공정예정기간)state.bid.주공정예정기간=null; // 새 공고에 기간이 없으면 이전 공고의 값이 남지 않도록 해제
     if(found.적격기준==='한전'){
       // 실적제한 수기입력값은 모달 안의 입력칸(⚡ 실적제한 블록, _kepcoPerfInputBlockHtml)에서 그대로 읽어와 저장한다.
       // (해당 입력칸은 기존 state.bid.한전실적입력 값 또는 공고문 검출 분담비율로 이미 초기값이 채워져 있고,
@@ -7451,6 +7470,7 @@ function showPdfResultModal(found,preview){
         var _gEl=$('#in-공종');if(_gEl)_gEl.value=v;
         var _lge=$('#o-공종-label');if(_lge)_lge.textContent=v;
       }
+      else if(k==='주공정예정기간'){state.bid.주공정예정기간=String(v);}
       else if(k==='A값'){state.bid.A값=v;var _aEl=$('#in-A값');if(_aEl)_aEl.value=FMT_NUM(v);}
     });
     save();refreshBidStats();refreshCombos();updateBidNameLabel();renderBidScreenTabs();root.innerHTML='';toast('공고 정보 반영 완료','ok');
@@ -8811,7 +8831,15 @@ function kepcoPerfEokLineHtml(c,keys){
   }).filter(Boolean).join('+');
   return '<div data-kperf-eokline style="font-size:10px;color:#6b7280;font-weight:600">'+(parts?'('+parts+')':'')+'</div>';
 }
+function updateMainProcPeriodLabel(){
+  var el=document.getElementById('o-주공정기간');if(!el)return;
+  var b=state&&state.bid;
+  var v=b&&b.주공정예정기간;
+  if(v&&(state.kepcoModeActive||b.적격기준==='한전')){el.textContent='⚠ 주공정예정기간: '+v;el.style.display='';}
+  else{el.textContent='';el.style.display='none';}
+}
 function refreshBidStats(){
+  try{updateMainProcPeriodLabel();}catch(_e){}
   var c=calcBid();
   updateBaseMultPlaceholders();
   // 배수/투찰률 입력칸이 비어있을 때 실제 내부 적용값(자동값)을 플레이스홀더로 명시
@@ -9236,7 +9264,7 @@ function bind(){
   $('#btn-reset-bid').addEventListener('click',function(){
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
     (function(){var _rm=$('#in-기준월');if(_rm)_rm.value=state.bid._기준월;})(); // 2026-08-27: 공고 초기화 시 기준월도 이번 달로 리셋(재확인 필요)
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
