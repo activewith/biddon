@@ -409,7 +409,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
 <main>
   <section id="tab-bid">
     <div class="panel">
-      <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span><span id="o-kepco-badge" style="display:none;font-size:11px;font-weight:700;color:#fff;background:#7c3aed;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle">⚡ 한전적격 전용 페이지</span>
+      <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span><span id="o-kepco-badge" style="display:none;font-size:11px;font-weight:700;color:#fff;background:#7c3aed;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle">⚡ 한전적격</span>
         <button type="button" class="btn btn-toggle-bidinput btn-sm" id="btn-toggle-bidinput" style="margin-left:auto;font-size:11px;padding:3px 10px;font-weight:700" title="공고 입력 내용을 접거나 펼칩니다">숨기기</button>
       </h2>
       <div id="bid-input-collapsible">
@@ -452,6 +452,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
             <option value="LH">LH(토지주택공사)</option>
             <option value="도로공사">도로공사(한국도로공사)</option>
             <option value="수자원공사">수자원공사(한국수자원공사)</option>
+            <option value="한전">한전(한국전력공사)</option>
           </select>
         </div>
         <div class="field"><label>공종</label>
@@ -824,7 +825,6 @@ const state={
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
-  kepcoModeActive:false,
   bidScreens:[{name:'입찰적격판정A',bid:_initBid,combos:_initCombos}],
   activeBidScreenIndex:0,
   bidScreensByUser:{}, // 계정별 화면 파티션: {accountId:{screens:[...], activeIndex:0}} — state.bidScreens/activeBidScreenIndex는 현재 로그인 계정의 파티션을 가리키는 런타임 뷰
@@ -2264,6 +2264,7 @@ function applyInstitutionUI(적격기준){
   if(isRail)updateRailGroupInfo();
   updateGongjongOptions(적격기준);
   updateEligNoteTooltip(적격기준);
+  applyKepcoModeUI(적격기준==='한전');
 }
 // 설정 > 공고/적격 > 적격(발주처)메모에 입력해둔 메모를, 공고 입력 화면의 적격기준 select/요약박스에
 // title 속성(브라우저 기본 풍선 도움말)로 반영. 적격기준이 바뀌거나(select change), 화면이 복원되거나
@@ -7261,7 +7262,7 @@ function showPdfResultModal(found,preview){
     if(k==='적격기준'){
       var custOpts=customInstitutionsList().map(function(c){return '<option value="'+esc(c.name)+'">'+esc(c.name)+'</option>';}).join('');
       return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
-        '<option value="">직접선택</option><option value="조달청">조달청</option><option value="인천공항">인천공항</option><option value="철도공단">철도공단</option><option value="지자체">지자체</option><option value="LH">LH</option><option value="도로공사">도로공사</option><option value="수자원공사">수자원공사</option>'+custOpts+'</select>';
+        '<option value="">직접선택</option><option value="조달청">조달청</option><option value="인천공항">인천공항</option><option value="철도공단">철도공단</option><option value="지자체">지자체</option><option value="LH">LH</option><option value="도로공사">도로공사</option><option value="수자원공사">수자원공사</option><option value="한전">한전</option>'+custOpts+'</select>';
     }
     if(k==='지역선택'){
       var sst='width:80px;box-sizing:border-box;padding:2px 3px;border:1px solid #f59e0b;border-radius:3px;font-size:11px;background:#fffbeb;color:#111827';
@@ -7307,7 +7308,7 @@ function showPdfResultModal(found,preview){
     }
     if(k==='적격기준'){
       var cur2=found.적격기준||'';
-      var opts2=['조달청','인천공항','철도공단','지자체','LH','도로공사','수자원공사'].concat(customInstitutionsList().map(function(c){return c.name;}));
+      var opts2=['조달청','인천공항','철도공단','지자체','LH','도로공사','수자원공사','한전'].concat(customInstitutionsList().map(function(c){return c.name;}));
       return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
         '<option value=""'+(cur2?'':' selected')+'>직접선택</option>'+
         opts2.map(function(o){return '<option value="'+o+'"'+(cur2===o?' selected':'')+'>'+o+'</option>';}).join('')+
@@ -7457,6 +7458,18 @@ function showPdfResultModal(found,preview){
   $('#m-apply-pdf').onclick=function(){
     if(applyBtn.disabled)return;
     _syncManualIntoFound();
+    // 2026-10-13: 적격기준이 한전 ↔ 비한전으로 바뀌면 한전 전용 입력(실적제한 등)과 조합 판정 기준이 달라지므로,
+    // 이미 업체가 들어간 조합이 있을 때는 반영 전에 확인한다(취소하면 아무것도 바꾸지 않음).
+    (function(){
+      var _cbE=document.querySelector('[data-pdf-key="적격기준"]');
+      if(!_cbE||!_cbE.checked||!found.적격기준)return;
+      var _was=state.bid.적격기준==='한전',_will=found.적격기준==='한전';
+      if(_was===_will)return;
+      var _hasCo=(state.combos||[]).some(function(cb){return(cb.slots||[]).some(function(sl){return((sl&&sl.업체명)||'').trim()!=='';});});
+      if(!_hasCo)return;
+      if(!confirm('이 공고의 적격기준이 "'+(state.bid.적격기준||'미지정')+'" → "'+found.적격기준+'"(으)로 바뀝니다.\n이미 구성한 조합의 판정 기준과 표시가 달라집니다.\n계속 반영하시겠습니까?')){found.__cancel=true;}
+    })();
+    if(found.__cancel){delete found.__cancel;return;}
     if(found.공사명){
       state.bid.공고명=found.공사명;
       state.bid.공고명저장일시=new Date().toISOString();
@@ -8889,7 +8902,7 @@ function updateMainProcPeriodLabel(){
   var el=document.getElementById('o-주공정기간');if(!el)return;
   var b=state&&state.bid;
   var v=b&&b.주공정예정기간;
-  if(v&&(state.kepcoModeActive||b.적격기준==='한전')){el.textContent='⚠ 주공정예정기간: '+v;el.style.display='';}
+  if(v&&(b.적격기준==='한전')){el.textContent='⚠ 주공정예정기간: '+v;el.style.display='';}
   else{el.textContent='';el.style.display='none';}
 }
 function refreshBidStats(){
@@ -9010,7 +9023,6 @@ function bind(){
   document.querySelectorAll('header nav button[data-tab]').forEach(function(btn){
     btn.addEventListener('click',function(){
       var _kbtn0=document.getElementById('btn-nav-kepco');if(_kbtn0)_kbtn0.classList.remove('active');
-      if(btn.id==='btn-nav-bid'&&state.kepcoModeActive){exitKepcoPage();return;}
       document.querySelectorAll('header nav button[data-tab]').forEach(function(b){b.classList.toggle('active',b===btn);});
       document.querySelectorAll('section[id^="tab-"]').forEach(function(s){s.classList.toggle('hidden',s.id!=='tab-'+btn.dataset.tab);});
       // 입찰적격판정 화면탭 줄(#bid-screen-tabs)은 '입찰적격판정' 버튼을 눌렀을 때만 보이도록 함 —
@@ -11386,6 +11398,7 @@ function loadBidScreensForUser(id){
   state.bidScreens=p.screens;
   state.activeBidScreenIndex=Math.max(0,Math.min(p.screens.length-1,Number(p.activeIndex)||0));
   autoRemoveExpiredBidScreens(); // 협정마감일 지난 탭은 로드 시점에 자동 정리
+  migrateKepcoBidToScreen(); // 구 한전 전용 보관함 → 화면탭 이전(내용 없으면 초기화만)
   var _act=state.bidScreens[state.activeBidScreenIndex];
   state.bid=_act.bid;
   state.combos=_act.combos;
@@ -11412,7 +11425,6 @@ function persistCurrentUserBidScreens(){
   p.activeIndex=state.activeBidScreenIndex;
 }
 function syncActiveBidScreen(){
-  if(state.kepcoModeActive)return; // 한전적격 페이지에서는 state.bid/combos가 kepcoBid/kepcoCombos를 가리키므로 일반 화면 동기화를 건너뜀
   if(!state.bidScreens||!state.bidScreens.length)return;
   var i=state.activeBidScreenIndex||0;
   if(state.bidScreens[i]){state.bidScreens[i].bid=state.bid;state.bidScreens[i].combos=state.combos;}
@@ -11514,50 +11526,60 @@ function switchBidScreen(idx){
 }
 // ── 한전적격 전용 페이지 ─────────────────────────────────────────────
 // 기존 입찰적격판정(#tab-bid) 화면/로직을 그대로 재사용하되, state.bid/state.combos를
-// 별도 보관함(state.kepcoBid/state.kepcoCombos)으로 바꿔치기하는 방식으로 "별도 페이지"처럼 분리한다.
+// [구방식 설명 — 2026-10-13 통합으로 폐지됨: 아래 enterKepcoPage는 이제 일반 화면탭을 한전으로 여는 단축키]
 // 적격기준은 이 페이지에서는 항상 '한전'으로 고정되며, 다른 기관(조달청/LH 등)의 일반 화면탭(bidScreens)과는
 // 완전히 분리된 저장공간을 쓰므로 서로 데이터가 섞이지 않는다.
+function isBlankBidScreen(scr){
+  var b=(scr&&scr.bid)||{};
+  if(b.공고명||b.공고번호||b.기초금액||b.추정가격)return false;
+  return !((scr&&scr.combos)||[]).some(function(cb){return(cb.slots||[]).some(function(sl){return((sl&&sl.업체명)||'').trim()!=='';});});
+}
+// 2026-10-13 통합: 한전은 더 이상 별도 보관함(kepcoBid)을 쓰지 않고, 적격기준='한전'인 일반 화면탭으로 동작한다.
+// '⚡ 한전' 버튼 = "적격기준이 한전인 화면탭을 열어주는 단축키". 현재 탭이 비어 있으면 그 탭을 한전으로 바꾸고,
+// 내용이 있으면 새 탭을 추가한다. 한전 전용 UI는 현재 탭의 b.적격기준에서 매번 도출(applyKepcoModeUI).
 function enterKepcoPage(){
-  // 2026-09-22 수정: 기존에는 state.kepcoModeActive가 true이면(=이미 한전모드로 전환된 적이 있으면)
-  // 곧바로 return 해버려서, 한전모드 상태에서 업체DB관리 등 "다른 화면탭"으로 이동한 뒤 다시 '한전'
-  // 버튼을 눌러도 화면(tab-bid 표시)이 갱신되지 않는 문제가 있었음(데이터 바꿔치기는 이미 되어있는데
-  // 화면 표시만 안 따라옴). → 데이터 바꿔치기(최초 진입시 1회만 필요)와 화면 표시 갱신(항상 필요)을 분리.
-  if(!state.kepcoModeActive){
-    syncActiveBidScreen(); // 현재 보고 있던 일반 화면(조달청 등)의 데이터를 먼저 안전하게 저장
-    state.kepcoModeActive=true;
-    state.bid=state.kepcoBid;
-    state.combos=state.kepcoCombos;
+  syncActiveBidScreen();
+  var cur=state.bidScreens[state.activeBidScreenIndex||0];
+  if(cur&&isBlankBidScreen(cur)){
     state.bid.적격기준='한전';
+    activateBidNavSection();
     restoreBidInputsFromState();
     refreshBidStats();
     refreshCombos();
+    renderBidScreenTabs();
+    save();
+    return;
   }
-  document.querySelectorAll('header nav button[data-tab]').forEach(function(b){b.classList.remove('active');});
-  document.querySelectorAll('section[id^="tab-"]').forEach(function(s){s.classList.toggle('hidden',s.id!=='tab-bid');});
-  var _tb=document.getElementById('bid-screen-tabs');if(_tb)_tb.classList.add('hidden');
-  // 2026-08-13: 공고검색 박스는 한전적격 페이지에서도 계속 보이도록 숨김 처리 제거(검색 시 searchBidScreens()가 자동으로 exitKepcoPage() 호출)
-  applyKepcoModeUI(true);
-  save();
-}
-function exitKepcoPage(){
-  if(!state.kepcoModeActive)return;
-  state.kepcoModeActive=false;
-  var idx=state.activeBidScreenIndex||0;
-  var scr=state.bidScreens[idx];
-  if(scr){state.bid=scr.bid;state.combos=scr.combos;}
-  restoreBidInputsFromState();
-  refreshBidStats();
-  refreshCombos();
-  applyKepcoModeUI(false);
+  var nb=defaultBidObj();nb.적격기준='한전';
+  state.bidScreens.unshift({name:'한전',bid:nb,combos:defaultCombos()});
+  state.activeBidScreenIndex=(state.activeBidScreenIndex||0)+1;
   activateBidNavSection();
-  save();
+  switchBidScreen(0);
+  toast('한전 화면 추가','ok');
 }
+// 한전 전용 UI(배지, 시평제한/분담시평 입력 숨김)는 applyInstitutionUI가 적격기준 값으로 호출한다.
 function applyKepcoModeUI(active){
-  var f=document.getElementById('field-적격기준');if(f)f.style.display=active?'none':'';
   var badge=document.getElementById('o-kepco-badge');if(badge)badge.style.display=active?'':'none';
-  var kb=document.getElementById('btn-nav-kepco');if(kb){kb.classList.toggle('active',active);kb.style.boxShadow=active?'0 0 0 2px #ede9fe, 0 0 0 4px #7c3aed':'';kb.style.outline=active?'2px solid #ede9fe':'';}
   var f1=document.getElementById('field-시평제한');if(f1)f1.style.display=active?'none':'';
   var f2=document.getElementById('field-분담시평');if(f2)f2.style.display=active?'none':'';
+}
+// 구버전의 한전 전용 보관함(state.kepcoBid/kepcoCombos)에 내용이 있으면 현재 계정의 화면탭 맨 앞으로 1회 이전.
+function migrateKepcoBidToScreen(){
+  try{
+    var kb=state.kepcoBid,kc=state.kepcoCombos;
+    if(!kb)return;
+    var has=!!(kb.공고명||kb.공고번호||kb.기초금액||kb.추정가격)||(kc||[]).some(function(cb){return(cb.slots||[]).some(function(sl){return((sl&&sl.업체명)||'').trim()!=='';});});
+    if(has){
+      var nb=Object.assign(defaultBidObj(),kb);nb.적격기준='한전';
+      var combos=(kc&&kc.length)?kc:defaultCombos();
+      var nm=(nb.공고명||'').trim().slice(0,6)||'한전';
+      state.bidScreens.unshift({name:nm,bid:nb,combos:combos});
+      state.activeBidScreenIndex=(state.activeBidScreenIndex||0)+1;
+      try{toast('기존 한전 전용 페이지 내용을 화면탭 "'+nm+'"으로 이전했습니다','ok');}catch(e){}
+    }
+    state.kepcoBid=defaultBidObj();state.kepcoBid.적격기준='한전';
+    state.kepcoCombos=Array.from({length:DEFAULT_COMBOS},emptyCombo);
+  }catch(e){console.warn('migrateKepcoBidToScreen',e);}
 }
 // 상단 nav를 '입찰적격판정' 버튼 활성 상태로 맞추고 tab-bid 섹션 + 화면탭 줄(#bid-screen-tabs)을 보여줌.
 // 2026-07-31: 화면탭 클릭/추가 시 다른 nav 버튼(업체DB관리 등)이 눌려있던 상태로 남아 화면탭 줄이
@@ -11616,7 +11638,6 @@ function searchBidScreens(term){
   term=(term||'').trim();
   if(!term){bidTabSearchMatches=[];renderBidScreenTabs();return;}
   // 2026-08-13: 한전적격 페이지에서 검색을 실행하면 입찰적격판정 화면으로 자동 전환 후 검색결과를 표시
-  if(state.kepcoModeActive)exitKepcoPage();
   var q=term.toLowerCase();
   bidTabSearchMatches=state.bidScreens.map(function(scr,i){
     var b=scr.bid||{};
