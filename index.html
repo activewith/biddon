@@ -1900,8 +1900,7 @@ function applyBidInputCollapse(collapsed){
     if(!mp._origParent){mp._origParent=mp.parentNode;mp._origNext=mp.nextSibling;}
     if(collapsed){
       btn.parentNode.insertBefore(mp,pb&&pb.parentNode===btn.parentNode?pb:btn);
-      mp.style.marginLeft='auto';
-      if(pb&&pb.parentNode===btn.parentNode)pb.style.marginLeft='8px';
+      mp.style.marginLeft='12px'; // 버튼들의 우측 정렬(margin-left:auto)은 건드리지 않음 — 문구가 숨겨진 공고에서도 버튼 위치 불변
     }else if(mp._origParent){
       mp._origParent.insertBefore(mp,mp._origNext&&mp._origNext.parentNode===mp._origParent?mp._origNext:null);
       mp.style.marginLeft='';
