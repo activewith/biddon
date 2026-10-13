@@ -311,7 +311,6 @@ body.role-user .railtech-incl{pointer-events:none;background:#f3f4f6}
 /* ── 2026-10-06 조회 전용 모드(html.view-only: 터치 기기 + 폭 1024px 미만) ──
    메뉴: 입찰적격판정/업체DB관리만. 허용 동작: 공고검색·화면탭 선택·DB 검색/필터/정렬·패널 접기/펼치기.
    입력칸/편집 버튼은 숨기거나 pointer-events:none, 추가로 JS 캡처 가드가 클릭을 막는다. */
-html.view-only #btn-nav-kepco,
 html.view-only header nav button[data-tab="railtech"],
 html.view-only #btn-nav-analyzer,
 html.view-only #btn-nav-analyzer2,
@@ -395,7 +394,6 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
     <button type="button" id="btn-bid-tab-search" style="background:#334155;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap">검색</button>
   </span>
   <nav>
-    <button type="button" id="btn-nav-kepco" class="btn btn-sm" style="background:#7c3aed;color:#fff;font-weight:700" title="한국전력공사 적격 전용 페이지">⚡ 한전</button>
     <button data-tab="bid" id="btn-nav-bid" class="active">입찰적격판정</button>
     <button data-tab="db">업체 DB 관리</button>
     <button data-tab="railtech">🚄 철도기술점수</button>
@@ -9022,7 +9020,6 @@ function bind(){
   })();
   document.querySelectorAll('header nav button[data-tab]').forEach(function(btn){
     btn.addEventListener('click',function(){
-      var _kbtn0=document.getElementById('btn-nav-kepco');if(_kbtn0)_kbtn0.classList.remove('active');
       document.querySelectorAll('header nav button[data-tab]').forEach(function(b){b.classList.toggle('active',b===btn);});
       document.querySelectorAll('section[id^="tab-"]').forEach(function(s){s.classList.toggle('hidden',s.id!=='tab-'+btn.dataset.tab);});
       // 입찰적격판정 화면탭 줄(#bid-screen-tabs)은 '입찰적격판정' 버튼을 눌렀을 때만 보이도록 함 —
@@ -9158,7 +9155,6 @@ function bind(){
       refreshCombos();
     });
   })();
-  (function(){var _kb=$('#btn-nav-kepco');if(_kb)_kb.addEventListener('click',enterKepcoPage);})();
   (function(){var _ab=$('#btn-nav-alert');if(_ab)_ab.addEventListener('click',showExpiryAlertModal);})();
   (function(){var _dbf=$('#in-db기준');if(!_dbf)return;
     _dbf.addEventListener('change',function(){
@@ -11526,37 +11522,10 @@ function switchBidScreen(idx){
 }
 // ── 한전적격 전용 페이지 ─────────────────────────────────────────────
 // 기존 입찰적격판정(#tab-bid) 화면/로직을 그대로 재사용하되, state.bid/state.combos를
-// [구방식 설명 — 2026-10-13 통합으로 폐지됨: 아래 enterKepcoPage는 이제 일반 화면탭을 한전으로 여는 단축키]
+// [구방식 설명 — 2026-10-13 통합으로 폐지됨: 한전 전용 버튼/페이지 없음. 한전은 적격기준="한전"인 일반 화면탭]
 // 적격기준은 이 페이지에서는 항상 '한전'으로 고정되며, 다른 기관(조달청/LH 등)의 일반 화면탭(bidScreens)과는
 // 완전히 분리된 저장공간을 쓰므로 서로 데이터가 섞이지 않는다.
-function isBlankBidScreen(scr){
-  var b=(scr&&scr.bid)||{};
-  if(b.공고명||b.공고번호||b.기초금액||b.추정가격)return false;
-  return !((scr&&scr.combos)||[]).some(function(cb){return(cb.slots||[]).some(function(sl){return((sl&&sl.업체명)||'').trim()!=='';});});
-}
-// 2026-10-13 통합: 한전은 더 이상 별도 보관함(kepcoBid)을 쓰지 않고, 적격기준='한전'인 일반 화면탭으로 동작한다.
-// '⚡ 한전' 버튼 = "적격기준이 한전인 화면탭을 열어주는 단축키". 현재 탭이 비어 있으면 그 탭을 한전으로 바꾸고,
-// 내용이 있으면 새 탭을 추가한다. 한전 전용 UI는 현재 탭의 b.적격기준에서 매번 도출(applyKepcoModeUI).
-function enterKepcoPage(){
-  syncActiveBidScreen();
-  var cur=state.bidScreens[state.activeBidScreenIndex||0];
-  if(cur&&isBlankBidScreen(cur)){
-    state.bid.적격기준='한전';
-    activateBidNavSection();
-    restoreBidInputsFromState();
-    refreshBidStats();
-    refreshCombos();
-    renderBidScreenTabs();
-    save();
-    return;
-  }
-  var nb=defaultBidObj();nb.적격기준='한전';
-  state.bidScreens.unshift({name:'한전',bid:nb,combos:defaultCombos()});
-  state.activeBidScreenIndex=(state.activeBidScreenIndex||0)+1;
-  activateBidNavSection();
-  switchBidScreen(0);
-  toast('한전 화면 추가','ok');
-}
+// 2026-10-13 통합: 한전 전용 버튼/페이지는 폐지됨. 한전은 적격기준='한전'인 일반 화면탭이며, 공고문분석 판정 또는 적격기준 선택으로 진입한다.
 // 한전 전용 UI(배지, 시평제한/분담시평 입력 숨김)는 applyInstitutionUI가 적격기준 값으로 호출한다.
 function applyKepcoModeUI(active){
   var badge=document.getElementById('o-kepco-badge');if(badge)badge.style.display=active?'':'none';
