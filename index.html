@@ -6935,8 +6935,8 @@ function extractBidFields(t){
       var _anchors=[/주\s*공\s*정[^\d]{0,60}?기\s*간[^\d]{0,30}/,/주\s*공\s*정[^\d]{0,40}/];
       var _out=[];
       for(var _ai=0;_ai<_anchors.length&&!_out.length;_ai++){
-        var _am=t.match(_anchors[_ai]);
-        if(!_am)continue;
+        var _ag=new RegExp(_anchors[_ai].source,'g'),_am;
+        while(!_out.length&&(_am=_ag.exec(t))){
         var _pos=_am.index+_am[0].length;
         while(_pos<t.length){
           var _rg=new RegExp(_D1+_SEP+_D2,'y');_rg.lastIndex=_pos;
@@ -6949,6 +6949,7 @@ function extractBidFields(t){
           _pos=_rg.lastIndex;
           var _gap=/^[\s\/,·、;]*/.exec(t.slice(_pos))[0];
           _pos+=_gap.length;
+        }
         }
       }
       if(_out.length)r.주공정예정기간=_out.join(' / ');
@@ -7259,6 +7260,9 @@ function showPdfResultModal(found,preview){
         '<button type="button" data-pdf-region-add style="font-size:11px;padding:2px 6px;line-height:1;border:1px solid #f59e0b;border-radius:3px;background:#fffbeb;color:#b45309;cursor:pointer">＋</button>'+
       '</div>';
     }
+    if(k==='주공정예정기간'){
+      return '<input type="text" data-pdf-manual="'+k+'" placeholder="예: 2026. 10. 19 ~ 2026. 12. 13" style="'+st+'">';
+    }
     // 나머지 항목은 숫자 직접입력형
     var numAttrs={추정가격:'min="0" step="1"',분담시평:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"'};
     var ph=_pdfPlaceholder(k,found);
@@ -7340,6 +7344,8 @@ function showPdfResultModal(found,preview){
     }).join('');
   }
   var individualKeys=keys.filter(function(k){return !commonKeys.includes(k)&&!excludeKeys.includes(k);});
+  // 2026-10-12: 한전은 주공정예정기간이 미검출이어도 개별항목에 행을 항상 표시(직접입력 가능, 값이 있으면 체크 시 반영)
+  if(found.적격기준==='한전'&&!individualKeys.includes('주공정예정기간'))individualKeys.push('주공정예정기간');
   function _buildIndividualRows(){
     return individualKeys.map(function(k){
       return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'"'+(_rowChecked(k)?' checked':'')+'></td>'+
