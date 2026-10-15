@@ -5338,25 +5338,45 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
     // 아래 일반 목록(그룹별/전체)에서는 위 고정칸에 이미 나온 업체를 중복 표시하지 않음
     if(pinnedNames.size>0)list=list.filter(function(c){return !pinnedNames.has(c.업체명);});
   }
-  // 그룹별 optgroup 렌더링
+  // 2026-10-15: 업체선택 목록 순서 = 그룹 → 개별 → 감점 → (====) 단독/미달 등.
+  // 그룹/개별 구분 없이 경영상태 감점이 있는 업체는 '감점' 섹터(맨 아래, ==== 위)로 모은다.
+  // 감점 판정은 makeOpt 라벨에 감점이 반영되는 경로와 동일 (지자체=jijaEffectiveDeduction, 그 외=getEffectiveDeduction).
+  function hasDed(c){
+    if(!calc)return false;
+    try{
+      if(calc.isJija)return !!showPct&&jijaEffectiveDeduction(c,calc).value>0;
+      return getEffectiveDeduction(c,calc,effPerfGongjong(grp,calc)).value>0;
+    }catch(e){return false;}
+  }
+  var _dedList=list.filter(hasDed);
+  var _dedSet=new Set(_dedList.map(function(c){return c.업체명;}));
+  var _mainList=list.filter(function(c){return !_dedSet.has(c.업체명);});
+  // 그룹별 optgroup 렌더링 (감점 업체 제외)
   var groups=state.groups&&state.groups.length>0?state.groups:[];
   if(groups.length>0){
     var assigned=new Set();
     groups.forEach(function(g){
-      var gList=list.filter(function(c){return c.groups&&c.groups.indexOf(g)>=0;});
+      var gList=_mainList.filter(function(c){return c.groups&&c.groups.indexOf(g)>=0;});
       if(!gList.length)return;
       html+='<optgroup label="'+esc(g)+'">';
       gList.forEach(function(c){html+=makeOpt(c);assigned.add(c.업체명);});
       html+='</optgroup>';
     });
-    var ungrouped=list.filter(function(c){return !assigned.has(c.업체명);});
+    var ungrouped=_mainList.filter(function(c){return !assigned.has(c.업체명);});
     if(ungrouped.length>0){
       if(assigned.size>0)html+='<optgroup label="─────────────">';
       ungrouped.forEach(function(c){html+=makeOpt(c);});
       if(assigned.size>0)html+='</optgroup>';
     }
   } else {
-    html+=list.map(makeOpt).join('');
+    html+=_mainList.map(makeOpt).join('');
+  }
+  // 감점 섹터
+  if(_dedList.length>0){
+    var _sepNeeded=_mainList.length>0||pinnedNames.size>0;
+    if(_sepNeeded)html+='<optgroup label="─────────────">';
+    _dedList.forEach(function(c){html+=makeOpt(c);});
+    if(_sepNeeded)html+='</optgroup>';
   }
   var renderedNames=new Set(list.map(function(c){return c.업체명;}));
   pinnedNames.forEach(function(n){renderedNames.add(n);});
