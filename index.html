@@ -319,6 +319,7 @@ html.view-only #settings-alert-dot,
 html.view-only #btn-gist-sync,
 html.view-only #btn-mypw,
 html.view-only #btn-nav-alert,
+html.view-only #btn-nav-cancel,
 html.view-only #btn-add-bid-screen,
 html.view-only .bid-del-btn,
 html.view-only #btn-paste-text,
@@ -376,7 +377,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
     <h1 style="margin:0">입찰 적격심사 도구</h1>
     <a href="https://bid.activewith.net" style="font-size:10px;color:#94a3b8;text-decoration:none">https://bid.activewith.net</a>
   </div>
-  <span class="small" style="color:#94a3b8">v6.26</span>
+  <span class="small" style="color:#94a3b8">v6.27</span>
   <span id="viewmode-box" style="display:none;align-items:center;gap:4px">
     <button type="button" id="btn-view-refresh" class="btn btn-sm" style="background:#334155;color:#fff;display:none" title="클라우드에서 최신 데이터를 다시 받습니다">↻ 새로고침</button>
     <button type="button" id="btn-viewmode" class="btn btn-sm" style="background:#0f766e;color:#fff;font-weight:700" title="조회 전용 ↔ PC 화면(편집) 전환"></button>
@@ -389,6 +390,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
   </span>
   <span id="session-info"><span id="session-user-label"></span><button id="btn-mypw" class="btn btn-ghost btn-sm" title="내 비밀번호 변경" style="padding:2px 6px">🔑</button><button id="btn-logout" class="btn btn-sm" style="background:#475569" title="로그아웃">로그아웃</button><button type="button" id="btn-usage-guide" class="btn btn-sm" style="background:#0891b2" title="사용법 문서를 새 창으로 엽니다">📘 사용법</button></span>
   <span id="bid-tab-search-box" style="display:flex;align-items:center;gap:4px;margin-left:auto">
+    <button type="button" id="btn-nav-cancel" class="btn btn-sm" style="background:#64748b;color:#fff;font-weight:700;font-size:8px;line-height:1.1;padding:2px 7px;text-align:center" title="취소공고 목록 (취소일로부터 1개월 보관 후 자동삭제)">취소<br>공고</button>
     <button type="button" id="btn-nav-alert" class="btn btn-sm" style="background:#dc2626;color:#fff;font-weight:700" title="만료임박 확인 알림 다시 보기">🔔 알림</button>
     <input type="text" id="in-bid-tab-search" placeholder="공고검색" style="width:120px;padding:5px 8px;border:1px solid #475569;border-radius:6px;background:#0f172a;color:#fff;font-size:12px">
     <button type="button" id="btn-bid-tab-search" style="background:#334155;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap">검색</button>
@@ -469,7 +471,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
           </select>
         </div>
         <button class="btn" id="btn-paste-text" title="스캔 PDF 등 직접 추출이 안 될 때 텍스트를 붙여넣어 분석" style="background:#2563eb;color:#fff;border-color:#1d4ed8">📋 공고문분석(텍스트)</button>
-        <button class="btn" id="btn-reset-bid" style="background:#111827;color:#fff;border-color:#111827">공고 초기화</button>
+        <button class="btn" id="btn-reset-bid" style="background:#111827;color:#fff;border-color:#111827" title="이 공고의 조합결과TXT를 [취소공고]로 보내고(취소일 기록, 1개월 보관) 입력값을 초기화합니다">공고취소</button>
         <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 메모 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 한줄요약/메모</button>
         <div id="o-주공정기간" class="main-proc-warn" style="display:none" title="공고문분석에서 추출한 주공정 작업 예정기간"></div>
       </div>
@@ -837,6 +839,9 @@ const state={
   // 2026-08-14: 외부앱(설정>외부앱) 등록 데이터. 예전엔 별도 localStorage 키(jodal_extapps_v1)에만 저장돼
   // Gist 동기화 대상(state)에서 빠져있었음 — state에 포함시켜 db/조합처럼 ☁ Push/Pull로 다른 기기에도 전달되도록 함.
   extApps:{1:{name:'',html:'',updated:''},2:{name:'',html:'',updated:''}},
+  // 2026-10-16: 취소공고 보관함 — [공고취소] 버튼으로 보낸 공고의 조합결과TXT. [{id,cancelledAt(ISO),공고명,공고번호,적격기준,txt,by}]
+  // 취소일로부터 1개월 지나면 pruneCancelledBids()가 자동삭제. 전체 계정 공통, Gist 동기화 대상.
+  cancelledBids:[],
   // 2026-09-08: 헤더 "📘 사용법" 버튼이 새 창으로 여는 사용설명서(HTML) 원본. gzip+base64로 저장(외부앱과 동일 방식),
   // 설정 탭바 우측 "사용법UPLOAD" 버튼(관리자 이상)으로 교체 업로드 가능. 전체 계정 공통, Gist로 동기화됨.
   usageGuide:{html:DEFAULT_USAGE_GUIDE_B64,gz:true,updated:'2026-09-08T00:00:00.000Z'},
@@ -937,6 +942,8 @@ function gistApplyData(obj){
   }
   if(obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object')state.bidScreensByUser=obj.bidScreensByUser;
   if(obj.extApps&&typeof obj.extApps==='object')state.extApps=obj.extApps; // 2026-08-14: 외부앱도 다른 필드와 동일하게 pull 적용
+  if(Array.isArray(obj.cancelledBids))state.cancelledBids=obj.cancelledBids; // 2026-10-16 취소공고
+  try{pruneCancelledBids();}catch(e){}
   if(obj.usageGuide&&typeof obj.usageGuide==='object'&&obj.usageGuide.html)state.usageGuide=obj.usageGuide; // 2026-09-08: 사용법 문서도 다른 기기에서 업로드한 최신본으로 pull 적용
   (function(){var _s=getSession();if(_s)loadBidScreensForUser(_s.id);})();
   try{runExpiryMaintenance();}catch(e){console.warn('runExpiryMaintenance error:',e);}
@@ -1508,6 +1515,7 @@ function renderBackupPanel(){
 function restoreStateFromBackupObj(obj){
   migrateV1(obj);migrateV2(obj);migrateV3(obj);migrateV4(obj);
   migrateV5(obj);migrateV6(obj);migrateV7(obj);migrateV8(obj);migrateV9(obj);migrateV10(obj);migrateV11(obj);migrateV12(obj);migrateV13(obj);
+  if(Array.isArray(obj.cancelledBids)){state.cancelledBids=obj.cancelledBids;try{pruneCancelledBids();}catch(e){}} // 2026-10-16 취소공고
   if(obj.db)state.db=obj.db;
   normalizeCompanyGroups(state.db);
   if(obj.groups)state.groups=obj.groups;
@@ -1639,6 +1647,8 @@ function load(){
     }
     if(obj.bidScreensByUser&&typeof obj.bidScreensByUser==='object')state.bidScreensByUser=obj.bidScreensByUser;
     if(obj.extApps&&typeof obj.extApps==='object')state.extApps=obj.extApps; // 2026-08-14: 로컬 재로드 시에도 외부앱 유지
+    if(Array.isArray(obj.cancelledBids))state.cancelledBids=obj.cancelledBids; // 2026-10-16 취소공고
+    try{pruneCancelledBids();}catch(e){}
     if(obj.usageGuide&&typeof obj.usageGuide==='object'&&obj.usageGuide.html)state.usageGuide=obj.usageGuide; // 2026-09-08: 로컬 재로드 시에도 업로드한 사용법 문서 유지
     var _s=getSession();
     if(_s)loadBidScreensForUser(_s.id);
@@ -4199,6 +4209,97 @@ function expiryWarnHTML(c){
   }).join(' / ');
   return ' <span class="exp-warn-badge" title="'+esc(tip)+'" style="color:#dc2626;font-weight:700;font-size:10px;cursor:help;white-space:nowrap">⚠주의</span>';
 }
+// ████ 취소공고 (2026-10-16) ████
+// [공고취소] 버튼 → 현재 공고의 조합결과TXT를 state.cancelledBids에 보관. 보관기간: 취소일로부터 1개월(달력 기준).
+function cancelledBidExpireAt(item){
+  var d=new Date(item.cancelledAt);if(isNaN(d))return new Date(0);
+  var e=new Date(d.getTime());e.setMonth(e.getMonth()+1);
+  if(e.getDate()!==d.getDate())e.setDate(0); // 1/31 → 2월말처럼 다음달에 같은 날이 없으면 그 달 말일
+  return e;
+}
+function pruneCancelledBids(){
+  if(!Array.isArray(state.cancelledBids)){state.cancelledBids=[];return false;}
+  var now=new Date();var before=state.cancelledBids.length;
+  state.cancelledBids=state.cancelledBids.filter(function(it){return it&&cancelledBidExpireAt(it)>now;});
+  return state.cancelledBids.length!==before;
+}
+function bidHasCancelableContent(){
+  var b=state.bid||{};
+  if(String(b.공고명||'').trim()||String(b.공고번호||'').trim())return true;
+  return (state.combos||[]).some(function(c){return c&&c.slots&&c.slots.some(function(s){return String(s.업체명||'').trim()!=='';});});
+}
+function addCancelledBidFromCurrent(){
+  var txt='';
+  try{window.__CT_RETURN_ONLY=true;txt=exportCombosText()||'';}
+  catch(e){console.warn('취소공고 TXT 생성 실패',e);txt=buildBidMsgHeader(state.bid)||'';}
+  finally{window.__CT_RETURN_ONLY=false;}
+  if(!Array.isArray(state.cancelledBids))state.cancelledBids=[];
+  var _s=null;try{_s=getSession();}catch(e){}
+  state.cancelledBids.unshift({
+    id:'cb'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    cancelledAt:new Date().toISOString(),
+    공고명:state.bid.공고명||'',공고번호:state.bid.공고번호||'',적격기준:state.bid.적격기준||'',
+    txt:txt,by:(_s&&(_s.name||_s.id))||''
+  });
+  pruneCancelledBids();
+  return true;
+}
+function _fmtCancelTs(iso){
+  var d=new Date(iso);if(isNaN(d))return '-';
+  var p=function(n){return (n<10?'0':'')+n;};
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+function showCancelledBidsModal(){
+  var changed=pruneCancelledBids();
+  if(changed)save();
+  var root=MODAL_ROOT;
+  var list=state.cancelledBids||[];
+  var now=new Date();
+  var rows=list.map(function(it,i){
+    var exp=cancelledBidExpireAt(it);
+    var dLeft=Math.ceil((exp-now)/86400000);
+    var title=(it.공고명||'(공고명 없음)')+(it.공고번호?' ('+it.공고번호+')':'');
+    return '<tr data-cbid="'+esc(it.id)+'" style="border-top:1px solid var(--border)">'+
+      '<td style="padding:6px 8px;white-space:nowrap;font-size:12px">'+esc(_fmtCancelTs(it.cancelledAt))+'</td>'+
+      '<td style="padding:6px 8px;font-size:12px;font-weight:600;word-break:break-all">'+esc(title)+(it.적격기준?' <span style="font-weight:400;color:#64748b">['+esc(it.적격기준)+']</span>':'')+'</td>'+
+      '<td style="padding:6px 8px;white-space:nowrap;font-size:11px;color:'+(dLeft<=3?'#dc2626':'#64748b')+'" title="자동삭제 예정: '+esc(_fmtCancelTs(exp.toISOString()))+'">D-'+dLeft+'</td>'+
+      '<td style="padding:6px 8px;white-space:nowrap;text-align:right">'+
+        '<button type="button" class="btn btn-ghost btn-sm cb-view" style="padding:2px 8px;font-size:11px">보기</button> '+
+        '<button type="button" class="btn btn-ghost btn-sm cb-copy" style="padding:2px 8px;font-size:11px">📋 복사</button> '+
+        '<button type="button" class="btn btn-sm cb-del" style="padding:2px 8px;font-size:11px;background:#dc2626;color:#fff">삭제</button>'+
+      '</td></tr>'+
+      '<tr class="cb-txt-row" data-for="'+esc(it.id)+'" style="display:none"><td colspan="4" style="padding:0 8px 8px">'+
+        '<textarea readonly rows="12" style="width:100%;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;line-height:1.6;box-sizing:border-box;white-space:pre">'+esc(it.txt||'')+'</textarea></td></tr>';
+  }).join('');
+  root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:560px;max-width:96vw;max-height:88vh;padding:0;display:flex;flex-direction:column;overflow:hidden">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:2px solid var(--border)">'+
+      '<span style="font-weight:700;font-size:15px;color:#1e293b">🗂 취소공고 <span style="font-weight:400;font-size:12px;color:#64748b">('+list.length+'건 · 취소일로부터 1개월 보관 후 자동삭제)</span></span>'+
+      '<button id="m-cb-close" class="btn btn-ghost" style="padding:2px 8px">닫기</button>'+
+    '</div>'+
+    '<div style="padding:8px 16px 14px;overflow:auto">'+
+      (list.length?
+        '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f1f5f9;font-size:12px">'+
+        '<th style="padding:6px 8px;text-align:left">취소일시</th><th style="padding:6px 8px;text-align:left">공고</th><th style="padding:6px 8px;text-align:left">남은기간</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+        :'<p style="color:var(--muted);font-size:13px;margin:12px 0">보관 중인 취소공고가 없습니다. 입찰적격판정 화면의 [공고취소] 버튼으로 보낸 공고가 여기에 1개월간 보관됩니다.</p>')+
+    '</div></div></div>';
+  $('#m-cb-close').onclick=function(){root.innerHTML='';};
+  root.querySelector('.modal-back').addEventListener('click',function(ev){if(ev.target===this)root.innerHTML='';});
+  root.querySelectorAll('tr[data-cbid]').forEach(function(tr){
+    var id=tr.getAttribute('data-cbid');
+    var item=(state.cancelledBids||[]).find(function(x){return x.id===id;});
+    var txtRow=root.querySelector('tr.cb-txt-row[data-for="'+id+'"]');
+    tr.querySelector('.cb-view').onclick=function(){var open=txtRow.style.display==='none';txtRow.style.display=open?'':'none';this.textContent=open?'접기':'보기';};
+    tr.querySelector('.cb-copy').onclick=function(){if(item)copyToClipboard(item.txt||'','복사 완료');};
+    tr.querySelector('.cb-del').onclick=function(){
+      if(!confirm('이 취소공고를 삭제할까요?\n'+((item&&item.공고명)||'')))return;
+      state.cancelledBids=(state.cancelledBids||[]).filter(function(x){return x.id!==id;});
+      save();try{gistPushNow();}catch(e){}
+      showCancelledBidsModal();
+      toast('삭제했습니다','ok');
+    };
+  });
+}
+// ████ END 취소공고 ████
 function showExpiryAlertModal(){
   var list=[];
   state.db.forEach(function(c){
@@ -7906,6 +8007,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     }
   }
   var txt=out.join('\n');
+  if(window.__CT_RETURN_ONLY)return txt; // 2026-10-16: 공고취소 시 텍스트만 받아 취소공고로 보관(팝업 없음)
   // 팝업으로 표시
   var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:480px;max-width:96vw;padding:0;overflow:hidden">'+
@@ -9185,6 +9287,7 @@ function bind(){
     });
   })();
   (function(){var _ab=$('#btn-nav-alert');if(_ab)_ab.addEventListener('click',showExpiryAlertModal);})();
+  (function(){var _cb=$('#btn-nav-cancel');if(_cb)_cb.addEventListener('click',showCancelledBidsModal);})();
   (function(){var _dbf=$('#in-db기준');if(!_dbf)return;
     _dbf.addEventListener('change',function(){
       state.bid.dbFixed=this.value;
@@ -9351,8 +9454,14 @@ function bind(){
     });
   }
 
-  // 공고 초기화
+  // 공고취소(2026-10-16, 구 "공고 초기화"): 내용이 있으면 조합결과TXT를 취소공고로 보관한 뒤 기존과 동일하게 초기화
   $('#btn-reset-bid').addEventListener('click',function(){
+    var _sentCancel=false;
+    if(bidHasCancelableContent()){
+      if(!confirm('이 공고를 [취소공고]로 보내고 입력값을 초기화합니다.\n(조합결과TXT 내용이 취소일자와 함께 1개월간 보관됩니다)\n\n계속할까요?'))return;
+      if(!addCancelledBidFromCurrent())return;
+      _sentCancel=true;
+    }
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
       지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
@@ -9373,6 +9482,7 @@ function bind(){
     var _rlh4=$('#in-lh순공사원가');if(_rlh4)_rlh4.value='';
     state.bid.품질평가점수=2;
     save();refreshBidStats();refreshCombos();updateBidNameLabel();
+    if(_sentCancel){toast('취소공고로 보냈습니다','ok');try{gistPushNow();}catch(e){}} // 새로고침 시 Pull로 되돌아가지 않도록 즉시 Push(외부앱 저장과 동일 사유)
   });
 
   // 조합 입력 이벤트
