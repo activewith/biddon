@@ -565,6 +565,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
         &nbsp;&nbsp;
         <label class="small" title="참여 중인 공종(전기/통신/소방) 중 시평액이 0이거나 비어 있는 것이 있는 업체만 표시"><input type="checkbox" id="db-filter-시평없음"> 시평 미등록</label>
         <label class="small" title="1회성(임시)으로 분류된 업체만 표시"><input type="checkbox" id="db-filter-임시"> 1회성(임시)</label>
+        <button class="btn btn-ghost" id="btn-db-stats" style="border-color:#0f766e;color:#0f766e;margin-left:12px" title="협정 유효업체 기준(시평·실적·감점)으로 업체를 추리고 지역별 분포를 원형그래프로 보기">📊 통계</button>
       </div>
       <div class="toolbar" id="db-group-toolbar" style="flex-wrap:wrap;gap:6px;align-items:center;min-height:30px">
         <span style="font-size:12px;color:#6b7280">그룹 보기:</span>
@@ -5595,6 +5596,196 @@ function dbGamHTML(c,공종override){
     if(_baseGr){var _crExpD=Math.round((15-_baseGr*15/35)*100)/100;if(_crExpD<dv7)_crExpHint=' <span style="color:#9ca3af;font-size:10px;font-weight:400" title="'+_crExpCheck.grade+' 만료('+(_crExpCheck.expiry?_crExpCheck.expiry.toISOString().slice(0,7):'?')+') — 갱신 필요">⚠'+_crExpCheck.grade+'만료</span>';}
   }
   return '<span title="'+tip7+' | '+tip6+'" style="color:'+color+';font-size:11px">'+fmt(dv7)+'('+fmt(dv6)+')'+(_crExpHint?'':'')+_crExpHint+'</span>';
+}
+
+// ████ SECTION: 업체 통계 (2026-10-19) ████
+// 업체DB 관리 > "📊 통계" 버튼 → 팝업. 협정 유효업체 기준(공종·시평·5년실적·감점 등)으로 업체를 추리고
+// 지역별 분포를 원형그래프로 표시. 그래프 조각/범례를 누르면 아래 목록이 그 지역만으로 좁혀짐.
+// 감점은 DB관리 화면 "감점" 칸과 같은 방식(조달청 별표7A 재무비율 감점, 신용평가가 유리하면 신용평가 감점)으로
+// 계산하되, 업계평균은 선택한 공종의 평균(설정 > 업종평균비율)을 사용한다. 재무비율이 없으면 DB의 감점값 사용.
+var STATS_FILTER_KEY='jodal_stats_filter_v1';
+var STATS_COLORS=['#2563eb','#dc2626','#16a34a','#d97706','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5','#0d9488','#be123c','#a16207','#9333ea','#0284c7','#57534e','#15803d','#b91c1c','#1e40af','#c2410c'];
+function statsDeduction(c,jong){
+  var pd=getCompPerfData(c,jong);
+  var credit=getCreditDeduction(c);
+  var ca=activeCompanyAvg();
+  var avgD=Number(ca[jong+'_평균부채'])||0,avgU=Number(ca[jong+'_평균유동'])||0;
+  var hasD=pd.부채만점||(pd.부채비율!=null&&pd.부채비율!=='');
+  var hasU=pd.유동만점||(pd.유동비율!=null&&pd.유동비율!=='');
+  var dv;
+  if(!avgD||!avgU||!hasD||!hasU){
+    dv=Math.abs(Number(c.감점)||0);
+  }else{
+    var fD=econForcedGrade(pd.부채만점),fU=econForcedGrade(pd.유동만점);
+    var rD=fD?econForcedDebtRatio(fD):(Number(pd.부채비율)/avgD)*100;
+    var rU=fU?econForcedLiqRatio(fU):(Number(pd.유동비율)/avgU)*100;
+    var yr=calcYears(pd.공사업등록일);
+    var bd=부채등급7A(rD),ud=유동등급7A(rU),od=yr!=null?영업등급7(yr):null;
+    dv=parseFloat((15-parseFloat((bd.s+ud.s+(od?od.s:0)).toFixed(3))).toFixed(3));
+  }
+  if(credit&&credit.deduction<dv)dv=credit.deduction;
+  return dv<0?0:dv;
+}
+function statsLoadFilter(){
+  var d={jong:'전기',spMin:'',spMax:'',pfMin:'',pfMax:'',ded:'all',dedMax:'',ex임시:true,exZero:true,sort:'sp'};
+  try{var s=JSON.parse(localStorage.getItem(STATS_FILTER_KEY)||'null');if(s)for(var k in d)if(s[k]!==undefined)d[k]=s[k];}catch(e){}
+  return d;
+}
+function statsSaveFilter(f){try{localStorage.setItem(STATS_FILTER_KEY,JSON.stringify(f));}catch(e){}}
+function statsCompute(f){
+  var E=1e8;
+  function num(v){var n=parseFloat(String(v).replace(/,/g,''));return isNaN(n)?null:n;}
+  var spMin=num(f.spMin),spMax=num(f.spMax),pfMin=num(f.pfMin),pfMax=num(f.pfMax),dedMax=num(f.dedMax);
+  var flag=f.jong==='통신'?'hasT':f.jong==='소방'?'hasS':'hasE';
+  var out=[];
+  (state.db||[]).forEach(function(c){
+    var ti=companyTradeInfo(c);
+    if(!ti[flag])return;
+    if(f.ex임시&&c.is임시)return;
+    var pd=getCompPerfData(c,f.jong);
+    var sp=Number(pd.시평액)||0,p5=Number(pd.실적5)||0,p3=Number(pd.실적3)||0;
+    if(f.exZero&&sp<=0)return;
+    if(spMin!=null&&sp<spMin*E)return;
+    if(spMax!=null&&sp>spMax*E)return;
+    if(pfMin!=null&&p5<pfMin*E)return;
+    if(pfMax!=null&&p5>pfMax*E)return;
+    var ded=statsDeduction(c,f.jong);
+    if(f.ded==='none'&&ded>0)return;
+    if(f.ded==='has'&&ded<=0)return;
+    if(f.ded==='max'&&dedMax!=null&&ded>dedMax+1e-9)return;
+    out.push({c:c,지역:(c.지역||'').trim()||'(미지정)',sp:sp,p5:p5,p3:p3,ded:ded});
+  });
+  return out;
+}
+function statsPieSVG(groups,total,sel){
+  var R=110,cx=120,cy=120;
+  if(!total)return '<div style="width:240px;height:240px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:13px;border:1px dashed #d1d5db;border-radius:50%">해당 업체 없음</div>';
+  var svg='<svg width="240" height="240" viewBox="0 0 240 240" style="display:block">';
+  if(groups.length===1){
+    var g0=groups[0];
+    svg+='<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="'+g0.color+'" data-stat-reg="'+esc(g0.name)+'" style="cursor:pointer"><title>'+esc(g0.name)+' '+g0.n+'개 (100%)</title></circle>';
+  }else{
+    var a0=-Math.PI/2;
+    groups.forEach(function(g){
+      var a1=a0+2*Math.PI*g.n/total;
+      var x0=cx+R*Math.cos(a0),y0=cy+R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy+R*Math.sin(a1);
+      var large=(a1-a0)>Math.PI?1:0;
+      var dim=sel&&sel!==g.name;
+      svg+='<path d="M'+cx+','+cy+' L'+x0.toFixed(2)+','+y0.toFixed(2)+' A'+R+','+R+' 0 '+large+' 1 '+x1.toFixed(2)+','+y1.toFixed(2)+' Z" fill="'+g.color+'" stroke="#fff" stroke-width="1.5" opacity="'+(dim?0.25:1)+'" data-stat-reg="'+esc(g.name)+'" style="cursor:pointer"><title>'+esc(g.name)+' '+g.n+'개 ('+(g.n/total*100).toFixed(1)+'%)</title></path>';
+      var am=(a0+a1)/2;
+      if(g.n/total>=0.05){
+        var lx=cx+R*0.66*Math.cos(am),ly=cy+R*0.66*Math.sin(am);
+        svg+='<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#fff" pointer-events="none">'+esc(g.name)+'</text>';
+      }
+      a0=a1;
+    });
+  }
+  svg+='<circle cx="'+cx+'" cy="'+cy+'" r="42" fill="#fff" pointer-events="none"/>'+
+    '<text x="'+cx+'" y="'+(cy-6)+'" text-anchor="middle" font-size="20" font-weight="800" fill="#111827" pointer-events="none">'+(sel?(groups.filter(function(g){return g.name===sel;})[0]||{n:0}).n:total)+'</text>'+
+    '<text x="'+cx+'" y="'+(cy+14)+'" text-anchor="middle" font-size="10" fill="#6b7280" pointer-events="none">'+(sel?esc(sel):'전체')+' 업체</text></svg>';
+  return svg;
+}
+function showStatsModal(){
+  var f=statsLoadFilter();
+  var selReg=null;
+  var ist='width:64px;text-align:right;padding:3px 5px;border:1px solid #d1d5db;border-radius:4px;font-size:12px';
+  MODAL_ROOT.innerHTML='<div class="modal-back"><div class="modal" style="width:900px;max-width:96vw">'+
+    '<h3>📊 업체 통계 <span style="font-size:12px;color:#6b7280;font-weight:400">— 협정 유효업체 기준으로 추리기 · 지역별 분포</span></h3>'+
+    '<div id="st-filter" style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;font-size:12px">'+
+      '<label>공종 <select id="st-jong" style="font-size:12px"><option value="전기">전기</option><option value="통신">통신</option><option value="소방">소방</option></select></label>'+
+      '<span>시평 <input id="st-spMin" style="'+ist+'" placeholder="하한">억 이상 ~ <input id="st-spMax" style="'+ist+'" placeholder="상한">억 이하</span>'+
+      '<span>5년실적 <input id="st-pfMin" style="'+ist+'" placeholder="하한">억 이상 ~ <input id="st-pfMax" style="'+ist+'" placeholder="상한">억 이하</span>'+
+      '<span>감점 <select id="st-ded" style="font-size:12px"><option value="all">전체</option><option value="none">감점 없음(만점)만</option><option value="max">감점 N 이하</option><option value="has">감점 있음만</option></select>'+
+        ' <input id="st-dedMax" style="'+ist+';width:48px" placeholder="N"></span>'+
+      '<label><input type="checkbox" id="st-exZero"> 시평 0(미등록) 제외</label>'+
+      '<label><input type="checkbox" id="st-ex임시"> 1회성(임시) 제외</label>'+
+      '<button class="btn btn-ghost" id="st-reset" style="padding:3px 10px;font-size:12px">기준 초기화</button>'+
+    '</div>'+
+    '<div style="font-size:11px;color:#6b7280;margin:4px 2px 0">빈칸은 제한 없음. 감점은 DB화면 감점칸과 같은 방식(별표7A 재무비율, 신용평가가 유리하면 신용평가)이며 선택 공종의 업종평균비율 기준.</div>'+
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;align-items:flex-start">'+
+      '<div id="st-pie"></div>'+
+      '<div id="st-legend" style="flex:1;min-width:240px;font-size:12px"></div>'+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin:10px 0 4px">'+
+      '<b id="st-list-title" style="font-size:13px"></b>'+
+      '<span style="margin-left:auto;font-size:12px">정렬 <select id="st-sort" style="font-size:12px"><option value="sp">시평 큰순</option><option value="p5">5년실적 큰순</option><option value="reg">지역순</option><option value="ded">감점 적은순</option></select></span>'+
+      '<button class="btn btn-ghost" id="st-xlsx" style="padding:3px 10px;font-size:12px">목록 xlsx</button>'+
+    '</div>'+
+    '<div style="max-height:300px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px"><table style="width:100%;border-collapse:collapse;font-size:12px" id="st-table"></table></div>'+
+    '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="st-close">닫기</button></div>'+
+  '</div></div>';
+  function setUI(){
+    $('#st-jong').value=f.jong;$('#st-spMin').value=f.spMin;$('#st-spMax').value=f.spMax;$('#st-pfMin').value=f.pfMin;$('#st-pfMax').value=f.pfMax;
+    $('#st-ded').value=f.ded;$('#st-dedMax').value=f.dedMax;$('#st-exZero').checked=!!f.exZero;$('#st-ex임시').checked=!!f.ex임시;$('#st-sort').value=f.sort;
+  }
+  function readUI(){
+    f.jong=$('#st-jong').value;f.spMin=$('#st-spMin').value.trim();f.spMax=$('#st-spMax').value.trim();f.pfMin=$('#st-pfMin').value.trim();f.pfMax=$('#st-pfMax').value.trim();
+    f.ded=$('#st-ded').value;f.dedMax=$('#st-dedMax').value.trim();f.exZero=$('#st-exZero').checked;f.ex임시=$('#st-ex임시').checked;f.sort=$('#st-sort').value;
+  }
+  var lastRows=[];
+  function eok(v){return v>0?(v/1e8).toFixed(1)+'억':'-';}
+  function render(){
+    $('#st-dedMax').style.display=f.ded==='max'?'':'none';
+    var rows=statsCompute(f);
+    var cnt={};rows.forEach(function(r){cnt[r.지역]=(cnt[r.지역]||0)+1;});
+    var names=Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a]||a.localeCompare(b);});
+    var groups=names.map(function(n,i){return{name:n,n:cnt[n],color:STATS_COLORS[i%STATS_COLORS.length]};});
+    if(selReg&&!cnt[selReg])selReg=null;
+    var total=rows.length;
+    $('#st-pie').innerHTML=statsPieSVG(groups,total,selReg);
+    $('#st-legend').innerHTML='<div style="margin-bottom:4px;color:#374151">조건 충족 <b>'+total+'</b>개 / '+f.jong+' 참여 업체 기준 · 지역 '+groups.length+'곳'+(selReg?' · <a href="#" id="st-clear-sel" style="color:#2563eb">지역선택 해제</a>':'')+'</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 10px">'+
+      groups.map(function(g){
+        var on=selReg===g.name;
+        return '<div data-stat-reg="'+esc(g.name)+'" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 4px;border-radius:4px;'+(on?'background:#eff6ff;outline:1px solid #93c5fd;':'')+(selReg&&!on?'opacity:.45;':'')+'">'+
+          '<span style="width:10px;height:10px;border-radius:2px;background:'+g.color+';flex:0 0 10px"></span>'+
+          '<span style="flex:1">'+esc(g.name)+'</span><b>'+g.n+'</b><span style="color:#6b7280;width:44px;text-align:right">'+(g.n/total*100).toFixed(1)+'%</span></div>';
+      }).join('')+'</div>';
+    var list=selReg?rows.filter(function(r){return r.지역===selReg;}):rows.slice();
+    list.sort(function(a,b){
+      if(f.sort==='p5')return b.p5-a.p5;
+      if(f.sort==='reg')return a.지역.localeCompare(b.지역)||b.sp-a.sp;
+      if(f.sort==='ded')return a.ded-b.ded||b.sp-a.sp;
+      return b.sp-a.sp;
+    });
+    lastRows=list;
+    $('#st-list-title').textContent=(selReg?selReg+' ':'')+'업체 목록 ('+list.length+'개)';
+    var th='style="position:sticky;top:0;background:#f3f4f6;padding:4px 6px;border-bottom:1px solid #e5e7eb"';
+    var thL=th.replace('border-bottom','text-align:left;border-bottom');
+    $('#st-table').innerHTML='<thead><tr><th '+thL+'>지역</th><th '+thL+'>업체명</th><th '+th+'>시평</th><th '+th+'>5년실적</th><th '+th+'>3년실적</th><th '+th+'>감점</th></tr></thead><tbody>'+
+      (list.length?list.map(function(r){
+        var td='style="padding:3px 6px;border-bottom:1px solid #f3f4f6;text-align:right"';
+        return '<tr><td style="padding:3px 6px;border-bottom:1px solid #f3f4f6;text-align:left">'+esc(r.지역)+'</td><td style="padding:3px 6px;border-bottom:1px solid #f3f4f6;text-align:left">'+esc(r.c.업체명)+'</td>'+
+          '<td '+td+' title="'+FMT_NUM(r.sp)+'">'+eok(r.sp)+'</td><td '+td+' title="'+FMT_NUM(r.p5)+'">'+eok(r.p5)+'</td><td '+td+' title="'+FMT_NUM(r.p3)+'">'+eok(r.p3)+'</td>'+
+          '<td '+td+'>'+(r.ded>0?'<span style="color:#dc2626">-'+TRIM3(r.ded)+'</span>':'<span style="color:#16a34a">만점</span>')+'</td></tr>';
+      }).join(''):'<tr><td colspan="6" style="padding:14px;text-align:center;color:#9ca3af">조건에 맞는 업체가 없습니다</td></tr>')+'</tbody>';
+    statsSaveFilter(f);
+  }
+  setUI();render();
+  var fw=$('#st-filter');
+  // 값이 실제로 바뀐 경우에만 다시 그림 — 입력칸에서 포커스가 빠질 때 생기는 change(이미 input에서 반영됨)로
+  // 그래프/범례가 다시 그려지면, 그 순간 누른 범례 클릭이 새 요소로 이어지지 않아 무시되는 문제 방지.
+  function upd(){var before=JSON.stringify(f);readUI();if(JSON.stringify(f)!==before)render();}
+  fw.addEventListener('input',upd);
+  fw.addEventListener('change',upd);
+  $('#st-sort').addEventListener('change',upd);
+  $('#st-reset').onclick=function(){f={jong:f.jong,spMin:'',spMax:'',pfMin:'',pfMax:'',ded:'all',dedMax:'',ex임시:true,exZero:true,sort:f.sort};selReg=null;setUI();render();};
+  MODAL_ROOT.querySelector('.modal').addEventListener('click',function(e){
+    if(e.target.id==='st-clear-sel'){e.preventDefault();selReg=null;render();return;}
+    var el=e.target.closest&&e.target.closest('[data-stat-reg]');
+    if(!el)return;
+    var r=el.getAttribute('data-stat-reg');
+    selReg=(selReg===r)?null:r;render();
+  });
+  $('#st-xlsx').onclick=function(){
+    if(typeof XLSX==='undefined'){toast('xlsx 라이브러리를 불러오지 못했습니다','err');return;}
+    var cond='공종 '+f.jong+' / 시평 '+(f.spMin||'-')+'~'+(f.spMax||'-')+'억 / 5년실적 '+(f.pfMin||'-')+'~'+(f.pfMax||'-')+'억 / 감점 '+({all:'전체',none:'없음만',has:'있음만',max:(f.dedMax||'-')+' 이하'})[f.ded]+(selReg?' / 지역 '+selReg:'');
+    var aoa=[['조건: '+cond],['지역','업체명','시평액','5년실적','3년실적','감점']].concat(lastRows.map(function(r){return[r.지역,r.c.업체명,r.sp,r.p5,r.p3,r.ded];}));
+    var ws=XLSX.utils.aoa_to_sheet(aoa);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'통계');
+    var d=new Date();var fn='업체통계_'+f.jong+'_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'.xlsx';
+    XLSX.writeFile(wb,fn);toast('xlsx 저장 완료: '+fn,'ok');
+  };
+  $('#st-close').onclick=function(){MODAL_ROOT.innerHTML='';};
 }
 
 // ████ SECTION: 그룹관리 (refreshGroupToolbar/addGroup) ████
@@ -10827,6 +11018,7 @@ function bind(){
   $('#file-import').addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;importXlsx(f,$('#import-mode').value);e.target.value='';});
   $('#btn-add-company').addEventListener('click',function(){openCompanyModal(null);});
   $('#btn-import-cert').addEventListener('click',openCertModal);
+  $('#btn-db-stats').addEventListener('click',showStatsModal);
   $('#btn-exp-alert').addEventListener('click',function(){
     var nowActive=this.classList.toggle('active');
     this.style.background=nowActive?'#dc2626':'';
