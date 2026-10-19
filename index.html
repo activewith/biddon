@@ -4777,10 +4777,13 @@ function calcBid(){
     var _한전입력=b.한전실적입력||{};
     var _한전배수=Number(_한전입력.배수)||0;
     var _kKeys=isComplexGJ?['전기','분담']:['전기'];
+    // 2026-10-19: "설계금액" 체크 시 기초금액 대신 설계금액에 비율%·배수를 곱해 실적제한 산출
+    var _한전설계=(_한전입력.설계사용&&Number(_한전입력.설계금액)>0)?Number(_한전입력.설계금액):null;
+    var _한전base=_한전설계!=null?_한전설계:E4_eff;
     한전분담E6={};
     _kKeys.forEach(function(k){
       var _pct=isComplexGJ?(Number(_한전입력[k+'_pct'])||0):100;
-      한전분담E6[k]=E4_eff*(_pct/100)*_한전배수;
+      한전분담E6[k]=_한전base*(_pct/100)*_한전배수;
     });
   }
   return{E3:E3,분담시평:분담시평,E4_eff:E4_eff,E5:E5,H4:H4,H6:H6,H7:H7,D7:D7,E6:E6,E7:E7,A값:A값,예정가격:예정가격,
@@ -7261,7 +7264,13 @@ function _kepcoPerfInputBlockHtml(found){
   var 전기pctVal=existing.전기_pct!=null?existing.전기_pct:(elecGuess!=null?elecGuess:'');
   var 분담pctVal=existing.분담_pct!=null?existing.분담_pct:(otherGuess!=null?otherGuess:'');
   var st='width:64px;text-align:right;padding:3px 6px;border:1px solid #c4b5fd;border-radius:4px;font-size:12px;background:#fff';
+  var _dsgnOn=!!existing.설계사용;
+  var _dsgnVal=(existing.설계금액!=null&&existing.설계금액!=='')?FMT_NUM(existing.설계금액):'';
   var rows='<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
+      '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#6b7280;white-space:nowrap;cursor:pointer"><input type="checkbox" id="m-kperf-dsgn-chk"'+(_dsgnOn?' checked':'')+'>설계금액</label>'+
+      '<input type="text" inputmode="numeric" id="m-kperf-dsgn" value="'+esc(_dsgnVal)+'" placeholder="설계금액 입력"'+(_dsgnOn?'':' disabled')+' style="flex:1;min-width:0;text-align:right;padding:3px 6px;border:1px solid #c4b5fd;border-radius:4px;font-size:12px;background:'+(_dsgnOn?'#fff':'#f3f4f6')+'">'+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
       '<span style="font-size:12px;color:#6b7280;width:32px">배수</span>'+
       '<input type="number" step="0.01" min="0" id="m-kperf-mult" value="'+esc(String(multVal))+'" placeholder="예:1" style="'+st+'">'+
     '</div>'+
@@ -7290,6 +7299,8 @@ function _updateKepcoPerfPreview(found){
   var isComplex=isComplexGongjong(normGongjong(found.공종));
   var base=(found.기초금액!=null&&found.기초금액!==''&&!isNaN(found.기초금액))?Number(found.기초금액):
     ((found.추정가격!=null&&found.추정가격!==''&&!isNaN(found.추정가격))?Number(found.추정가격)*getBaseMult():0);
+  var _dChk=document.getElementById('m-kperf-dsgn-chk'),_dIn=document.getElementById('m-kperf-dsgn');
+  if(_dChk&&_dChk.checked&&_dIn){var _dv=parseMoney(_dIn.value);if(_dv!=null&&_dv>0)base=_dv;}
   var multEl=document.getElementById('m-kperf-mult');
   var mult=multEl?(Number(multEl.value)||0):0;
   var pctEEl=document.getElementById('m-kperf-pct-전기');
@@ -7307,10 +7318,16 @@ function _updateKepcoPerfPreview(found){
 function _rebuildKepcoPerfBlock(found){
   var wrap=document.getElementById('m-kperf-wrap');
   if(!wrap)return;
+  var _oldChk=document.getElementById('m-kperf-dsgn-chk'),_oldIn=document.getElementById('m-kperf-dsgn');
+  var _keepChk=_oldChk?_oldChk.checked:null,_keepVal=_oldIn?_oldIn.value:null;
   var tmp=document.createElement('div');
   tmp.innerHTML=_kepcoPerfInputBlockHtml(found);
   var newWrap=tmp.querySelector('#m-kperf-wrap');
   if(newWrap)wrap.outerHTML=newWrap.outerHTML;
+  // 공종 변경으로 블록을 다시 그려도 방금 입력한 설계금액 체크/금액은 유지
+  var _nc=document.getElementById('m-kperf-dsgn-chk'),_ni=document.getElementById('m-kperf-dsgn');
+  if(_nc&&_keepChk!=null){_nc.checked=_keepChk;}
+  if(_ni&&_keepVal!=null){_ni.value=_keepVal;_ni.disabled=!(_nc&&_nc.checked);_ni.style.background=(_nc&&_nc.checked)?'#fff':'#f3f4f6';}
   _bindKepcoPerfInputs(found);
 }
 function _bindKepcoPerfInputs(found){
@@ -7318,6 +7335,16 @@ function _bindKepcoPerfInputs(found){
     var el=document.getElementById(id);
     if(el)el.addEventListener('input',function(){_updateKepcoPerfPreview(found);});
   });
+  var _dChk=document.getElementById('m-kperf-dsgn-chk'),_dIn=document.getElementById('m-kperf-dsgn');
+  if(_dChk&&_dIn){
+    _dChk.addEventListener('change',function(){
+      _dIn.disabled=!_dChk.checked;_dIn.style.background=_dChk.checked?'#fff':'#f3f4f6';
+      if(_dChk.checked)_dIn.focus();
+      _updateKepcoPerfPreview(found);
+    });
+    _dIn.addEventListener('input',function(){_updateKepcoPerfPreview(found);});
+    _dIn.addEventListener('blur',function(){var v=parseMoney(_dIn.value);_dIn.value=v!=null?FMT_NUM(v):'';});
+  }
   _updateKepcoPerfPreview(found);
 }
 // 공고문분석 결과에서 검출 실패해 수동입력칸으로 대체될 때, 기관(적격기준)+추정가격 구간별로
@@ -7632,6 +7659,9 @@ function showPdfResultModal(found,preview){
       if(_mEl&&_mEl.value!=='')state.bid.한전실적입력.배수=Number(_mEl.value);
       if(_pEEl&&_pEEl.value!=='')state.bid.한전실적입력.전기_pct=Number(_pEEl.value);
       if(_pDEl&&_pDEl.value!=='')state.bid.한전실적입력.분담_pct=Number(_pDEl.value);
+      var _dsChk=document.getElementById('m-kperf-dsgn-chk'),_dsIn=document.getElementById('m-kperf-dsgn');
+      if(_dsChk){state.bid.한전실적입력.설계사용=!!_dsChk.checked;}
+      if(_dsIn){var _dsV=parseMoney(_dsIn.value);state.bid.한전실적입력.설계금액=(_dsV!=null&&_dsV>0)?_dsV:null;}
     }
     document.querySelectorAll('[data-pdf-key]').forEach(function(cb){
       if(!cb.checked)return;
@@ -8998,6 +9028,11 @@ function kepcoPerfRowsHtml(c){
   var isComplex=isComplexGongjong(c.공종);
   var 입력=state.bid.한전실적입력||{};
   var keys=isComplex?['전기','분담']:['전기'];
+  var _dsOn=!!입력.설계사용;
+  var dsgnRow='<div style="display:flex;align-items:center;gap:4px;font-size:11px">'+
+    '<label style="display:flex;align-items:center;gap:3px;color:#6b7280;white-space:nowrap;cursor:pointer"><input type="checkbox" data-kperf-dsgn-chk'+(_dsOn?' checked':'')+' style="margin:0">설계금액</label>'+
+    '<input type="text" inputmode="numeric" data-kperf-dsgn value="'+((입력.설계금액!=null&&입력.설계금액!=='')?FMT_NUM(입력.설계금액):'')+'"'+(_dsOn?'':' disabled')+' style="width:96px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #c4b5fd;border-radius:4px;background:'+(_dsOn?'#fff':'#f3f4f6')+'">'+
+  '</div>';
   var multRow='<div style="display:flex;align-items:center;gap:4px;font-size:11px">'+
     '<span style="color:#6b7280">배수</span>'+
     '<input type="number" step="0.01" min="0" data-kperf-mult value="'+(입력.배수!=null?입력.배수:'')+'" placeholder="예:1" style="width:48px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #c4b5fd;border-radius:4px">'+
@@ -9016,7 +9051,7 @@ function kepcoPerfRowsHtml(c){
       '<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>'+
     '</div>';
   }).join('');
-  return '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">'+multRow+itemRows+'</div>';
+  return '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">'+dsgnRow+multRow+itemRows+'</div>';
 }
 // 실적제한(한전분담E6) 값을 기초가격 등 다른 금액표시와 통일된 그레이 소형 "(억)" 표기로 요약.
 // 전기/통신(분담) 두 항목이 한 박스 안에 같이 표시되므로 항목명 첫 글자만 괄호 안에 "+"로 묶어 표기한다
@@ -9274,10 +9309,21 @@ function bind(){
       var t=e.target;
       var pk=t.getAttribute('data-kperf-pct');
       var isMult=t.hasAttribute('data-kperf-mult');
-      if(!pk&&!isMult)return;
+      var isDsChk=t.hasAttribute('data-kperf-dsgn-chk'),isDs=t.hasAttribute('data-kperf-dsgn');
+      if(!pk&&!isMult&&!isDsChk&&!isDs)return;
       if(!state.bid.한전실적입력)state.bid.한전실적입력={};
-      var val=t.value===''?null:Number(t.value);
-      if(isMult)state.bid.한전실적입력.배수=val;else state.bid.한전실적입력[pk+'_pct']=val;
+      if(isDsChk){
+        state.bid.한전실적입력.설계사용=!!t.checked;
+        var _dsI=_kw.querySelector('[data-kperf-dsgn]');
+        if(_dsI){_dsI.disabled=!t.checked;_dsI.style.background=t.checked?'#fff':'#f3f4f6';if(t.checked)_dsI.focus();}
+      }else if(isDs){
+        var _dsv=parseMoney(t.value);
+        state.bid.한전실적입력.설계금액=(_dsv!=null&&_dsv>0)?_dsv:null;
+        t.value=state.bid.한전실적입력.설계금액!=null?FMT_NUM(state.bid.한전실적입력.설계금액):'';
+      }else{
+        var val=t.value===''?null:Number(t.value);
+        if(isMult)state.bid.한전실적입력.배수=val;else state.bid.한전실적입력[pk+'_pct']=val;
+      }
       save();
       var _c=calcBid();
       _kw.querySelectorAll('[data-kperf-calc]').forEach(function(b){
