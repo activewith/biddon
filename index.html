@@ -4784,6 +4784,8 @@ function calcBid(){
     한전분담E6={};
     _kKeys.forEach(function(k){
       var _pct=isComplexGJ?(Number(_한전입력[k+'_pct'])||0):100;
+      // 2026-10-19: 항목별 "수기" 체크 시 계산하지 않고 입력한 금액을 그대로 실적제한으로 사용
+      if(_한전입력[k+'_manual']){한전분담E6[k]=Number(_한전입력[k+'_amt'])||0;return;}
       한전분담E6[k]=_한전base*(_pct/100)*_한전배수;
     });
   }
@@ -4893,7 +4895,7 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
     var _keysK=_isComplexK?['전기','분담']:['전기'];
     var _linesK=_keysK.map(function(k,idxK){
       var _lblK=(k==='분담'?kepcoDamLabel(normGongjong(b.공종)):k);
-      var _pctK=_isComplexK?(Number(_입력K[k+'_pct'])||0):100;
+      var _pctK=(_isComplexK||(_입력K[k+'_manual']&&_입력K[k+'_pct']!=null))?(Number(_입력K[k+'_pct'])||0):100;
       var _valK=(c.한전분담E6&&c.한전분담E6[k]!=null)?c.한전분담E6[k]:0;
       var _eokK=_valK>0?_eokTrim(_valK):'0';
       return (idxK+1)+'. '+_lblK+' '+TRIMDEC(_pctK)+'% ('+_eokK+'억)';
@@ -7465,24 +7467,26 @@ function _kepcoPerfInputBlockHtml(found){
       '<span style="font-size:12px;color:#6b7280;width:32px">배수</span>'+
       '<input type="number" step="0.01" min="0" id="m-kperf-mult" value="'+esc(String(multVal))+'" placeholder="예:1" style="'+st+'">'+
     '</div>'+
-    '<div style="display:flex;align-items:center;gap:6px">'+
-      '<span style="font-weight:700;width:32px;color:#5b21b6;font-size:12px">전기</span>'+
-      (isComplex
-        ?('<input type="number" step="0.01" min="0" max="100" id="m-kperf-pct-전기" value="'+esc(String(전기pctVal))+'" style="'+st+'">%')
-        :'<span style="font-weight:700;font-size:12px">100%<span style="font-size:10px;color:#6b7280;font-weight:400"> (자동)</span></span>')+
-      '<span style="color:#6b7280;font-size:12px">=</span>'+
-      '<b id="m-kperf-calc-전기" style="color:#059669;font-size:12px">-</b>'+
-    '</div>'+
-    (isComplex?(
-      '<div style="display:flex;align-items:center;gap:6px;margin-top:3px">'+
-        '<span style="font-weight:700;width:32px;color:#5b21b6;font-size:12px">'+kepcoDamLabel(normGongjong(found.공종))+'</span>'+
-        '<input type="number" step="0.01" min="0" max="100" id="m-kperf-pct-분담" value="'+esc(String(분담pctVal))+'" style="'+st+'">%'+
-        '<span style="color:#6b7280;font-size:12px">=</span>'+
-        '<b id="m-kperf-calc-분담" style="color:#059669;font-size:12px">-</b>'+
-      '</div>'
-    ):'');
+    _kperfModalRow('전기','전기',전기pctVal,isComplex,existing,st,false)+
+    (isComplex?_kperfModalRow('분담',kepcoDamLabel(normGongjong(found.공종)),분담pctVal,true,existing,st,true):'');
   return '<div style="font-size:12px;font-weight:700;color:#7c3aed;margin:10px 0 4px">⚡ 실적제한 (수기입력)</div>'+
     '<div id="m-kperf-wrap" style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:8px 10px">'+rows+'</div>';
+}
+// 2026-10-19: 실적제한 항목 1줄 — [라벨] [비율]% = [계산값 | 수기금액칸] [□수기]
+// "수기" 체크 시 비율·금액을 모두 직접 입력(금액은 계산하지 않고 입력값 그대로 실적제한으로 사용).
+// 단일공종(전기만)은 평소 100%(자동)이며, 수기 체크 시에만 비율칸이 열린다.
+function _kperfModalRow(k,label,pctVal,pctEditable,existing,st,mt){
+  var man=!!existing[k+'_manual'];
+  var amt=(existing[k+'_amt']!=null&&existing[k+'_amt']!=='')?FMT_NUM(existing[k+'_amt']):'';
+  var pv=(pctEditable||man)?pctVal:100;
+  return '<div style="display:flex;align-items:center;gap:6px'+(mt?';margin-top:3px':'')+'">'+
+    '<span style="font-weight:700;width:32px;color:#5b21b6;font-size:12px">'+esc(label)+'</span>'+
+    '<input type="number" step="0.01" min="0" max="100" id="m-kperf-pct-'+k+'" data-kperf-autopct="'+(pctEditable?'0':'1')+'" value="'+esc(String(pv))+'"'+((pctEditable||man)?'':' disabled')+' style="'+st+((pctEditable||man)?'':';background:#f3f4f6')+'">%'+
+    '<span style="color:#6b7280;font-size:12px">=</span>'+
+    '<b id="m-kperf-calc-'+k+'" style="color:#059669;font-size:12px;flex:1;'+(man?'display:none':'')+'">-</b>'+
+    '<input type="text" inputmode="numeric" id="m-kperf-amt-'+k+'" value="'+esc(amt)+'" placeholder="금액 직접입력" style="flex:1;min-width:0;text-align:right;padding:3px 6px;border:1px solid #f59e0b;border-radius:4px;font-size:12px;background:#fffbeb;'+(man?'':'display:none')+'">'+
+    '<label style="display:flex;align-items:center;gap:3px;font-size:11px;color:#6b7280;white-space:nowrap;cursor:pointer" title="체크하면 비율·금액을 모두 직접 입력(계산 안 함)"><input type="checkbox" id="m-kperf-man-'+k+'"'+(man?' checked':'')+'>수기</label>'+
+  '</div>';
 }
 // _kepcoPerfInputBlockHtml의 입력칸이 바뀔 때마다(또는 공종이 바뀌어 블록 자체가 다시 그려질 때) 계산값(<b>)만 갱신.
 // found.기초금액(없으면 추정가격×1.1)을 base로 사용 — calcBid()의 한전분담E6 산식과 동일(base×비율%×배수).
@@ -7494,16 +7498,12 @@ function _updateKepcoPerfPreview(found){
   if(_dChk&&_dChk.checked&&_dIn){var _dv=parseMoney(_dIn.value);if(_dv!=null&&_dv>0)base=_dv;}
   var multEl=document.getElementById('m-kperf-mult');
   var mult=multEl?(Number(multEl.value)||0):0;
-  var pctEEl=document.getElementById('m-kperf-pct-전기');
-  var pctE=isComplex?(pctEEl?(Number(pctEEl.value)||0):0):100;
-  var bE=document.getElementById('m-kperf-calc-전기');
-  if(bE)bE.textContent=FMT_NUM(Math.round(base*(pctE/100)*mult));
-  if(isComplex){
-    var pctDEl=document.getElementById('m-kperf-pct-분담');
-    var pctD=pctDEl?(Number(pctDEl.value)||0):0;
-    var bD=document.getElementById('m-kperf-calc-분담');
-    if(bD)bD.textContent=FMT_NUM(Math.round(base*(pctD/100)*mult));
-  }
+  (isComplex?['전기','분담']:['전기']).forEach(function(k){
+    var pEl=document.getElementById('m-kperf-pct-'+k);
+    var pct=isComplex?(pEl?(Number(pEl.value)||0):0):100;
+    var bEl=document.getElementById('m-kperf-calc-'+k);
+    if(bEl)bEl.textContent=FMT_NUM(Math.round(base*(pct/100)*mult));
+  });
 }
 // 공종을 바꾸면(단일↔복합) 블록의 행 구성 자체가 달라져야 하므로 통째로 다시 그림.
 function _rebuildKepcoPerfBlock(found){
@@ -7511,6 +7511,7 @@ function _rebuildKepcoPerfBlock(found){
   if(!wrap)return;
   var _oldChk=document.getElementById('m-kperf-dsgn-chk'),_oldIn=document.getElementById('m-kperf-dsgn');
   var _keepChk=_oldChk?_oldChk.checked:null,_keepVal=_oldIn?_oldIn.value:null;
+  var _keepMan={};['전기','분담'].forEach(function(k){var c=document.getElementById('m-kperf-man-'+k),a=document.getElementById('m-kperf-amt-'+k),pp=document.getElementById('m-kperf-pct-'+k);if(c)_keepMan[k]={on:c.checked,amt:a?a.value:'',pct:pp?pp.value:''};});
   var tmp=document.createElement('div');
   tmp.innerHTML=_kepcoPerfInputBlockHtml(found);
   var newWrap=tmp.querySelector('#m-kperf-wrap');
@@ -7519,9 +7520,31 @@ function _rebuildKepcoPerfBlock(found){
   var _nc=document.getElementById('m-kperf-dsgn-chk'),_ni=document.getElementById('m-kperf-dsgn');
   if(_nc&&_keepChk!=null){_nc.checked=_keepChk;}
   if(_ni&&_keepVal!=null){_ni.value=_keepVal;_ni.disabled=!(_nc&&_nc.checked);_ni.style.background=(_nc&&_nc.checked)?'#fff':'#f3f4f6';}
+  Object.keys(_keepMan).forEach(function(k){
+    var c=document.getElementById('m-kperf-man-'+k);if(!c)return;
+    c.checked=_keepMan[k].on;var a=document.getElementById('m-kperf-amt-'+k);if(a)a.value=_keepMan[k].amt;
+    if(_keepMan[k].on){var pp=document.getElementById('m-kperf-pct-'+k);if(pp)pp.value=_keepMan[k].pct;}
+    _applyKperfManUI(k);
+  });
   _bindKepcoPerfInputs(found);
 }
+function _applyKperfManUI(k){
+  var c=document.getElementById('m-kperf-man-'+k);if(!c)return;
+  var on=c.checked;
+  var a=document.getElementById('m-kperf-amt-'+k),b=document.getElementById('m-kperf-calc-'+k),p=document.getElementById('m-kperf-pct-'+k);
+  if(a)a.style.display=on?'':'none';
+  if(b)b.style.display=on?'none':'';
+  if(p&&p.getAttribute('data-kperf-autopct')==='1'){
+    p.disabled=!on;p.style.background=on?'#fff':'#f3f4f6';
+    if(!on)p.value=100;
+  }
+}
 function _bindKepcoPerfInputs(found){
+  ['전기','분담'].forEach(function(k){
+    var c=document.getElementById('m-kperf-man-'+k),a=document.getElementById('m-kperf-amt-'+k);
+    if(c)c.addEventListener('change',function(){_applyKperfManUI(k);if(c.checked&&a)a.focus();_updateKepcoPerfPreview(found);});
+    if(a)a.addEventListener('blur',function(){var v=parseMoney(a.value);a.value=v!=null?FMT_NUM(v):'';});
+  });
   ['m-kperf-mult','m-kperf-pct-전기','m-kperf-pct-분담'].forEach(function(id){
     var el=document.getElementById(id);
     if(el)el.addEventListener('input',function(){_updateKepcoPerfPreview(found);});
@@ -7848,11 +7871,16 @@ function showPdfResultModal(found,preview){
       var _pEEl=document.getElementById('m-kperf-pct-전기');
       var _pDEl=document.getElementById('m-kperf-pct-분담');
       if(_mEl&&_mEl.value!=='')state.bid.한전실적입력.배수=Number(_mEl.value);
-      if(_pEEl&&_pEEl.value!=='')state.bid.한전실적입력.전기_pct=Number(_pEEl.value);
+      if(_pEEl&&_pEEl.value!==''&&(_pEEl.getAttribute('data-kperf-autopct')!=='1'||!_pEEl.disabled))state.bid.한전실적입력.전기_pct=Number(_pEEl.value);
       if(_pDEl&&_pDEl.value!=='')state.bid.한전실적입력.분담_pct=Number(_pDEl.value);
       var _dsChk=document.getElementById('m-kperf-dsgn-chk'),_dsIn=document.getElementById('m-kperf-dsgn');
       if(_dsChk){state.bid.한전실적입력.설계사용=!!_dsChk.checked;}
       if(_dsIn){var _dsV=parseMoney(_dsIn.value);state.bid.한전실적입력.설계금액=(_dsV!=null&&_dsV>0)?_dsV:null;}
+      ['전기','분담'].forEach(function(k){
+        var c=document.getElementById('m-kperf-man-'+k),a=document.getElementById('m-kperf-amt-'+k);
+        if(c)state.bid.한전실적입력[k+'_manual']=!!c.checked;
+        if(a){var v=parseMoney(a.value);state.bid.한전실적입력[k+'_amt']=(v!=null&&v>=0)?v:null;}
+      });
     }
     document.querySelectorAll('[data-pdf-key]').forEach(function(cb){
       if(!cb.checked)return;
@@ -9232,14 +9260,19 @@ function kepcoPerfRowsHtml(c){
   var itemRows=keys.map(function(k){
     var calcVal=(c.한전분담E6&&c.한전분담E6[k]!=null)?c.한전분담E6[k]:0;
     var pctVal=입력[k+'_pct'];
-    var pctField=isComplex
+    var man=!!입력[k+'_manual'];
+    var pctField=(isComplex||man)
       ?('<input type="number" step="0.01" min="0" max="100" data-kperf-pct="'+k+'" value="'+(pctVal!=null?pctVal:'')+'" placeholder="%" style="width:54px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #c4b5fd;border-radius:4px">%')
       :('<span style="font-weight:700;font-size:11px">100%<span style="font-size:9px;color:#6b7280;font-weight:400"> (자동)</span></span>');
-    return '<div style="display:flex;align-items:center;gap:4px;font-size:11px;flex-wrap:wrap">'+
+    var valField=man
+      ?('<input type="text" inputmode="numeric" data-kperf-amt="'+k+'" value="'+((입력[k+'_amt']!=null&&입력[k+'_amt']!=='')?FMT_NUM(입력[k+'_amt']):'')+'" placeholder="금액" style="width:84px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #f59e0b;border-radius:4px;background:#fffbeb">')
+      :('<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>');
+    return '<div style="display:flex;align-items:center;gap:4px;font-size:11px;flex-wrap:nowrap;white-space:nowrap">'+
       '<span style="font-weight:700;width:24px;color:#5b21b6">'+(k==='분담'?kepcoDamLabel(c.공종):k)+'</span>'+
       pctField+
       '<span style="color:#6b7280">=</span>'+
-      '<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>'+
+      valField+
+      '<label style="display:flex;align-items:center;gap:2px;color:#6b7280;white-space:nowrap;cursor:pointer" title="체크하면 비율·금액을 모두 직접 입력(계산 안 함)"><input type="checkbox" data-kperf-man="'+k+'"'+(man?' checked':'')+' style="margin:0">수기</label>'+
     '</div>';
   }).join('');
   return '<div style="display:flex;flex-direction:column;gap:3px;align-items:center">'+dsgnRow+multRow+itemRows+'</div>';
@@ -9501,9 +9534,23 @@ function bind(){
       var pk=t.getAttribute('data-kperf-pct');
       var isMult=t.hasAttribute('data-kperf-mult');
       var isDsChk=t.hasAttribute('data-kperf-dsgn-chk'),isDs=t.hasAttribute('data-kperf-dsgn');
-      if(!pk&&!isMult&&!isDsChk&&!isDs)return;
+      var manK=t.getAttribute('data-kperf-man'),amtK=t.getAttribute('data-kperf-amt');
+      if(!pk&&!isMult&&!isDsChk&&!isDs&&!manK&&!amtK)return;
       if(!state.bid.한전실적입력)state.bid.한전실적입력={};
-      if(isDsChk){
+      if(manK){
+        // 수기 체크 전환은 행 구성(계산값↔금액칸, 단일공종 비율칸)이 바뀌므로 실적제한 칸만 다시 그림
+        state.bid.한전실적입력[manK+'_manual']=!!t.checked;
+        save();
+        var _cm=calcBid();_kw.innerHTML=kepcoPerfRowsHtml(_cm);
+        if(t.checked){var _af=_kw.querySelector('[data-kperf-amt="'+manK+'"]');if(_af)_af.focus();}
+        refreshCombos();
+        return;
+      }
+      if(amtK){
+        var _av=parseMoney(t.value);
+        state.bid.한전실적입력[amtK+'_amt']=(_av!=null&&_av>=0)?_av:null;
+        t.value=state.bid.한전실적입력[amtK+'_amt']!=null?FMT_NUM(state.bid.한전실적입력[amtK+'_amt']):'';
+      }else if(isDsChk){
         state.bid.한전실적입력.설계사용=!!t.checked;
         var _dsI=_kw.querySelector('[data-kperf-dsgn]');
         if(_dsI){_dsI.disabled=!t.checked;_dsI.style.background=t.checked?'#fff':'#f3f4f6';if(t.checked)_dsI.focus();}
