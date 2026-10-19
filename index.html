@@ -457,7 +457,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
         </div>
         <div class="field"><label>공종</label>
           <select id="in-공종" style="width:150px;background:#f5f3ff;color:#5b21b6;font-weight:700;border-color:#c4b5fd">
-            <option value="전기">전기</option><option value="통신">통신</option><option value="소방">소방</option><option value="복합(전기+통신)">복합(전기+통신)</option><option value="복합(전기+소방)">복합(전기+소방)</option>
+            <option value="전기">전기</option><option value="통신">통신</option><option value="소방">소방</option><option value="복합(전기+통신)">복합(전기+통신)</option><option value="복합(전기+소방)">복합(전기+소방)</option><option value="복합(전기+포장)">복합(전기+포장)</option>
           </select></div>
         <div class="field" id="field-기준월">
           <label>기준월 <span class="star-tip" style="color:#0891b2" data-tip="일자리가점(A/B조건)·신용평가·안전보건 등 월/만료 단위로 자동 변하는 값을 판정할 기준월. 협정마감일이 아니라 보통 공고 개시월. 탭을 열 때 이번 달로 자동 채워지며, 다른 달 공고면 직접 수정">★</span></label>
@@ -696,8 +696,9 @@ const normGongjong=function(g){return(g==='전기+통신'||g==='전기+소방')?
 // 2026-09-21: 한전도 복합(전기+통신)/복합(전기+소방)을 지원하면서 "복합 여부" 판정과 분담 라벨을 한 곳에서 관리.
 // - isComplexGongjong: 복합(전기+분담)/복합(전기+통신)/복합(전기+소방) 어느 것이든 true (한전 실적제한 UI/계산의 분담행 표시 기준).
 // - kepcoDamLabel: 한전 실적제한/실적비율 표시에서 '분담' 행 이름 — 내부 저장 키(한전실적입력.분담_pct, 한전분담E6['분담'])는 그대로 '분담'.
-const isComplexGongjong=function(g){return g==='복합(전기+분담)'||g==='복합(전기+통신)'||g==='복합(전기+소방)';};
-const kepcoDamLabel=function(g){return g==='복합(전기+통신)'?'통신':g==='복합(전기+소방)'?'소방':'분담';};
+const isComplexGongjong=function(g){return g==='복합(전기+분담)'||g==='복합(전기+통신)'||g==='복합(전기+소방)'||g==='복합(전기+포장)';};
+const kepcoDamLabel=function(g){return g==='복합(전기+통신)'?'통신':g==='복합(전기+소방)'?'소방':g==='복합(전기+포장)'?'포장':'분담';};
+// 2026-10-19: 복합(전기+포장) 추가 — 업체DB에 포장 업종이 없으므로 포장 슬롯은 '분담'(업체명 직접입력) 방식으로 동작.
 // 확정/조합결과TXT의 Func 표기: 철도기술점수(FuncNumeric)는 [기술_값], 그 외 수동입력값은 [값]. 2026-07-28 추가.
 function funcSuffixText(row){
   if(row==null||row.Func==null||row.Func==='')return '';
@@ -2317,9 +2318,9 @@ function updateRegionNoteTooltips(){
 function updateGongjongOptions(적격기준){
   var sel=$('#in-공종');if(!sel)return;
   var isKEPCO=(적격기준==='한전');
-  var allOpts=[['전기','전기'],['통신','통신'],['소방','소방'],['복합(전기+통신)','복합(전기+통신)'],['복합(전기+소방)','복합(전기+소방)'],['복합(전기+분담)','복합(전기+분담)']];
+  var allOpts=[['전기','전기'],['통신','통신'],['소방','소방'],['복합(전기+통신)','복합(전기+통신)'],['복합(전기+소방)','복합(전기+소방)'],['복합(전기+포장)','복합(전기+포장)'],['복합(전기+분담)','복합(전기+분담)']];
   var cur=sel.value||state.bid.공종;
-  var allow=isKEPCO?['전기','복합(전기+통신)','복합(전기+소방)','복합(전기+분담)']:['전기','통신','소방','복합(전기+통신)','복합(전기+소방)'];
+  var allow=isKEPCO?['전기','복합(전기+통신)','복합(전기+소방)','복합(전기+포장)','복합(전기+분담)']:['전기','통신','소방','복합(전기+통신)','복합(전기+소방)','복합(전기+포장)'];
   if(!isKEPCO&&cur==='복합(전기+분담)')allow=allow.concat(['복합(전기+분담)']);
   sel.innerHTML=allOpts.filter(function(o){return allow.indexOf(o[0])>=0;})
     .map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
@@ -5108,7 +5109,7 @@ function calcSlot(combo,calc){
   // 슬롯이 정확히 구성되어야 함(예: 복합(전기+소방)인데 소방 슬롯이 비어있고 통신만 채워져 있으면 부적격).
   var 필요분담grp=(calc.공종==='복합(전기+통신)')?'통신':(calc.공종==='복합(전기+소방)')?'소방':null;
   var hasDam필요=필요분담grp?분담ROW.some(function(r){return r.grp===필요분담grp&&(r.업체명||'').trim()!=='';}):hasDam;
-  var 분담누락=(calc.공종==='복합(전기+분담)'||calc.공종==='복합(전기+통신)'||calc.공종==='복합(전기+소방)')&&used>0&&!hasDam필요;
+  var 분담누락=isComplexGongjong(calc.공종)&&used>0&&!hasDam필요;
   // 분담 슬롯의 시평액 합산(지분율 미적용, 분담업체 실제 보유 시평 그대로 합산) — 분담시평 제한 게이트 전용.
   // 분담의 다른 값(지분율·신인도·감점·실적 등)은 적격판정과 무관하지만, 분담시평만은 예외로 적격판정에 영향을 준다. 2026-07-29 추가
   var 분담시평합산=분담ROW.filter(function(r){return(r.업체명||'').trim()!=='';}).reduce(function(a,r){return a+(Number(r.시평액)||0);},0);
@@ -5134,7 +5135,7 @@ function calcSlot(combo,calc){
   else if(anyUnder)적격사유='최소지분율 미달';
   else if(Math.abs(지분합_pct-100)>1e-6)적격사유='지분율 합 '+TRIMDEC(지분합_pct)+'% (≠100%)';
   else if(지역의무미달)적격사유='지역의무지분 미달 (지역 '+TRIMDEC(지역지분합)+'% / 기준 '+지역의무지분+'%)';
-  else if(분담누락)적격사유=필요분담grp?(필요분담grp+'업체 미등록 ('+displayGongjong(calc.공종)+'은 '+필요분담grp+' 슬롯 1개 이상 필요)'):'분담업체 미등록 (복합(전기+분담)은 분담 슬롯 1개 이상 필요)';
+  else if(분담누락)적격사유=필요분담grp?(필요분담grp+'업체 미등록 ('+displayGongjong(calc.공종)+'은 '+필요분담grp+' 슬롯 1개 이상 필요)'):'분담업체 미등록 ('+displayGongjong(calc.공종)+'은 분담 슬롯 1개 이상 필요)';
   else if(분담시평미달)적격사유='분담 시평 부족 (합산 '+FMT_NUM(Math.round(분담시평합산))+' / 제한 '+FMT_NUM(calc.분담시평)+')';
   // ── 2026-09-04: 이하 분기는 calc.isLH/isRail/isKEPCO를 다시 확인하는 대신, calcBid()가 b.적격기준
   // 하나로부터 미리 골라둔 calc.적격모듈(그릇, resolveEligibilityModule 참고)을 기준으로 판단한다 —
@@ -5247,7 +5248,7 @@ function getDbByType(grp,calc,currentCi,currentSi){
   // 공종 필터: grp이 통신/소방이면 이미 필터됐으므로 skip; 그 외 calc.공종 기준 필터
   if(calc&&calc.공종&&grp!=='통신'&&grp!=='소방'){
     var _공종필터=calc.공종;
-    if(_공종필터==='복합(전기+분담)'||_공종필터==='복합(전기+통신)'||_공종필터==='복합(전기+소방)'){
+    if(isComplexGongjong(_공종필터)){
       list=list.filter(function(c){var jt=c.공사업종||'';return jt.indexOf('전기')>=0;});
     }else{
       list=list.filter(function(c){var jt=c.공사업종||'';return jt.indexOf(_공종필터)>=0;});
@@ -5417,7 +5418,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
     if(calc.공종){
       var jtR=c.공사업종||'';
       var _공종필터R=calc.공종,공종OKR;
-      if(_공종필터R==='복합(전기+분담)'||_공종필터R==='복합(전기+통신)'||_공종필터R==='복합(전기+소방)')공종OKR=jtR.indexOf('전기')>=0;
+      if(isComplexGongjong(_공종필터R))공종OKR=jtR.indexOf('전기')>=0;
       else 공종OKR=jtR.indexOf(_공종필터R)>=0;
       if(!공종OKR)return jtR===''?'미참여':'공종불일치';
     }
@@ -6785,11 +6786,12 @@ function extractBidFields(t){
       // 복합 표기는 슬래시(/)로 구분: "전기/전문소방", "금속구조물.창호.온실/지붕판금.건축물조립" 등
       // 슬래시 없이 하나의 값만 있으면 단일 공종.
       var _segs=_tt.split('/').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
-      var _has전기=false,_has통신=false,_has소방=false,_hasOther=false;
+      var _has전기=false,_has통신=false,_has소방=false,_has포장=false,_hasOther=false;
       _segs.forEach(function(seg){
         // 소방 계열 합성어(전기소방/기계소방/전문소방처럼 구분자 없이 붙은 단어)는 그 자체로 전기 근거로 보지 않음(레거시 규칙 유지).
         if(seg.indexOf('소방')>=0){_has소방=true;return;}
         if(seg.indexOf('통신')>=0){_has통신=true;return;}
+        if(seg.indexOf('포장')>=0){_has포장=true;return;}
         if(seg.indexOf('전기')>=0){_has전기=true;return;}
         _hasOther=true;
       });
@@ -6799,6 +6801,8 @@ function extractBidFields(t){
       if(_has전기&&_has소방&&_has통신){r.공종='복합(전기+소방)';return;}
       if(_has전기&&_has소방){r.공종='복합(전기+소방)';return;}
       if(_has전기&&_has통신){r.공종='복합(전기+통신)';return;}
+      if(_has전기&&_has포장&&!_hasOther){r.공종='복합(전기+포장)';return;} // 2026-10-19
+      if(_has포장){_hasOther=true;}
       if(_has전기&&_hasOther){return;}
       if(_has소방){r.공종='소방';return;}
       if(_has통신){r.공종='통신';return;}
@@ -6919,7 +6923,7 @@ function extractBidFields(t){
     var _mkSeg=t.slice(_mkIdx,_mkIdx+600);
     var _mkNums=_mkSeg.match(/\d{1,3}(?:,\d{3}){2,}/g)||[];
     if(r.시평제한==null&&_mkNums.length>=1)r.시평제한=parseMoney(_mkNums[0]);
-    if((r.공종==='복합(전기+분담)'||r.공종==='복합(전기+통신)'||r.공종==='복합(전기+소방)')&&_mkNums.length>=2)r.분담시평=parseMoney(_mkNums[1]);
+    if(isComplexGongjong(r.공종)&&_mkNums.length>=2)r.분담시평=parseMoney(_mkNums[1]);
   }
   _tryKW(t,'분담시평',r);
   // ── LH 전용: 추정금액(지분율기준) 파싱 ────────────────────────────
@@ -7060,10 +7064,12 @@ function extractBidFields(t){
         var _bmM;
         while((_bmM=_bmRe.exec(_bmCtx[0]))){
           var _lbl=_bmM[1];
-          var _norm=_lbl.indexOf('전기')>=0?'전기':_lbl.indexOf('통신')>=0?'통신':_lbl.indexOf('소방')>=0?'소방':_lbl;
+          var _norm=_lbl.indexOf('전기')>=0?'전기':_lbl.indexOf('통신')>=0?'통신':_lbl.indexOf('소방')>=0?'소방':_lbl.indexOf('포장')>=0?'포장':_lbl;
           _bmPairs[_norm]=Number(_bmM[2]);
         }
         if(Object.keys(_bmPairs).length>=2)r.한전분담비율=_bmPairs;
+        // 2026-10-19: 종목 필드로 공종을 못 정했어도 분담비율이 전기+포장 2개뿐이면 복합(전기+포장)으로 판정
+        if(!r.공종&&_bmPairs['전기']!=null&&_bmPairs['포장']!=null&&Object.keys(_bmPairs).length===2)r.공종='복합(전기+포장)';
       }
     }
     // 2026-10-07: 주공정 작업 예정기간 추출 — "주공정(작업) 예정기간 : 2026. 10. 19 ~ 2026. 12. 13" 및 유사 형식
@@ -7385,7 +7391,7 @@ function showPdfResultModal(found,preview){
     var st='width:100%;box-sizing:border-box;padding:2px 4px;border:1px solid #f59e0b;border-radius:3px;font-size:12px;background:#fffbeb;color:#111827';
     if(k==='공종'){
       return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
-        '<option value="">직접선택</option><option value="전기">전기</option><option value="통신">통신</option><option value="소방">소방</option><option value="복합(전기+통신)">복합(전기+통신)</option><option value="복합(전기+소방)">복합(전기+소방)</option></select>';
+        '<option value="">직접선택</option><option value="전기">전기</option><option value="통신">통신</option><option value="소방">소방</option><option value="복합(전기+통신)">복합(전기+통신)</option><option value="복합(전기+소방)">복합(전기+소방)</option><option value="복합(전기+포장)">복합(전기+포장)</option></select>';
     }
     if(k==='적격기준'){
       var custOpts=customInstitutionsList().map(function(c){return '<option value="'+esc(c.name)+'">'+esc(c.name)+'</option>';}).join('');
@@ -7428,7 +7434,7 @@ function showPdfResultModal(found,preview){
     var st='width:100%;box-sizing:border-box;padding:2px 4px;border:1px solid #93c5fd;border-radius:3px;font-size:12px;background:#eff6ff;color:#111827';
     if(k==='공종'){
       var cur=found.공종||'';
-      var opts=['전기','통신','소방','복합(전기+통신)','복합(전기+소방)'];
+      var opts=['전기','통신','소방','복합(전기+통신)','복합(전기+소방)','복합(전기+포장)'];
       return '<select data-pdf-manual="'+k+'" style="'+st+'">'+
         '<option value=""'+(cur?'':' selected')+'>직접선택</option>'+
         opts.map(function(o){return '<option value="'+o+'"'+(cur===o?' selected':'')+'>'+displayGongjong(o)+'</option>';}).join('')+
@@ -7843,6 +7849,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
         var _rest3=row.업체명||'',_pre3='';
         if(_rest3.indexOf('(소방)')===0){_pre3='(소방)';_rest3=_rest3.slice(4);}
         else if(_rest3.indexOf('(통신)')===0){_pre3='(통신)';_rest3=_rest3.slice(4);}
+        else if(_rest3.indexOf('(포장)')===0){_pre3='(포장)';_rest3=_rest3.slice(4);}
         else if(_rest3.indexOf('(분담)')===0){_pre3='(분담)';_rest3=_rest3.slice(4);}
         var _dbE3b=state.db.find(function(x){return x.업체명===_rest3;});
         return _pre3+((_dbE3b&&_dbE3b.약어)?_dbE3b.약어:(_rest3||'').trim())+' '+TRIMDEC(Number(row.지분율)||0)+funcSuffixText(row);
@@ -8583,7 +8590,7 @@ function renderSlotRow(ci,si,r,calc,forceAllocOn){
   }else if(grp==='1회'){
     compSelHtml='<input type="text" class="manual-inp" data-manual="'+ci+'-'+si+'" autocomplete="off" placeholder="업체명 직접입력" value="'+esc(r.업체명||'')+'" style="flex:1;min-width:0;box-sizing:border-box;font-size:11px;padding:2px 6px;border:1px solid #fed7aa;border-radius:3px;font-family:inherit;background:#fff7ed">';
   }else if(grp==='분담'){
-    compSelHtml='<input type="text" class="manual-inp" data-manual="'+ci+'-'+si+'" data-dam="'+ci+'-'+si+'" autocomplete="off" placeholder="(분담)업체명" value="'+esc(r.업체명||'')+'" style="flex:1;min-width:0;box-sizing:border-box;font-size:11px;padding:2px 6px;border:1px solid #94a3b8;border-radius:3px;font-family:inherit;background:#f1f5f9">';
+    compSelHtml='<input type="text" class="manual-inp" data-manual="'+ci+'-'+si+'" data-dam="'+ci+'-'+si+'" autocomplete="off" placeholder="'+(calc&&calc.공종==='복합(전기+포장)'?'(포장)업체명':'(분담)업체명')+'" value="'+esc(r.업체명||'')+'" style="flex:1;min-width:0;box-sizing:border-box;font-size:11px;padding:2px 6px;border:1px solid #94a3b8;border-radius:3px;font-family:inherit;background:#f1f5f9">';
   }else{
     compSelHtml=
       '<select data-pick="'+ci+'-'+si+'" style="flex:1;min-width:0;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;font-family:inherit">'+
@@ -9093,7 +9100,7 @@ function refreshBidStats(){
   var _eok2=document.getElementById('o-시평제한-eok');if(_eok2)_eok2.textContent=c.E3!=null?fmtEok(c.E3):'';
   var _damStat=$('#stat-분담시평');
   if(_damStat){
-    var _isComplex=(normGongjong(state.bid.공종)==='복합(전기+분담)'||state.bid.공종==='복합(전기+통신)'||state.bid.공종==='복합(전기+소방)')&&!c.isKEPCO;
+    var _isComplex=isComplexGongjong(normGongjong(state.bid.공종))&&!c.isKEPCO;
     _damStat.style.display=_isComplex?'':'none';
     if(_isComplex){
       var _dEl=$('#o-분담시평');if(_dEl)_dEl.textContent=c.분담시평==null?'미적용':FMT_NUM(c.분담시평);
