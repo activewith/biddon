@@ -122,6 +122,12 @@ tr.hover:hover{background:#f8fafc}
 .combo{border:1px solid var(--border);border-radius:6px;background:#fff;overflow:hidden}
 .combo.ok{border-color:var(--ok);box-shadow:0 0 0 2px rgba(22,163,74,.1)}
 .combo.warn{border-color:var(--warn)}
+/* 2026-10-20: 조합 '전송' 체크 — 체크된 조합 카드 전체를 어둡게(흐림 없음)(입력은 그대로 가능, 전송 체크박스만 유리 위에 노출) */
+.combo{position:relative}
+.combo.sent::after{content:'';position:absolute;inset:0;background:rgba(15,23,42,.38);pointer-events:none;z-index:5;border-radius:inherit}
+.combo-sent-lbl{margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;font-weight:700;color:#0f172a;background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;position:relative;z-index:6;user-select:none}
+.combo-sent-lbl input{width:15px;height:15px;margin:0;cursor:pointer}
+.combo.sent .combo-sent-lbl{background:#fde047;border-color:#ca8a04}
 .combo-head{background:#f1f5f9;padding:6px 10px;display:flex;align-items:center;gap:10px;font-weight:600;font-size:12px;flex-wrap:wrap}
 .combo-head .name{font-size:13px;color:#0f172a}
 .combo-actions-row{background:#f1f5f9;padding:4px 10px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
@@ -5321,6 +5327,36 @@ function isShareShort(c,grp,calc){
   var 최대=calc.isLH&&calc.lh지분율기준?Math.floor((Number(_pd.시평액)/_기준)*1000)/10:FLOOR1((Number(_pd.시평액)/_기준)*100);
   return 최대<최하;
 }
+// 2026-10-20: 단독가능(감점없음+실적·시평 충족) 판정을 buildTypeCompanyOptions 내부에서 꺼내 공용화 —
+// 자동분배의 우선협정업체 투입 판정(isEligibleForNeedType)에서도 같은 기준을 쓰기 위함.
+function isRegionSoloPossible(c,calc){
+  if(!calc)return false;
+  var _regionE6R=kepcoAwareE6(calc);
+  if(!(_regionE6R>0))return false;
+  var _pdR=getCompPerfData(c,calc.공종||'전기');
+  var 실적OKR=Number((calc.use3yr?_pdR.실적3:_pdR.실적5)||0)>=_regionE6R;
+  var 시평OKR=(!calc.E3)||Number(_pdR.시평액||0)>=calc.E3;
+  var 감점없음R=getEffectiveDeduction(c,calc).value<=0;
+  // 철도공단 100점 배점제(별표3, 3억~100억) 구간은 실적·시평·감점만으로는 단독가능 여부를 판단할 수 없음 —
+  // 기술점수(경력기술자)를 포함한 95점 이상 여부를 실제로 시뮬레이션해야 함. 2026-08-13
+  if(calc.isRail&&railScoreTier(calc.E5)){
+    var _rsR=시평OKR?railSoloScore(c,calc):null;
+    return !!(_rsR&&_rsR.ok);
+  }
+  return !!(감점없음R&&실적OKR&&시평OKR);
+}
+// 2026-10-20: 해당 업체가 이 조합·슬롯의 '필요' 유형 업체선택 목록(구분선 위 정상 후보)에 포함되는지.
+// buildTypeCompanyOptions('필요')와 동일 기준: getDbByType('필요') → 지분미달 제외 → 지역 단독가능 업체 제외.
+function isEligibleForNeedType(name,calc,ci,si){
+  var nm=(name||'').trim();if(!nm)return false;
+  var regs=getRegionList();
+  return getDbByType('필요',calc,ci,si).some(function(c){
+    if(c.업체명!==nm)return false;
+    if(isShareShort(c,'필요',calc))return false;
+    if(regionMatchCo(regs,c)&&isRegionSoloPossible(c,calc))return false;
+    return true;
+  });
+}
 function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
   var list=getDbByType(grp,calc,currentCi,currentSi);
   var _shortList=[],_shortNames=new Set();
@@ -5408,19 +5444,7 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
   // 자동목록 제외 사유 판정 (지역 유형 전용) - getDbByType의 '지역' 필터 로직과 동일 기준
   function regionExclusionReason(c){
     if(!calc)return '';
-    var _regionE6R=kepcoAwareE6(calc);
-    if(_regionE6R>0){
-      var _pdR=getCompPerfData(c,calc.공종||'전기');
-      var 실적OKR=Number((calc.use3yr?_pdR.실적3:_pdR.실적5)||0)>=_regionE6R;
-      var 시평OKR=(!calc.E3)||Number(_pdR.시평액||0)>=calc.E3;
-      var 감점없음R=getEffectiveDeduction(c,calc).value<=0;
-      // 철도공단 100점 배점제(별표3, 3억~100억) 구간은 실적·시평·감점만으로는 단독가능 여부를 판단할 수 없음 —
-      // 기술점수(경력기술자)를 포함한 95점 이상 여부를 실제로 시뮬레이션해야 함. 2026-08-13
-      if(calc.isRail&&railScoreTier(calc.E5)){
-        var _rsR=시평OKR?railSoloScore(c,calc):null;
-        if(_rsR&&_rsR.ok)return '단독가능';
-      } else if(감점없음R&&실적OKR&&시평OKR)return '단독가능';
-    }
+    if(isRegionSoloPossible(c,calc))return '단독가능';
     if(calc.공종){
       var jtR=c.공사업종||'';
       var _공종필터R=calc.공종,공종OKR;
@@ -8966,7 +8990,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     var forceRowsList=getForceAllocRows(combo,result);
     var forceActive=forceRowsList.length>0;
     var card=document.createElement('div');
-    card.className='combo'+(result.적격?' ok':(result.used>0&&!result.지분율OK?' warn':''));
+    card.className='combo'+(result.적격?' ok':(result.used>0&&!result.지분율OK?' warn':''))+(combo.전송?' sent':'');
     card.dataset.ci=ci;
     var status=comboCalc.isKEPCO
       ?'<span class="badge" data-stat="status" style="background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc">'+result.적격사유+'</span>'
@@ -9008,6 +9032,9 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           ' value="'+_sjDisp+'" placeholder="'+_sjPlaceholder+'"'+
           ' style="width:56px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;'+_sjOverrideStyle+'">%'+
         '</span>'+
+        '<label class="combo-sent-lbl" title="전송한 조합 표시 — 체크하면 이 조합 카드가 어둡게 표시됩니다">'+
+          '<input type="checkbox" class="combo-sent-chk" data-ci="'+ci+'"'+(combo.전송?' checked':'')+'>전송'+
+        '</label>'+
       '</div>'+
       '<div class="combo-actions-row">'+
         '<span class="need-txt">필요값 : <b data-stat="필요값">'+esc(buildNeedHtml(comboCalc,result))+'</b></span>'+
@@ -9199,13 +9226,22 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
     }
     var emptySi=-1;
     combo.slots.forEach(function(s2,si2){if(si2!==지역si&&(s2.업체명||'').trim()===''&&emptySi<0)emptySi=si2;});
+    // 2026-10-20: 우선협정업체는 '검색'으로 무조건 넣지 않고, 이 슬롯의 '필요' 유형 후보에 포함될 때만 '필요' 유형으로 투입.
+    // (예: 충남 공고에서 충남 단독가능 업체가 우선협정으로 등록돼 있으면 '필요' 목록에서 빠지므로 투입하지 않음)
+    var ppCo=state.db.find(function(x){return x.업체명===우선협정명;});
+    var _chkSi=emptySi>=0?emptySi:combo.slots.length; // 빈 슬롯이 없으면 새로 추가될 위치 기준(제외할 행 없음)
+    if(!ppCo||!isEligibleForNeedType(우선협정명,calc,ci,_chkSi)){
+      toast(!ppCo?('우선협정업체 "'+우선협정명+'"이(가) 업체DB에 없어 투입하지 않았습니다 (지역업체 지분만 입력)')
+                 :('우선협정업체 "'+우선협정명+'"은(는) 필요 유형 후보가 아니라 투입하지 않았습니다 (지역업체 지분만 입력)'),'bad');
+      save();refreshCombos();
+      return;
+    }
     if(emptySi<0){
       if(combo.slots.length<MAX_SLOTS){combo.slots.push(emptySlot());emptySi=combo.slots.length-1;}
       else{toast('빈 슬롯이 없습니다 (최대 '+MAX_SLOTS+'개)','bad');save();refreshCombos();return;}
     }
     var 잔여지분=Math.max(0,100-val);
-    var ppCo=state.db.find(function(x){return x.업체명===우선협정명;});
-    combo.slots[emptySi]=ppCo?buildSlotFromDb(ppCo,잔여지분,'검색'):Object.assign(emptySlot(),{업체명:우선협정명,grp:'검색',지분율:잔여지분,isRec:true});
+    combo.slots[emptySi]=buildSlotFromDb(ppCo,잔여지분,'필요');
 
     toast('자동분배 완료 (지역업체+우선협정업체)','ok');
     save();refreshCombos();
@@ -9856,6 +9892,13 @@ function bind(){
     }
     if(t.classList.contains('combo-sipyung-chk')){
       state.combos[Number(t.dataset.ci)].표시시평합=t.checked;save();return;
+    }
+    // 2026-10-20: 조합 '전송' 체크 — 전송 완료 조합 구분용(표시 전용, 계산·출력에는 영향 없음)
+    if(t.classList.contains('combo-sent-chk')){
+      var sci=Number(t.dataset.ci);
+      state.combos[sci].전송=t.checked;
+      var scard=t.closest('.combo');if(scard)scard.classList.toggle('sent',t.checked);
+      save();return;
     }
     // 조합별 안내(URL) 개별표시 체크박스 — 체크 시 이 조합의 확정메모를 현재 적격기준의 안내(URL)로 채움(전체표시와는 OR 조건).
     // 2026-09-16: 해제하면 확정메모를 비움 — 단, 전체표시(state.bid.표시안내URL)가 켜져 있으면 OR 조건상 여전히
