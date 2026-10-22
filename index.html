@@ -4903,7 +4903,7 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
     var _입력K=b.한전실적입력||{};
     var _keysK=_isComplexK?['전기','분담']:['전기'];
     var _linesK=_keysK.map(function(k,idxK){
-      var _lblK=(k==='분담'?kepcoDamLabel(normGongjong(b.공종)):k);
+      var _lblK=(k==='분담'?kepcoDamLabel(normGongjong(b.공종)):kepcoMainLabel(normGongjong(b.공종))); // 2026-10-22: 한전 단독 통신/소방 공종이면 '전기' 대신 실제 공종명 표시
       var _pctK=(_isComplexK||(_입력K[k+'_manual']&&_입력K[k+'_pct']!=null))?(Number(_입력K[k+'_pct'])||0):100;
       var _valK=(c.한전분담E6&&c.한전분담E6[k]!=null)?c.한전분담E6[k]:0;
       var _eokK=_valK>0?_eokTrim(_valK):'0';
@@ -8112,8 +8112,13 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       var _dbE3=state.db.find(function(x){return x.업체명===row.업체명;});
       var nm=(_dbE3&&_dbE3.약어)?_dbE3.약어:(row.업체명||'').trim();
       // 한전(한국전력공사): 지분율(%)·신인도 표기 없이 업체명+Func(업종 등 수동입력값)만 표시(적격판정 없음). 2026-08-13 확정메세지와 동일하게 통일.
+      // 2026-10-22(사용자 확정): 한전이라도 공종이 복합(분담이행)이 아닌 공동이행(같은 공종을 지분율로 나눠 참여) 공고는
+      // 지분율을 표시한다. 신인도 표기 없음은 동일. 복합(전기+통신/소방/포장/분담)은 기존대로 지분율 미표시.
       if(c.isKEPCO){
         var _funcTxt3=funcSuffixText(row);
+        if(!isComplexGongjong(normGongjong(state.bid.공종))){
+          return nm+' '+TRIMDEC(Number(row.지분율)||0)+(_funcTxt3?' '+_funcTxt3:'');
+        }
         return nm+(_funcTxt3?' '+_funcTxt3:'');
       }
       var _fr=forceMap[r.ROW.indexOf(row)];
@@ -11468,7 +11473,9 @@ function _showConfirmPopCore(ci){ return withLegacyDBIfNeeded(function(){
       }else{
         _funcTxt=funcSuffixText(s);
       }
-      var _kLines=[s.업체명+(_funcTxt?' '+_funcTxt:'')];
+      // 2026-10-22(사용자 확정): 공동이행(복합 아님) 한전 공고는 지분율(%) 표시 — 조합결과TXT와 동일 기준
+      var _kPct=!isComplexGongjong(normGongjong(state.bid.공종))?' '+TRIMDEC(Number(s.지분율)||0)+'%':'';
+      var _kLines=[s.업체명+_kPct+(_funcTxt?' '+_funcTxt:'')];
       // 2026-09-22(사용자 확정): 한전 확정메세지 <구성현황>에서 대표사(전기, slots[0])의
       // 사업자번호·계좌정보는 표기 제외. 분담(통신/소방 등) 구성사는 기존대로 사업자번호·계좌정보 표기 유지.
       if(_ci9176!==0){
