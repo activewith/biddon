@@ -705,6 +705,8 @@ const normGongjong=function(g){return(g==='전기+통신'||g==='전기+소방')?
 // - kepcoDamLabel: 한전 실적제한/실적비율 표시에서 '분담' 행 이름 — 내부 저장 키(한전실적입력.분담_pct, 한전분담E6['분담'])는 그대로 '분담'.
 const isComplexGongjong=function(g){return g==='복합(전기+분담)'||g==='복합(전기+통신)'||g==='복합(전기+소방)'||g==='복합(전기+포장)';};
 const kepcoDamLabel=function(g){return g==='복합(전기+통신)'?'통신':g==='복합(전기+소방)'?'소방':g==='복합(전기+포장)'?'포장':'분담';};
+// 2026-10-22: 한전 단독 통신/소방 공종 추가 — 한전 실적제한 내부 키 '전기'(주공종 몫)는 그대로 두고 화면 표시 라벨만 공종에 맞춤
+const kepcoMainLabel=function(g){return g==='통신'?'통신':g==='소방'?'소방':'전기';};
 // 2026-10-19: 복합(전기+포장) 추가 — 업체DB에 포장 업종이 없으므로 포장 슬롯은 '분담'(업체명 직접입력) 방식으로 동작.
 // 확정/조합결과TXT의 Func 표기: 철도기술점수(FuncNumeric)는 [기술_값], 그 외 수동입력값은 [값]. 2026-07-28 추가.
 function funcSuffixText(row){
@@ -2314,7 +2316,7 @@ function updateRegionNoteTooltips(){
   var o=document.getElementById('o-지역선택');
   if(o)o.title=parts.length?('📝 '+parts.join(' / ')):'';
 }
-// 한전(한국전력공사)은 공종이 전기/복합(전기+통신)/복합(전기+소방)/복합(전기+분담) 4가지(단독 통신/소방은 없음) — 다른 기관에서는
+// 한전(한국전력공사)은 공종이 전기/통신/소방/복합(전기+통신)/복합(전기+소방)/복합(전기+포장)/복합(전기+분담)(2026-10-22 단독 통신/소방 추가) — 다른 기관에서는
 // 전기/통신/소방/복합(전기+통신)/복합(전기+소방) 5개를 유지한다. 2026-09-21: 한전에도 복합(전기+통신)/(전기+소방) 추가
 // (분담 슬롯이 일반 기관처럼 통신/소방 업체 DB 선택형으로 동작). 복합(전기+분담)은 통신/소방이 아닌 분담 업종용 + 기존 저장데이터 호환용으로 유지.
 // 2026-08-14: 일반(비한전) 기관 대상
@@ -2327,7 +2329,8 @@ function updateGongjongOptions(적격기준){
   var isKEPCO=(적격기준==='한전');
   var allOpts=[['전기','전기'],['통신','통신'],['소방','소방'],['복합(전기+통신)','복합(전기+통신)'],['복합(전기+소방)','복합(전기+소방)'],['복합(전기+포장)','복합(전기+포장)'],['복합(전기+분담)','복합(전기+분담)']];
   var cur=sel.value||state.bid.공종;
-  var allow=isKEPCO?['전기','복합(전기+통신)','복합(전기+소방)','복합(전기+포장)','복합(전기+분담)']:['전기','통신','소방','복합(전기+통신)','복합(전기+소방)','복합(전기+포장)'];
+  // 2026-10-22: 한전에도 단독 통신/소방 추가(사용자 요청)
+  var allow=isKEPCO?['전기','통신','소방','복합(전기+통신)','복합(전기+소방)','복합(전기+포장)','복합(전기+분담)']:['전기','통신','소방','복합(전기+통신)','복합(전기+소방)','복합(전기+포장)'];
   if(!isKEPCO&&cur==='복합(전기+분담)')allow=allow.concat(['복합(전기+분담)']);
   sel.innerHTML=allOpts.filter(function(o){return allow.indexOf(o[0])>=0;})
     .map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
@@ -3288,14 +3291,14 @@ const 적격기준_한전 = {
   // calcSlot()의 "else if(calc.isKEPCO)" 블록 그대로 이동 — 항상 적격:false, 문구도 동일.
   // 2026-09-21: 복합(전기+통신)/(전기+소방) 지원 — 키 '분담'은 grp가 분담/통신/소방인 슬롯을 모두 합산하고,
   // 표시 라벨은 분담라벨(통신/소방/분담)로 대체한다(5번째 인자, 생략 시 기존과 동일하게 키 이름 그대로).
-  judge: function(합산실적,ROW,한전분담E6,E6,분담라벨){
+  judge: function(합산실적,ROW,한전분담E6,E6,분담라벨,주라벨){
     var 적격사유;
     if(한전분담E6){
       var kepco상세=Object.keys(한전분담E6).map(function(k){
         var amt=(k==='전기')?합산실적:ROW.filter(function(r){return k==='분담'?(r.grp==='분담'||r.grp==='통신'||r.grp==='소방'):r.grp===k;}).reduce(function(a,r){return a+(r.지분환산실적||0);},0);
         var e6k=한전분담E6[k];
         var pct=e6k>0?(amt/e6k*100):0;
-        var lbl=(k==='분담'&&분담라벨)?분담라벨:k;
+        var lbl=(k==='분담'&&분담라벨)?분담라벨:((k==='전기'&&주라벨)?주라벨:k);
         return lbl+' '+pct.toFixed(1)+'%('+FMT_NUM(Math.round(amt))+'/'+FMT_NUM(Math.round(e6k))+')';
       });
       적격사유='실적비율 '+kepco상세.join(' · ')+' (참고용 · 적격판정 미적용)';
@@ -5170,7 +5173,7 @@ function calcSlot(combo,calc){
   } else if(calc.적격모듈===적격기준_한전){
     // 한전(한국전력공사): 기초금액 대비 5년실적 비율만 계산·표시. 시평/신인도를 포함한 적격·부적격 판정은
     // 하지 않음(2026-08-12 사용자 요청). (적격기준_한전.judge 참고)
-    var _kjd=적격기준_한전.judge(합산실적,ROW,calc.한전분담E6,calc.E6,kepcoDamLabel(calc.공종));
+    var _kjd=적격기준_한전.judge(합산실적,ROW,calc.한전분담E6,calc.E6,kepcoDamLabel(calc.공종),kepcoMainLabel(calc.공종));
     적격=_kjd.적격;적격사유=_kjd.적격사유;
   } else {
     // ② 실적·시평은 충족하는데 경영상태비율(①) 기준 신인도만 부족한 경우, 감점업체 신용등급이
@@ -7491,7 +7494,7 @@ function _kepcoPerfInputBlockHtml(found){
       '<span style="font-size:12px;color:#6b7280;width:32px">배수</span>'+
       '<input type="number" step="0.01" min="0" id="m-kperf-mult" value="'+esc(String(multVal))+'" placeholder="예:1" style="'+st+'">'+
     '</div>'+
-    _kperfModalRow('전기','전기',전기pctVal,isComplex,existing,st,false)+
+    _kperfModalRow('전기',kepcoMainLabel(normGongjong(found.공종)),전기pctVal,isComplex,existing,st,false)+
     (isComplex?_kperfModalRow('분담',kepcoDamLabel(normGongjong(found.공종)),분담pctVal,true,existing,st,true):'');
   return '<div style="font-size:12px;font-weight:700;color:#7c3aed;margin:10px 0 4px">⚡ 실적제한 (수기입력)</div>'+
     '<div id="m-kperf-wrap" style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:8px 10px">'+rows+'</div>';
@@ -8886,7 +8889,7 @@ function renderSlotRow(ci,si,r,calc,forceAllocOn){
     '></td>'+
     '<td><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-실적" value="'+FMT_NUM(r.실적||0)+'"'+(isDam?' disabled style="color:#9ca3af;background:#f3f4f6"':'')+' ></td>'+
     '<td'+_kHide+'><input type="text" inputmode="numeric" class="money" data-edit="'+ci+'-'+si+'-시평액" value="'+FMT_NUM(r.시평액||0)+'"'+(isDamSiPyeongLock?' disabled style="color:#9ca3af;background:#f3f4f6"':(grp==='분담'?' title="분담 업체의 시공능력평가액 — 분담시평 제한 판정에 사용"':''))+' ></td>'+
-    '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':(calc&&calc.isRail?' style="color:#d1d5db" title="철도공단: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isDoRo?' style="color:#d1d5db" title="도로공사: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isKEPCO?' style="display:none"':''))))+'>'+TRIMDEC(r.최대지분율_pct||0)+'%</td>'+
+    '<td data-cell="'+ci+'-'+si+'-max"'+(calc&&calc.jijaTier===1?' style="color:#d1d5db" title="지자체 30억 미만: 최대지분율 제한 미적용"':(calc&&calc.isRail?' style="color:#d1d5db" title="철도공단: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isDoRo?' style="color:#d1d5db" title="도로공사: 시평 기반 최대지분율 제한 미적용"':(calc&&calc.isKEPCO?' style="color:#d1d5db" title="한전: 최대지분율 제한 미적용(지분율 계산에 시평 미평가)"':''))))+'>'+TRIMDEC(r.최대지분율_pct||0)+'%</td>'+
     '<td><input type="number" class="pct '+(r.over?'over':(r.under?'under':(r.isRec?'isrec':'')))+'" step="0.01" min="0" max="100" data-edit="'+ci+'-'+si+'-지분율" value="'+(r.지분율||0)+'"></td>'+
     '<td data-cell="'+ci+'-'+si+'-환산실적">'+FMT_NUM(Math.round(r.지분환산실적))+'</td>'+
     '<td data-cell="'+ci+'-'+si+'-환산시평"'+_kHide+'>'+FMT_NUM(Math.round(r.지분환산시평))+'</td>'+
@@ -9068,7 +9071,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
             '<th class="l" style="min-width:155px">유형 / 업체</th>'+
             '<th>신인도<br><span style="font-size:10px">(가점)</span></th><th>감점</th>'+
             '<th>'+(comboCalc.use3yr?'3년':'5년')+'<br>실적</th><th'+(comboCalc.isKEPCO?' style="display:none"':'')+'>시평액</th>'+
-            '<th'+(comboCalc.isKEPCO?' style="display:none"':'')+'>최대<br>지분율</th><th>지분율<br>(%)</th>'+
+            '<th>최대<br>지분율</th><th>지분율<br>(%)</th>'+
             '<th>환산<br>실적</th><th'+(comboCalc.isKEPCO?' style="display:none"':'')+'>환산<br>시평</th>'+
             '<th>신인도<br>가점</th><th>감점<br>가점</th>'+
             '<th style="color:#0369a1;min-width:56px" title="특별 계산점수 · 참고사항 수동 입력용 (예: 철도기술점수 총합산점수)">Func</th>'+
@@ -9304,7 +9307,7 @@ function kepcoPerfRowsHtml(c){
       ?('<input type="text" inputmode="numeric" data-kperf-amt="'+k+'" value="'+((입력[k+'_amt']!=null&&입력[k+'_amt']!=='')?FMT_NUM(입력[k+'_amt']):'')+'" placeholder="금액" style="width:84px;text-align:right;padding:2px 3px;font-size:11px;border:1px solid #f59e0b;border-radius:4px;background:#fffbeb">')
       :('<b data-kperf-calc="'+k+'" style="color:#059669">'+FMT_NUM(Math.round(calcVal))+'</b>');
     return '<div style="display:flex;align-items:center;gap:4px;font-size:11px;flex-wrap:nowrap;white-space:nowrap">'+
-      '<span style="font-weight:700;width:24px;color:#5b21b6">'+(k==='분담'?kepcoDamLabel(c.공종):k)+'</span>'+
+      '<span style="font-weight:700;width:24px;color:#5b21b6">'+(k==='분담'?kepcoDamLabel(c.공종):kepcoMainLabel(c.공종))+'</span>'+
       pctField+
       '<span style="color:#6b7280">=</span>'+
       valField+
@@ -9323,7 +9326,7 @@ function kepcoPerfEokLineHtml(c,keys){
   var parts=keys.map(function(k){
     var calcVal=(c.한전분담E6&&c.한전분담E6[k]!=null)?c.한전분담E6[k]:0;
     if(!calcVal||calcVal<=0)return '';
-    var lbl=(k==='분담'?kepcoDamLabel(c.공종):k).charAt(0);
+    var lbl=(k==='분담'?kepcoDamLabel(c.공종):kepcoMainLabel(c.공종)).charAt(0);
     var rounded=Math.ceil(calcVal/10000000)*10000000;
     return lbl+(rounded/100000000).toFixed(1)+'억';
   }).filter(Boolean).join('+');
