@@ -4872,6 +4872,24 @@ function buildBidMsgHeader(b){
   }
   return lines.join('\n');
 }
+// 2026-10-27: 실적제한 표기에 배수 반영 — 예) 조달청 50억 이상: (추정*1.1*2). 배수 1이면 생략.
+// 조달청/도로공사/수자원/철도 등=c.H6, LH=추정가격 50억 기준 lhMult(calcAll과 동일), 한전=수기입력 배수.
+function 실적배수sfx(b,c){
+  var m;
+  if(c.isKEPCO)m=Number((b.한전실적입력||{}).배수)||0;
+  else if(c.isLH)m=(c.E5>=LIMIT_50)?2:1;
+  else m=Number(c.H6)||0;
+  return (m>0&&m!==1)?'*'+TRIM3(m):'';
+}
+// 2026-10-27: 기초금액 입력 시 (기초*2), 미입력 시 (추정*1.1*2). 배수 1이면 기초는 표기 생략, 추정은 (추정*1.1).
+// 한전 '설계금액' 사용 시에는 기준이 설계금액이므로 (설계*배수).
+function 실적기준표기(b,c,isEst){
+  var mSfx=실적배수sfx(b,c);
+  var _ki=b.한전실적입력||{};
+  if(c.isKEPCO&&_ki.설계사용&&Number(_ki.설계금액)>0)return '(설계'+mSfx+')';
+  if(isEst)return '(추정*'+TRIM3(getBaseMult())+mSfx+')';
+  return mSfx?'(기초'+mSfx+')':'';
+}
 function getOneLineSummary(b, c, hideLHNote) {
   var 기준=기준약칭(b.적격기준)||'?';
   if(b.적격기준==='지자체'){
@@ -4884,7 +4902,7 @@ function getOneLineSummary(b, c, hideLHNote) {
   var 시평str='';
   if(c.E3!=null&&c.E3>0){var 시평억=Math.ceil(c.E3/10000000)/10;시평str='시평'+시평억.toFixed(1)+'억';}
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
-  var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정*'+TRIM3(getBaseMult())+')':'');
+  var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):실적기준표기(b,c,isEst);
   var 실적str;
   if(b.적격기준==='한전'&&isComplexGongjong(normGongjong(b.공종))&&c.한전분담E6){
     var _kDamLbl=kepcoDamLabel(normGongjong(b.공종));
@@ -4983,7 +5001,7 @@ function getEligibilityChecklist(b, c, damLabel, forceScoreInfo, lhGapInfo) {
   if(c.분담시평!=null&&c.분담시평>0)시평parts.push('분담시평'+_eokTrim(c.분담시평)+'억');
   var 시평str=시평parts.join(' / ');
   var isEst=(b.기초금액==null||b.기초금액===''||isNaN(b.기초금액));
-  var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):(isEst?'(추정*'+TRIM3(getBaseMult())+')':'');
+  var 실적기준sfx=(b.적격기준==='지자체')?(c.use3yr?'(3년*'+TRIM3(c.H6)+')':''):실적기준표기(b,c,isEst);
   var 실적str='실적 '+(c.E6>0?_eokTrim(c.E6):'0')+'억'+실적기준sfx;
   if(lhGap부족.indexOf('실적')!==-1)실적str+=' (합산'+_eokFloor(lhGapInfo.합산실적)+'억)';
   var lines=[];
