@@ -512,6 +512,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
         <button class="btn btn-ghost btn-sm" id="btn-clear-combos">전체 조합 비우기</button>
         <button class="btn btn-sm" id="btn-export-xlsx">조합결과TXT</button>
       </h2>
+      <div id="kepco-solo" style="display:none;border:1px solid #a5b4fc;background:#eef2ff;border-radius:8px;padding:8px 10px;margin-bottom:10px"></div>
       <div class="combos" id="combos"></div>
       <div style="margin-top:8px;text-align:center">
         <button class="btn" id="btn-add-combo">＋ 조합 추가</button>
@@ -3347,10 +3348,193 @@ function kepcoReasonHtml(txt){
     var under;
     if(m[2]){var a=+m[3].replace(/,/g,''),b=+m[4].replace(/,/g,'');under=b>0&&a<b;}
     else under=parseFloat(m[1])<100;
-    out+=under?'<span style="color:#dc2626;font-weight:800" title="필요실적 대비 100% 미달">'+escHtml(m[0])+'</span>':escHtml(m[0]);
+    out+=under?'<span style="color:#dc2626;font-weight:800" title="필요실적 대비 100% 미달 (일반공고는 탈락이 아니라 시공경험 만점 미달 — 상단 단독 판정표 참고)">'+escHtml(m[0])+'</span>':escHtml(m[0]);
     last=re.lastIndex;
   }
   return out+escHtml(src.slice(last));
+}
+
+// ████ SECTION: 한전 일반공고 — 자사 단독 적격 판정 (2026-10-27) ████
+// 근거: 한전 일반공고 적격심사기준 표본 4건(HVDC 동해안-신가평·남광명분기 전력구 전기설비 / 서오창 배전인출 전력구 /
+// 동해안#2 STATCOM 내선전기). 사용자 확정 가정(2026-10-27):
+//  - 입찰가격 점수 고정: 3억 이상 50억 미만 65점, 3억 미만 85점(50억 이상은 45점이나 기준서 표본이 없어 판정 미지원)
+//  - 산업재해 벌점 마일리지 없음, 신인도는 일자리창출(+2.5/+0.5)과 안전보건경영(+0.1, 변전소 토건 양식만)만 적용
+//  - 통과 = 수행능력(시공경험+경영상태+신인도)이 만점(3억↑ 30 / 3억↓ 10) 이상 → 총점 95
+//  - 실적공고(공고마다 특수 실적 요구)는 판정 보류 — state.bid.한전실적공고=true면 표를 그리지 않음
+// 시공경험 분모 = 사정액(VAT포함): 공고문 "사정가격/사정금액"(state.bid.한전사정가격), 없으면 추정가격×1.1(표본 4건 모두 일치).
+var KEPCO_LIMIT_3=300000000,KEPCO_LIMIT_08=80000000;
+var KEPCO_ECON_A={부채:[{t:50,g:'A',s:7.0},{t:75,g:'B',s:6.2},{t:100,g:'C',s:5.4},{t:125,g:'D',s:4.6},{g:'E',s:3.8}],
+                  유동:[{t:150,g:'A',s:7.0},{t:120,g:'B',s:6.2},{t:100,g:'C',s:5.4},{t:70,g:'D',s:4.6},{g:'E',s:3.8}]};
+var KEPCO_ECON_B={부채:[{t:100,g:'A',s:7.0},{t:130,g:'B',s:6.2},{t:160,g:'C',s:5.4},{t:190,g:'D',s:4.6},{g:'E',s:3.8}],
+                  유동:[{t:100,g:'A',s:7.0},{t:90,g:'B',s:6.2},{t:80,g:'C',s:5.4},{t:70,g:'D',s:4.6},{g:'E',s:3.8}]};
+var KEPCO_ECON_U3={부채:[{t:100,g:'A',s:3.0},{t:130,g:'B',s:2.7},{t:160,g:'C',s:2.4},{t:190,g:'D',s:2.1},{g:'E',s:1.8}],
+                   유동:[{t:100,g:'A',s:2.0},{t:90,g:'B',s:1.8},{t:80,g:'C',s:1.6},{t:70,g:'D',s:1.4},{g:'E',s:1.2}]};
+var KEPCO_ECON_YEAR=[{t:3,g:'3년+',s:1.0},{t:1,g:'1~3년',s:0.9},{g:'1년미만',s:0.8}];
+function kepcoSoloTier(E5){
+  if(!(E5>0))return null;
+  if(E5>=LIMIT_50)return{key:'50+',label:'50억 이상',price:45,cap:null,supported:false};
+  if(E5>=LIMIT_10)return{key:'A',label:'10억~50억',price:65,cap:30,perfMax:15,perfFull:1,econ:KEPCO_ECON_A,year:true,supported:true};
+  if(E5>=KEPCO_LIMIT_3)return{key:'B',label:'3억~10억',price:65,cap:30,perfMax:15,perfFull:1,econ:KEPCO_ECON_B,year:true,supported:true};
+  if(E5>=KEPCO_LIMIT_08)return{key:'U3',label:'8천만~3억',price:85,cap:10,perfMax:5,perfFull:0.5,econ:KEPCO_ECON_U3,year:false,supported:true};
+  return{key:'U08',label:'8천만 미만',price:85,cap:null,supported:false};
+}
+function kepcoSajeong(calc){
+  var v=Number(state.bid.한전사정가격);
+  if(v>0)return{amt:v,src:'사정가격 입력값'};
+  return{amt:Math.round((calc.E5||0)*1.1),src:'추정가격×1.1'};
+}
+// 등급 구간 판정. 3억 미만 부채는 "기준치×1.0 이하"가 만점(이하, 경계 포함)이라 첫 구간만 <= 비교.
+function _kepcoTier(table,val,mode,firstInclusive){
+  for(var i=0;i<table.length-1;i++){
+    var t=table[i];
+    var hit=mode==='lt'?((i===0&&firstInclusive)?val<=t.t:val<t.t):(val>=t.t);
+    if(hit)return t;
+  }
+  return table[table.length-1];
+}
+function _kepcoTierByGrade(table,g){for(var i=0;i<table.length;i++)if(table[i].g===g)return table[i];return null;}
+function kepcoCreditScore(c,tier){
+  var cr=parseCreditRating(c.신용평가||'');
+  if(!cr||!cr.isValid)return null;
+  var g=cr.grade,top=creditGradeScore(g)>=35;
+  var isU3=tier.key==='U3';
+  var s;
+  if(top)s=isU3?5:15;
+  else if(g==='BB-')s=isU3?4.9:14.8;
+  else if(['B+','B','B0','B-'].indexOf(g)>=0)s=isU3?4.9:14.6;
+  else s=isU3?4.3:12.9;
+  return{score:s,grade:g};
+}
+function kepcoFinScore(c,tier,gj){
+  var avgD=Number(state.bid.업계평균부채비율)||0,avgU=Number(state.bid.업계평균유동비율)||0;
+  var pd=getCompPerfData(c,gj);
+  var fD=econForcedGrade(pd.부채만점),fU=econForcedGrade(pd.유동만점);
+  var d=null,u=null,rD=null,rU=null;
+  if(fD)d=_kepcoTierByGrade(tier.econ.부채,fD);
+  else if(pd.부채비율!=null&&pd.부채비율!==''&&avgD){rD=Number(pd.부채비율)/avgD*100;d=_kepcoTier(tier.econ.부채,rD,'lt',tier.key==='U3');}
+  if(fU)u=_kepcoTierByGrade(tier.econ.유동,fU);
+  else if(pd.유동비율!=null&&pd.유동비율!==''&&avgU){rU=Number(pd.유동비율)/avgU*100;u=_kepcoTier(tier.econ.유동,rU,'gte');}
+  if(!d||!u)return null;
+  var y=null,ys=0;
+  if(tier.year){
+    var yr=calcYears(pd.공사업등록일);
+    y=_kepcoTier(KEPCO_ECON_YEAR,yr!=null?yr:0,'gte');ys=y.s;
+  }
+  return{score:Math.round((d.s+u.s+ys)*100)/100,부채:d,유동:u,영업:y,rD:rD,rU:rU};
+}
+function kepcoGongjongOK(c,gj){
+  var jt=c.공사업종||'';
+  if(!jt)return true; // 참여종목 미입력 업체는 판정에서 막지 않음
+  return jt.indexOf(gj)>=0;
+}
+function kepcoSoloScore(c,calc){
+  var tier=kepcoSoloTier(calc.E5);
+  if(!tier||!tier.supported)return{supported:false,tier:tier};
+  var gj=isComplexGongjong(calc.공종)?'전기':(calc.공종||'전기');
+  var S=kepcoSajeong(calc).amt;
+  var 실적=Number(getCompPerfData(c,gj).실적5)||0;
+  var 배수=S>0?실적/S:0;
+  var 시공=S>0?Math.min(Math.round(배수/tier.perfFull*tier.perfMax*100)/100,tier.perfMax):0;
+  var fin=kepcoFinScore(c,tier,gj),cr=kepcoCreditScore(c,tier);
+  var 경영=0,경영방식='없음';
+  if(fin&&(!cr||fin.score>=cr.score)){경영=fin.score;경영방식='재무';}
+  else if(cr){경영=cr.score;경영방식='신용 '+cr.grade;}
+  var 일자리=Math.max(0,Math.min(3,Number(c.일자리가점)||0));
+  var 안전=0;
+  if(state.bid.한전안전가점&&tier.key!=='U3'){var ps=parseSafetySystem(c.안전보건시스템||'');if(ps.valid&&ps.type)안전=0.1;}
+  var 신인도=Math.round((일자리+안전)*100)/100;
+  var 합=Math.round((시공+경영+신인도)*100)/100;
+  var 수행=Math.min(합,tier.cap);
+  var total=Math.round((수행+tier.price)*100)/100;
+  var regs=getRegionList();
+  var regionOK=!regs.length||regionMatchCo(regs,c);
+  var gjOK=kepcoGongjongOK(c,gj);
+  var scoreOK=합>=tier.cap-1e-9;
+  var need시공=Math.max(0,Math.round((tier.cap-경영-신인도)*100)/100);
+  var needPerf=null,perfImpossible=false;
+  if(!scoreOK){
+    if(need시공>tier.perfMax+1e-9)perfImpossible=true;
+    else needPerf=Math.ceil(need시공/tier.perfMax*tier.perfFull*S);
+  }
+  return{supported:true,tier:tier,S:S,실적:실적,배수:배수,시공:시공,경영:경영,경영방식:경영방식,fin:fin,credit:cr,
+         일자리:일자리,안전:안전,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
+         ok:scoreOK&&regionOK&&gjOK,need시공:need시공,needPerf:needPerf,perfImpossible:perfImpossible,gj:gj};
+}
+function renderKepcoSolo(calc){
+  var root=document.getElementById('kepco-solo');if(!root)return;
+  if(!calc||!calc.isKEPCO){root.style.display='none';root.innerHTML='';return;}
+  root.style.display='';
+  var b=state.bid;
+  var isPerf=!!b.한전실적공고;
+  var tier=kepcoSoloTier(calc.E5);
+  var sj=kepcoSajeong(calc);
+  var head='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px">'+
+    '<b style="color:#3730a3">⚡ 한전 자사 단독 판정</b>'+
+    '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="공고마다 특수 실적을 요구하는 실적공고는 단독 판정을 하지 않고 실적비율만 참고로 표시합니다">'+
+      '<input type="checkbox" data-kepco-solo="실적공고"'+(isPerf?' checked':'')+'>실적공고(판정 보류)</label>';
+  if(!isPerf){
+    head+='<label class="small" style="display:flex;align-items:center;gap:3px">사정가격(VAT포함) '+
+      '<input type="text" data-kepco-solo="사정가격" value="'+(Number(b.한전사정가격)>0?FMT_NUM(b.한전사정가격):'')+'" placeholder="'+FMT_NUM(Math.round((calc.E5||0)*1.1))+' (추정×1.1)" style="width:130px;padding:2px 4px;font-size:12px"></label>'+
+      '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="변전소 토건공사 양식 기준서에만 있는 안전보건경영시스템(ISO45001/KOSHA-MS) +0.1 가점. 전기공사 양식에는 이 항목이 없습니다">'+
+      '<input type="checkbox" data-kepco-solo="안전가점"'+(b.한전안전가점?' checked':'')+'>안전보건 +0.1(변전 양식)</label>';
+  }
+  head+='</div>';
+  if(isPerf){
+    root.innerHTML=head+'<div class="small" style="color:#6b7280">실적공고 — 단독 판정을 하지 않습니다. 조합 카드의 실적비율(참고용)을 확인하세요.</div>';
+    _bindKepcoSolo(root);return;
+  }
+  if(!tier){root.innerHTML=head+'<div class="small" style="color:#6b7280">추정가격을 입력하면 판정합니다.</div>';_bindKepcoSolo(root);return;}
+  if(!tier.supported){
+    root.innerHTML=head+'<div class="small" style="color:#b45309">추정가격 '+tier.label+' 구간은 기준서 표본이 없어 판정하지 않습니다'+(tier.key==='50+'?' (가격 45점 고정 예정)':'')+'.</div>';
+    _bindKepcoSolo(root);return;
+  }
+  var info='<div class="small" style="color:#4b5563;margin-bottom:6px">구간 '+tier.label+' · 사정액 '+FMT_NUM(sj.amt)+'원('+sj.src+') · 가격 '+tier.price+'점 고정 · 수행능력 만점 '+tier.cap+'점 필요(시공경험 '+tier.perfMax+'점은 실적 '+tier.perfFull+'배 만점) · 평균부채/유동 '+(state.bid.업계평균부채비율||'-')+'%/'+(state.bid.업계평균유동비율||'-')+'%</div>';
+  var list=state.db.filter(function(c){return c.is자사;});
+  if(!list.length){root.innerHTML=head+info+'<div class="small" style="color:#6b7280">업체DB에 자사로 지정된 업체가 없습니다.</div>';_bindKepcoSolo(root);return;}
+  var th='padding:4px 6px;border-bottom:1px solid #c7d2fe;font-size:11px;color:#3730a3;text-align:right;white-space:nowrap';
+  var td='padding:4px 6px;border-bottom:1px solid #e0e7ff;font-size:12px;text-align:right;white-space:nowrap';
+  var rows=list.map(function(c){
+    var r=kepcoSoloScore(c,calc);
+    var reasons=[];
+    if(!r.regionOK)reasons.push('지역 불일치');
+    if(!r.gjOK)reasons.push(r.gj+' 미참여');
+    if(!r.scoreOK){
+      reasons.push(TRIMDEC(Math.round((r.tier.cap-r.합)*100)/100)+'점 부족');
+      if(r.perfImpossible)reasons.push('실적만으로 불가');
+      else if(r.needPerf!=null)reasons.push('필요실적 '+FMT_NUM(r.needPerf)+'(부족 '+FMT_NUM(Math.max(0,r.needPerf-r.실적))+')');
+    }
+    var 경영t=r.경영방식==='재무'&&r.fin?('부채'+r.fin.부채.g+' 유동'+r.fin.유동.g+(r.fin.영업?' '+r.fin.영업.g:'')):r.경영방식;
+    var perfColor=r.배수+1e-12<r.tier.perfFull?'#dc2626':'#111827';
+    var verdict=r.ok?'<span class="badge b-ok">통과</span>':'<span class="badge b-bad">미달</span>';
+    return '<tr>'+
+      '<td style="'+td+';text-align:left;font-weight:700">'+esc(c.업체명)+'</td>'+
+      '<td style="'+td+'">'+FMT_NUM(r.실적)+'</td>'+
+      '<td style="'+td+';color:'+perfColor+';font-weight:700">'+(Math.floor(r.배수*1000)/1000).toFixed(3)+'배</td>'+
+      '<td style="'+td+'">'+TRIMDEC(r.시공)+'</td>'+
+      '<td style="'+td+'" title="'+esc(경영t)+'">'+TRIMDEC(r.경영)+' <span style="color:#6b7280;font-size:10px">('+esc(경영t)+')</span></td>'+
+      '<td style="'+td+'">'+TRIMDEC(r.신인도)+(r.안전?' <span style="color:#6b7280;font-size:10px">(안전+0.1)</span>':'')+'</td>'+
+      '<td style="'+td+';font-weight:700;color:'+(r.scoreOK?'#047857':'#dc2626')+'">'+TRIMDEC(r.합)+' / '+r.tier.cap+'</td>'+
+      '<td style="'+td+'">'+TRIMDEC(r.total)+'</td>'+
+      '<td style="'+td+';text-align:center">'+verdict+'</td>'+
+      '<td style="'+td+';text-align:left;color:#b91c1c">'+esc(reasons.join(' · '))+'</td>'+
+    '</tr>';
+  }).join('');
+  root.innerHTML=head+info+
+    '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;background:#fff">'+
+    '<thead><tr><th style="'+th+';text-align:left">업체</th><th style="'+th+'">5년 실적</th><th style="'+th+'">실적배수</th><th style="'+th+'">시공경험</th><th style="'+th+'">경영상태</th><th style="'+th+'">신인도</th><th style="'+th+'">수행능력</th><th style="'+th+'">총점(가격'+tier.price+')</th><th style="'+th+';text-align:center">판정</th><th style="'+th+';text-align:left">비고</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
+  _bindKepcoSolo(root);
+}
+function _bindKepcoSolo(root){
+  root.querySelectorAll('[data-kepco-solo]').forEach(function(el){
+    var k=el.getAttribute('data-kepco-solo');
+    el.addEventListener('change',function(){
+      if(k==='실적공고')state.bid.한전실적공고=!!el.checked;
+      else if(k==='안전가점')state.bid.한전안전가점=!!el.checked;
+      else if(k==='사정가격'){var v=parseMoney(el.value);state.bid.한전사정가격=(v!=null&&v>0)?v:null;}
+      save();refreshCombos();
+    });
+  });
 }
 
 // ████ SECTION: 적격기준 구조화 (도로공사·수자원공사) ████
@@ -5306,7 +5490,7 @@ function getDbByType(grp,calc,currentCi,currentSi){
     list=state.db.filter(function(c){return regionMatchCo(지역들,c);});
     // 단독입찰 가능+감점없는 업체 제외 (감점 있는 업체는 항상 표시)
     var _지역E6=kepcoAwareE6(calc);
-    if(_지역E6>0){
+    if(_지역E6>0&&!(calc&&calc.isKEPCO)){ // 2026-10-27: 한전은 단독가능 업체도 지역 목록에 노출
       list=list.filter(function(c){
         var _pd4=getCompPerfData(c,calc&&calc.공종||'전기');
         var 실적OK=Number((calc.use3yr?_pd4.실적3:_pd4.실적5)||0)>=_지역E6;
@@ -5395,6 +5579,8 @@ function isShareShort(c,grp,calc){
 // 자동분배의 우선협정업체 투입 판정(isEligibleForNeedType)에서도 같은 기준을 쓰기 위함.
 function isRegionSoloPossible(c,calc){
   if(!calc)return false;
+  // 2026-10-27: 한전은 대부분 단독 입찰이라 단독가능 업체도 업체선택 목록에 그대로 노출(지역/필요/실적/자사 고정칸 제외 안 함)
+  if(calc.isKEPCO)return false;
   var _regionE6R=kepcoAwareE6(calc);
   if(!(_regionE6R>0))return false;
   var _pdR=getCompPerfData(c,calc.공종||'전기');
@@ -7274,12 +7460,17 @@ function extractBidFields(t){
     return new RegExp('('+_names.map(_esc).join('|')+')','g');
   })();
   var _foundRegs=[];
+  // 2026-10-27: 지역제한 문구가 "본점을 충청북도에 둔 업체"처럼 광역 정식명칭으로 오면 약칭(충북 등) 정규식에 걸리지 않아
+  // 지역제한을 놓쳤음 → 지역 문맥 줄에 한해 정식명칭을 약칭으로 바꿔서 매칭한다(본문 t 자체는 변경하지 않음).
+  var _FULLREG=[['서울특별시','서울'],['부산광역시','부산'],['대구광역시','대구'],['인천광역시','인천'],['광주광역시','광주'],['대전광역시','대전'],['울산광역시','울산'],['세종특별자치시','세종'],['경기도','경기'],['강원특별자치도','강원'],['강원도','강원'],['충청북도','충북'],['충청남도','충남'],['전북특별자치도','전북'],['전라북도','전북'],['전라남도','전남'],['경상북도','경북'],['경상남도','경남'],['제주특별자치도','제주'],['제주도','제주']];
+  function _shortReg(l){_FULLREG.forEach(function(p){l=l.split(p[0]).join(p[1]);});return l;}
   var _rCtxLines=t.match(/(?:지역\s*의무공동도급|지역\s*제한|공사\s*지역)[^\n]{0,150}/g);
+  if(_rCtxLines)_rCtxLines=_rCtxLines.map(_shortReg);
   if(_rCtxLines){_rCtxLines.forEach(function(line){var ms=line.match(_REGPAT);if(ms)ms.forEach(function(x){if(_foundRegs.indexOf(x)<0)_foundRegs.push(x);});});}
   if(!_foundRegs.length){var _fm=t.match(_REGPAT);if(_fm&&_fm[0])_foundRegs=[_fm[0]];}
   if(_foundRegs.length)r.지역선택=_foundRegs;
   // 2026-10-13: '전국'은 지역제한 칸에 '전국' 단독일 때만 확정(기관 무관). "전국/서울"처럼 지역명이 함께 있으면 그 지역명 기준(기존 방식).
-  var _limLines=t.match(/지\s*역\s*제\s*한[^\n]{0,150}/g)||[];
+  var _limLines=(t.match(/지\s*역\s*제\s*한[^\n]{0,150}/g)||[]).map(_shortReg);
   var _natOnly=false,_limHasReg=false;
   _limLines.forEach(function(l){var ms=l.match(_REGPAT);if(ms&&ms.length)_limHasReg=true;else if(/전\s*국/.test(l.slice(0,30)))_natOnly=true;});
   if(_natOnly&&!_limHasReg)r.지역선택=['전국'];
@@ -7340,6 +7531,12 @@ function extractBidFields(t){
     if(_natOnly&&!_limHasReg){
       r.지역선택=['전국'];
     }
+    // 2026-10-27: 한전 공고는 지역제한이 없으면 "지역제한 : 해당없음"이거나 항목 자체가 없다. 이때 위의 "본문 첫 지역명"
+    // 폴백이 공사현장·발주처 주소(예: 울진 → 경북, 세종 법원로 등)를 지역제한으로 잘못 잡으므로, 지역제한/지역의무공동도급/
+    // 공사지역 문맥 어디에도 지역명이 없으면 '전국'으로 확정한다(단독 판정의 지역 일치 검사에 쓰임).
+    if(!_limHasReg&&!(_rCtxLines||[]).some(function(l){var ms=l.match(_REGPAT);return ms&&ms.length;})){
+      r.지역선택=['전국'];
+    }
     if(/공\s*동\s*도\s*급|분\s*담\s*이\s*행/.test(t)){
       var _bmCtx=t.match(/(?:공\s*동\s*도\s*급|분\s*담\s*이\s*행)[\s\S]{0,300}/);
       if(_bmCtx){
@@ -7384,6 +7581,12 @@ function extractBidFields(t){
         }
       }
       if(_out.length)r.주공정예정기간=_out.join(' / ');
+    })();
+    // 2026-10-27: 사정가격(VAT포함) 추출 — 일반공고 단독 판정의 시공경험 분모. 공고문 "사정가격 : 3,162,335,000원",
+    // "사정금액 : ￦ 249,755,000-", 적격심사기준서 "…산출기초조서상의 사정액 (VAT포함) : ￦ 2,452,022,100원" 형식.
+    (function(){
+      var _sm=t.match(/사\s*정\s*(?:가\s*격|금\s*액)\s*[：:]\s*[￦₩\\]?\s*([\d,]{7,})/)||t.match(/사\s*정\s*액[^\d￦₩]{0,30}[：:]\s*[￦₩\\]?\s*([\d,]{7,})/);
+      if(_sm){var _sv=Number(_sm[1].replace(/,/g,''));if(_sv>0)r.한전사정가격=_sv;}
     })();
     delete r.시평제한;delete r.분담시평;
   }
@@ -7679,7 +7882,7 @@ function _pdfPlaceholder(k,found){
 }
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
-  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)'};
+  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)',한전사정가격:'사정가격(한전·VAT포함)'};
   var root=MODAL_ROOT;
   if(keys.length===0){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:400px">'+
@@ -7713,7 +7916,7 @@ function showPdfResultModal(found,preview){
   }
   function _dispVal(k){
     var val=found[k];
-    return (k==='기초금액'||k==='추정가격'||k==='시평제한'||k==='분담시평'||k==='A값'||k==='lh지분율기준')?FMT_NUM(val):
+    return (k==='기초금액'||k==='추정가격'||k==='시평제한'||k==='분담시평'||k==='A값'||k==='lh지분율기준'||k==='한전사정가격')?FMT_NUM(val):
       String(Array.isArray(val)?val.join(','):val)+(k==='지역의무지분'||k==='투찰률'||k==='최소지분율'?'%':k==='배수'?'배':k==='구성업체수'?'개사':'');
   }
   function _manualInput(k){
@@ -7949,6 +8152,7 @@ function showPdfResultModal(found,preview){
     if(found.등록마감일)state.bid.마감일=found.등록마감일;
     if(found.협정마감일_YMD)state.bid.협정마감일_YMD=found.협정마감일_YMD; // 탭 자동삭제 기준일(연도 포함, autoRemoveExpiredBidScreens 참고)
     if(found.한전분담비율)state.bid.한전분담비율=found.한전분담비율; // 참고용 원본 보존
+    if(found.적격기준==='한전'&&!found.한전사정가격)state.bid.한전사정가격=null; // 2026-10-27: 새 공고에 사정가격이 없으면 이전 값 해제(추정×1.1로 대체)
     if(found.적격기준==='한전'&&!found.주공정예정기간)state.bid.주공정예정기간=null; // 새 공고에 기간이 없으면 이전 공고의 값이 남지 않도록 해제
     if(found.적격기준==='한전'){
       // 실적제한 수기입력값은 모달 안의 입력칸(⚡ 실적제한 블록, _kepcoPerfInputBlockHtml)에서 그대로 읽어와 저장한다.
@@ -8009,6 +8213,7 @@ function showPdfResultModal(found,preview){
         var _lge=$('#o-공종-label');if(_lge)_lge.textContent=v;
       }
       else if(k==='주공정예정기간'){state.bid.주공정예정기간=String(v);}
+      else if(k==='한전사정가격'){state.bid.한전사정가격=Number(v)||null;}
       else if(k==='A값'){state.bid.A값=v;var _aEl=$('#in-A값');if(_aEl)_aEl.value=FMT_NUM(v);}
     });
     save();refreshBidStats();refreshCombos();updateBidNameLabel();renderBidScreenTabs();root.innerHTML='';toast('공고 정보 반영 완료','ok');
@@ -9034,6 +9239,7 @@ function buildNeedHtml(comboCalc,result){
 function refreshCombos(){ return withLegacyDBIfNeeded(function(){
   if(syncDamSlotsToGongjong(state.combos,state.bid.공종))save();
   var calc=calcBid();
+  renderKepcoSolo(calc); // 2026-10-27: 한전 일반공고 자사 단독 판정표
   var root=$('#combos');if(!root)return;
   root.innerHTML='';
   state.combos.forEach(function(combo,ci){
@@ -9851,7 +10057,7 @@ function bind(){
     }
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
     (function(){var _rm=$('#in-기준월');if(_rm)_rm.value=state.bid._기준월;})(); // 2026-08-27: 공고 초기화 시 기준월도 이번 달로 리셋(재확인 필요)
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
