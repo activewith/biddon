@@ -3336,6 +3336,23 @@ const 적격기준_한전 = {
   }
 };
 
+// 2026-10-27: 한전 실적비율 표시용 HTML — 판정은 미적용이지만 실적이 필요실적(100%)에 못 미치는 항목은 적색 강조.
+// 적격사유 텍스트(조합결과TXT·확정메세지 등)는 그대로 두고, 화면 표시에만 사용한다.
+// 미달 판정은 반올림된 % 대신 괄호 안 원금액(실적/필요)을 우선 비교 — 99.96%가 "100.0%"로 보여도 미달이면 적색.
+function kepcoReasonHtml(txt){
+  var src=String(txt==null?'':txt);
+  var re=/(\d+(?:\.\d+)?)%(\(([\d,]+)\/([\d,]+)\))?/g,out='',last=0,m;
+  while((m=re.exec(src))){
+    out+=escHtml(src.slice(last,m.index));
+    var under;
+    if(m[2]){var a=+m[3].replace(/,/g,''),b=+m[4].replace(/,/g,'');under=b>0&&a<b;}
+    else under=parseFloat(m[1])<100;
+    out+=under?'<span style="color:#dc2626;font-weight:800" title="필요실적 대비 100% 미달">'+escHtml(m[0])+'</span>':escHtml(m[0]);
+    last=re.lastIndex;
+  }
+  return out+escHtml(src.slice(last));
+}
+
 // ████ SECTION: 적격기준 구조화 (도로공사·수자원공사) ████
 // 도로공사/수자원공사는 경영상태 점수(econScore)·적격판정(judge)은 조달청 기준(별표6/7A)을 그대로 쓰지만,
 // 안전보건경영시스템 가점·일자리창출 가점 적용비율은 기관마다 고유하다(calcSafetyBonus 참고 — 이 함수
@@ -9018,7 +9035,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     card.className='combo'+(result.적격?' ok':(result.used>0&&!result.지분율OK?' warn':''))+(combo.전송?' sent':'');
     card.dataset.ci=ci;
     var status=comboCalc.isKEPCO
-      ?'<span class="badge" data-stat="status" style="background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc">'+result.적격사유+'</span>'
+      ?'<span class="badge" data-stat="status" style="background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc">'+kepcoReasonHtml(result.적격사유)+'</span>'
       :(result.적격
         ?(result.LH점수모드
           ?'<span class="badge b-ok-score" data-stat="status" title="'+esc(result.적격사유)+'">적격</span>'
@@ -9103,7 +9120,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         '</table>'+
       '</div>'+
       '<div class="combo-foot">'+
-        '<div class="item"><span class="k">'+(comboCalc.isKEPCO?'실적비율':'적격여부')+'</span><span class="v '+(comboCalc.isKEPCO?'':(result.적격?(result.LH점수모드?'score-text':'ok-text'):'bad-text'))+'" data-stat="적격사유">'+(comboCalc.isKEPCO?result.적격사유:(result.적격?(result.LH점수모드?result.적격사유:'OK'):result.적격사유))+'</span></div>'+
+        '<div class="item"><span class="k">'+(comboCalc.isKEPCO?'실적비율':'적격여부')+'</span><span class="v '+(comboCalc.isKEPCO?'':(result.적격?(result.LH점수모드?'score-text':'ok-text'):'bad-text'))+'" data-stat="적격사유">'+(comboCalc.isKEPCO?kepcoReasonHtml(result.적격사유):(result.적격?(result.LH점수모드?result.적격사유:'OK'):result.적격사유))+'</span></div>'+
         '<div data-scorefoot="'+ci+'" style="display:contents">'+scoreFootHtml+'</div>'+
         (comboCalc.isKEPCO&&comboCalc.한전분담E6?'':'<div class="item"><span class="k">'+(comboCalc.use3yr?'실적제한(3년)':'실적제한(5년)')+'</span><span class="v"><span data-stat="합산실적2" class="'+(_실적미달?'bad-text':'')+'">'+FMT_NUM(Math.round(result.합산실적))+'</span> / '+FMT_NUM(Math.round(comboCalc.E6))+'</span></div>')+
         (comboCalc.isKEPCO?'':'<div class="item"><span class="k">시평제한 대비</span><span class="v">'+시평제한대비+'</span></div>')+
@@ -9135,7 +9152,7 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
   if(je){je.textContent=TRIMDEC(FLOOR1(result.지분합_pct))+'%';je.className=result.지분율OK?'ok-text':'bad-text';}
   var se=card.querySelector('[data-stat="status"]');
   if(se){
-    if(comboCalc.isKEPCO){se.textContent=result.적격사유;se.className='badge';se.style.cssText='background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc';}
+    if(comboCalc.isKEPCO){se.innerHTML=kepcoReasonHtml(result.적격사유);se.className='badge';se.style.cssText='background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc';}
     else if(result.적격&&result.LH점수모드){se.textContent='적격';se.className='badge b-ok-score';se.title=result.적격사유;se.removeAttribute('style');}
     else if(result.적격){se.textContent='적격';se.className='badge b-ok';se.removeAttribute('style');se.removeAttribute('title');}
     else if(forceActive){se.textContent=result.적격사유+' · 강제할당';se.className='badge';se.style.cssText='background:#fed7aa;color:#9a3412;border:1px solid #fdba74';}
@@ -9153,7 +9170,7 @@ function updateSlotMath(ci){ return withLegacyDBIfNeeded(function(){
     faBtn.textContent='강제할당'+(combo.강제할당?' ON':'');
   }
   var ae=card.querySelector('[data-stat="적격사유"]');
-  if(ae){ae.textContent=comboCalc.isKEPCO?result.적격사유:(result.적격?(result.LH점수모드?result.적격사유:'OK'):result.적격사유);ae.className=comboCalc.isKEPCO?'v':'v '+(result.적격?(result.LH점수모드?'score-text':'ok-text'):'bad-text');}
+  if(ae){if(comboCalc.isKEPCO)ae.innerHTML=kepcoReasonHtml(result.적격사유);else ae.textContent=(result.적격?(result.LH점수모드?result.적격사유:'OK'):result.적격사유);ae.className=comboCalc.isKEPCO?'v':'v '+(result.적격?(result.LH점수모드?'score-text':'ok-text'):'bad-text');}
   set('합산실적2',FMT_NUM(Math.round(result.합산실적)));set('합산시평2',FMT_NUM(Math.round(result.합산시평)));
   set('순신인도2',FMT_REP(result.순신인도));
   set('분담시평합산',FMT_NUM(Math.round(result.분담시평합산||0)));
