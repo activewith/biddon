@@ -4477,7 +4477,12 @@ function addCancelledBidFromCurrent(){
     id:'cb'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
     cancelledAt:new Date().toISOString(),
     공고명:state.bid.공고명||'',공고번호:state.bid.공고번호||'',적격기준:state.bid.적격기준||'',
-    txt:txt,by:(_s&&(_s.name||_s.id))||''
+    txt:txt,by:(_s&&(_s.name||_s.id))||'',
+    // 2026-10-28: 재공고 판단(공종·지역·추정가격·적격기준 100% 일치) 및 조합 자동반영용 — 업체가 들어간 조합만 보관(용량 절감)
+    공종:state.bid.공종||'',지역선택:(Array.isArray(state.bid.지역선택)?state.bid.지역선택.slice():[]),
+    추정가격:(state.bid.추정가격!=null&&state.bid.추정가격!=='')?Number(state.bid.추정가격):null,
+    구성업체수:state.bid.구성업체수||2,
+    combos:JSON.parse(JSON.stringify((state.combos||[]).filter(function(c){return c&&c.slots&&c.slots.some(function(sl){return sl&&String(sl.업체명||'').trim()!=='';});})))
   });
   pruneCancelledBids();
   return true;
@@ -4499,7 +4504,7 @@ function showCancelledBidsModal(){
     var title=(it.공고명||'(공고명 없음)')+(it.공고번호?' ('+it.공고번호+')':'');
     return '<tr data-cbid="'+esc(it.id)+'" style="border-top:1px solid var(--border)">'+
       '<td style="padding:6px 8px;white-space:nowrap;font-size:12px">'+esc(_fmtCancelTs(it.cancelledAt))+'</td>'+
-      '<td style="padding:6px 8px;font-size:12px;font-weight:600;word-break:break-all">'+esc(title)+(it.적격기준?' <span style="font-weight:400;color:#64748b">['+esc(it.적격기준)+']</span>':'')+'</td>'+
+      '<td style="padding:6px 8px;font-size:12px;font-weight:600;word-break:break-all">'+esc(title)+(it.적격기준?' <span style="font-weight:400;color:#64748b">['+esc(it.적격기준)+']</span>':'')+(it.재공고반영At?' <span style="font-weight:700;font-size:10px;color:#fff;background:#16a34a;border-radius:3px;padding:1px 4px" title="'+esc(_fmtCancelTs(it.재공고반영At))+'">↻재공고 반영</span>':'')+'</td>'+
       '<td style="padding:6px 8px;white-space:nowrap;font-size:11px;color:'+(dLeft<=3?'#dc2626':'#64748b')+'" title="자동삭제 예정: '+esc(_fmtCancelTs(exp.toISOString()))+'">D-'+dLeft+'</td>'+
       '<td style="padding:6px 8px;white-space:nowrap;text-align:right">'+
         '<button type="button" class="btn btn-ghost btn-sm cb-view" style="padding:2px 8px;font-size:11px">보기</button> '+
@@ -4536,6 +4541,64 @@ function showCancelledBidsModal(){
       toast('삭제했습니다','ok');
     };
   });
+}
+// ── 2026-10-28: 취소 후 재공고 판정 ───────────────────────────────
+// 조건: (1) 공고명 유사도 80% 이상(문자 편집거리 비율 / 단어 일치율 중 큰 값)
+//       (2) 공종·지역·추정가격·적격기준 100% 일치
+// 2026-10-28 이전에 보관된 취소공고는 공종/지역/추정가격/조합 데이터가 없어 판정 대상에서 제외됨.
+function _rebidNormTitle(t){
+  return String(t||'').replace(/[\(\[\{<]?\s*(재공고|재입찰|긴급|정정|변경)\s*[\)\]\}>]?/g,' ').replace(/[\s\(\)\[\]\{\}<>.,·\-_~"'“”‘’:;\/]+/g,'').toLowerCase();
+}
+function _rebidTokens(t){
+  return String(t||'').replace(/(재공고|재입찰|긴급|정정|변경)/g,' ').split(/[\s\(\)\[\]\{\}<>.,·\-_~"'“”‘’:;\/]+/).map(function(x){return x.trim().toLowerCase();}).filter(Boolean);
+}
+function _levenshtein(a,b){
+  var m=a.length,n=b.length;if(!m)return n;if(!n)return m;
+  var prev=new Array(n+1),cur=new Array(n+1),i,j;
+  for(j=0;j<=n;j++)prev[j]=j;
+  for(i=1;i<=m;i++){cur[0]=i;for(j=1;j<=n;j++){cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a.charCodeAt(i-1)===b.charCodeAt(j-1)?0:1));}var t=prev;prev=cur;cur=t;}
+  return prev[n];
+}
+function bidTitleSimilarity(t1,t2){
+  var a=_rebidNormTitle(t1),b=_rebidNormTitle(t2);
+  if(!a||!b)return 0;
+  var charR=1-_levenshtein(a,b)/Math.max(a.length,b.length);
+  var A=Array.from(new Set(_rebidTokens(t1))),B=Array.from(new Set(_rebidTokens(t2)));
+  var inter=A.filter(function(x){return B.indexOf(x)>=0;}).length;
+  var tokR=(A.length+B.length)?(2*inter/(A.length+B.length)):0;
+  return Math.max(charR,tokR);
+}
+function _rebidRegionKey(v){
+  var arr=Array.isArray(v)?v:(v?[v]:[]);
+  return arr.map(function(x){return String(x||'').trim();}).filter(Boolean).sort().join('|');
+}
+// cur: {공고명,공종,지역선택,추정가격,적격기준} → [{item,score}] (유사도 높은 순)
+function findRebidMatches(cur){
+  pruneCancelledBids();
+  var out=[];
+  var curG=normGongjong(cur.공종||''),curR=_rebidRegionKey(cur.지역선택),curE=Number(cur.추정가격)||0;
+  if(!String(cur.공고명||'').trim()||!curE)return out;
+  (state.cancelledBids||[]).forEach(function(it){
+    if(!it||it.공종==null||it.추정가격==null)return; // 구버전 보관분(비교 데이터 없음)
+    if(normGongjong(it.공종||'')!==curG)return;
+    if(_rebidRegionKey(it.지역선택)!==curR)return;
+    if(Number(it.추정가격)!==curE)return;
+    if(String(it.적격기준||'')!==String(cur.적격기준||''))return;
+    var sc=bidTitleSimilarity(it.공고명,cur.공고명);
+    if(sc>=0.8)out.push({item:it,score:sc});
+  });
+  out.sort(function(x,y){return y.score-x.score;});
+  return out;
+}
+function _rebidCombosSummaryHtml(combos){
+  combos=combos||[];
+  if(!combos.length)return '<span style="color:#dc2626">보관된 조합 없음</span>';
+  return combos.map(function(c,i){
+    var names=(c.slots||[]).filter(function(sl){return sl&&String(sl.업체명||'').trim();}).map(function(sl){
+      return esc(sl.업체명)+(Number(sl.지분율)?' <span style="color:#64748b">'+esc(TRIMDEC(Number(sl.지분율),2))+'%</span>':'');
+    });
+    return '<div style="white-space:nowrap">#'+(i+1)+' '+names.join(' + ')+'</div>';
+  }).join('');
 }
 // ████ END 취소공고 ████
 function showExpiryAlertModal(){
@@ -8037,6 +8100,13 @@ function showPdfResultModal(found,preview){
   root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:460px;max-width:96vw">'+
     '<h3>📄 공고문 분석 결과</h3>'+
     '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">반영할 항목을 선택하세요.</p>'+
+    // 2026-10-28: 공고명 표시칸(검출값 표시, 직접 수정 가능 — 반영 시 이 칸의 값이 공고명으로 저장되고 재공고 판정에도 쓰임)
+    '<div style="border:1px solid #c7d2fe;background:#eef2ff;border-radius:6px;padding:6px 8px;margin:0 0 8px">'+
+      '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#3730a3;margin-bottom:4px">공고명'+
+        (found.공고번호?'<span style="font-weight:400;color:#64748b">('+esc(found.공고번호)+')</span>':'')+
+        (found.공사명?'':'<span style="font-weight:400;color:#dc2626">미검출 — 직접입력</span>')+'</div>'+
+      '<input type="text" id="m-pdf-bidname" value="'+esc(found.공사명||'')+'" placeholder="공고명 직접입력" style="width:100%;box-sizing:border-box;padding:4px 6px;border:1px solid #a5b4fc;border-radius:4px;font-size:13px;font-weight:700;background:#fff;color:#111827">'+
+    '</div>'+
     '<div style="font-size:12px;font-weight:700;color:#1d4ed8;margin:4px 0">공통(필수)항목</div>'+
     '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="width:32px"></th><th class="l">항목</th><th class="l">추출값</th></tr></thead><tbody id="m-pdf-common-tbody">'+commonRows+'</tbody></table>'+
     _kepcoPerfInputBlockHtml(found)+
@@ -8136,6 +8206,53 @@ function showPdfResultModal(found,preview){
       if(!confirm('이 공고의 적격기준이 "'+(state.bid.적격기준||'미지정')+'" → "'+found.적격기준+'"(으)로 바뀝니다.\n이미 구성한 조합의 판정 기준과 표시가 달라집니다.\n계속 반영하시겠습니까?')){found.__cancel=true;}
     })();
     if(found.__cancel){delete found.__cancel;return;}
+    // 2026-10-28: 공고명 칸 값 반영(수정했을 수 있음)
+    (function(){var _bn=document.getElementById('m-pdf-bidname');if(_bn){var _v=_bn.value.trim();if(_v)found.공사명=_v;}})();
+    // 2026-10-28: 취소 후 재공고 판정 — 반영될 값 기준으로 취소공고와 비교
+    function _eff(k){var cb=document.querySelector('[data-pdf-key="'+k+'"]');var v=found[k];if(cb&&cb.checked&&v!=null&&v!==''&&!(Array.isArray(v)&&!v.length))return v;return state.bid[k];}
+    var _rbCur={공고명:found.공사명||state.bid.공고명||'',공종:_eff('공종'),지역선택:_eff('지역선택'),추정가격:_eff('추정가격'),적격기준:_eff('적격기준')};
+    var _rbMatches=[];try{_rbMatches=findRebidMatches(_rbCur);}catch(e){console.warn('재공고 판정 실패',e);}
+    if(_rbMatches.length){_showRebidCompare(_rbCur,_rbMatches);return;}
+    _doApplyPdf(null);
+  };
+  function _showRebidCompare(cur,matches){
+    var ov=document.createElement('div');ov.className='modal-back';ov.id='m-rebid-back';ov.style.zIndex='110';
+    var td='padding:4px 8px;border-top:1px solid var(--border);font-size:12px;vertical-align:top;text-align:left';
+    var blocks=matches.map(function(m,mi){
+      var it=m.item;var hasCombo=!!(it.combos&&it.combos.length);
+      var row=function(lbl,a,b,same){return '<tr><td style="'+td+';color:#64748b;white-space:nowrap">'+lbl+'</td><td style="'+td+'">'+a+'</td><td style="'+td+'">'+b+'</td><td style="'+td+';text-align:center;font-weight:700;color:'+(same?'#16a34a':'#d97706')+'">'+(same?'일치':'유사')+'</td></tr>';};
+      return '<div style="border:1px solid #cbd5e1;border-radius:6px;margin-bottom:10px;overflow:hidden">'+
+        '<div style="background:#f1f5f9;padding:6px 8px;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px">'+
+          '<span><b>후보 '+(mi+1)+'</b> · 공고명 유사도 <b style="color:#1d4ed8">'+Math.round(m.score*100)+'%</b> · 취소 '+esc(_fmtCancelTs(it.cancelledAt))+(it.재공고반영At?' · <span style="color:#16a34a">이미 반영된 적 있음</span>':'')+'</span>'+
+          '<button type="button" class="btn btn-sm" data-rebid-apply="'+mi+'" '+(hasCombo?'':'disabled ')+'style="background:'+(hasCombo?'#16a34a':'#9ca3af')+';color:#fff;padding:3px 10px">이 취소공고 조합 반영</button>'+
+        '</div>'+
+        '<table style="width:100%;border-collapse:collapse"><thead><tr style="font-size:11px;color:#475569"><th style="padding:4px 8px;text-align:left;width:70px">항목</th><th style="padding:4px 8px;text-align:left">취소공고</th><th style="padding:4px 8px;text-align:left">이번 공고(재공고)</th><th style="width:40px"></th></tr></thead><tbody>'+
+          row('공고명',esc(it.공고명||'')+(it.공고번호?'<div style="color:#64748b">'+esc(it.공고번호)+'</div>':''),esc(cur.공고명||'')+(found.공고번호?'<div style="color:#64748b">'+esc(found.공고번호)+'</div>':''),String(it.공고명||'')===String(cur.공고명||''))+
+          row('공종',esc(displayGongjong(it.공종||'')),esc(displayGongjong(normGongjong(cur.공종||''))),true)+
+          row('지역',esc((it.지역선택||[]).join(', ')),esc((Array.isArray(cur.지역선택)?cur.지역선택:[cur.지역선택]).filter(Boolean).join(', ')),true)+
+          row('추정가격',esc(FMT_NUM(it.추정가격)),esc(FMT_NUM(cur.추정가격)),true)+
+          row('적격기준',esc(it.적격기준||''),esc(cur.적격기준||''),true)+
+          '<tr><td style="'+td+';color:#64748b">조합</td><td colspan="3" style="'+td+'">'+_rebidCombosSummaryHtml(it.combos)+'</td></tr>'+
+        '</tbody></table></div>';
+    }).join('');
+    ov.innerHTML='<div class="modal" style="min-width:560px;max-width:96vw;max-height:88vh;overflow:auto">'+
+      '<h3 style="margin-top:0">↻ 취소 후 재공고로 판단됩니다</h3>'+
+      '<p style="font-size:12px;color:var(--muted);margin:0 0 8px">공고명 80% 이상 유사 + 공종·지역·추정가격·적격기준 100% 일치하는 취소공고가 '+matches.length+'건 있습니다. 취소공고의 조합을 이 화면의 조합슬롯에 그대로 반영할까요?<br>(반영 시 현재 화면의 조합은 취소공고 조합으로 교체됩니다)</p>'+
+      blocks+
+      '<div class="row" style="justify-content:flex-end;gap:6px;margin-top:6px">'+
+        '<button type="button" class="btn btn-ghost" id="m-rebid-back-btn">돌아가기</button>'+
+        '<button type="button" class="btn" id="m-rebid-skip" style="background:#2563eb">조합 없이 공고 정보만 반영</button>'+
+      '</div></div>';
+    root.appendChild(ov);
+    var _close=function(){if(ov.parentNode)ov.parentNode.removeChild(ov);};
+    ov.querySelector('#m-rebid-back-btn').onclick=_close;
+    ov.addEventListener('click',function(ev){if(ev.target===ov)_close();});
+    ov.querySelector('#m-rebid-skip').onclick=function(){_close();_doApplyPdf(null);};
+    ov.querySelectorAll('[data-rebid-apply]').forEach(function(b){
+      b.onclick=function(){var m=matches[Number(b.getAttribute('data-rebid-apply'))];if(!m)return;_close();_doApplyPdf(m.item);};
+    });
+  }
+  function _doApplyPdf(rebidItem){
     if(found.공사명){
       state.bid.공고명=found.공사명;
       state.bid.공고명저장일시=new Date().toISOString();
@@ -8216,8 +8333,21 @@ function showPdfResultModal(found,preview){
       else if(k==='한전사정가격'){state.bid.한전사정가격=Number(v)||null;}
       else if(k==='A값'){state.bid.A값=v;var _aEl=$('#in-A값');if(_aEl)_aEl.value=FMT_NUM(v);}
     });
-    save();refreshBidStats();refreshCombos();updateBidNameLabel();renderBidScreenTabs();root.innerHTML='';toast('공고 정보 반영 완료','ok');
-  };
+    // 2026-10-28: 취소 후 재공고 — 취소공고의 조합을 그대로 복원(슬롯 수가 구성업체수보다 적으면 빈 슬롯 추가, 많으면 업체 보존을 위해 자르지 않음)
+    var _rebidDone=false;
+    if(rebidItem&&rebidItem.combos&&rebidItem.combos.length){
+      var _nc=JSON.parse(JSON.stringify(rebidItem.combos));
+      var _ns=Math.max(1,Math.min(MAX_SLOTS,Number(state.bid.구성업체수)||2));
+      _nc.forEach(function(c){if(!c.slots)c.slots=[];while(c.slots.length<_ns)c.slots.push(emptySlot());});
+      while(_nc.length<DEFAULT_COMBOS)_nc.push(emptyCombo());
+      state.combos=_nc;
+      rebidItem.재공고반영At=new Date().toISOString();
+      _rebidDone=true;
+    }
+    save();refreshBidStats();refreshCombos();updateBidNameLabel();renderBidScreenTabs();root.innerHTML='';
+    if(_rebidDone){toast('공고 정보 + 취소공고 조합 '+rebidItem.combos.length+'개 반영 완료','ok');try{gistPushNow();}catch(e){}}
+    else toast('공고 정보 반영 완료','ok');
+  }
 }
 
 // ████ SECTION: IMPORT-EXPORT (importXlsx/exportResultXlsx/exportDBXlsx) ████
@@ -10050,10 +10180,27 @@ function bind(){
   // 공고취소(2026-10-16, 구 "공고 초기화"): 내용이 있으면 조합결과TXT를 취소공고로 보관한 뒤 기존과 동일하게 초기화
   $('#btn-reset-bid').addEventListener('click',function(){
     var _sentCancel=false;
+    var _multi=!!(state.bidScreens&&state.bidScreens.length>1);
     if(bidHasCancelableContent()){
-      if(!confirm('이 공고를 [취소공고]로 보내고 입력값을 초기화합니다.\n(조합결과TXT 내용이 취소일자와 함께 1개월간 보관됩니다)\n\n계속할까요?'))return;
+      if(!confirm('이 공고를 [취소공고]로 보내고 '+(_multi?'이 화면탭을 삭제합니다.':'입력값을 초기화합니다.\n(마지막 화면탭이라 탭은 삭제되지 않습니다)')+'\n(조합결과TXT 내용이 취소일자와 함께 1개월간 보관됩니다)\n\n계속할까요?'))return;
       if(!addCancelledBidFromCurrent())return;
       _sentCancel=true;
+    }else if(_multi){
+      if(!confirm('빈 화면탭입니다. 이 화면탭을 삭제할까요?'))return;
+    }
+    // 2026-10-28: 공고취소 시 화면탭 자체를 삭제(탭이 2개 이상일 때). 마지막 1개는 기존처럼 초기화만 함.
+    if(_multi){
+      var _ci=state.activeBidScreenIndex||0;
+      state.bidScreens.splice(_ci,1);
+      var _na=Math.max(0,Math.min(state.bidScreens.length-1,_ci-1<0?0:_ci-1));
+      state.activeBidScreenIndex=_na;
+      var _ns=state.bidScreens[_na];
+      state.bid=_ns.bid;state.combos=_ns.combos;
+      restoreBidInputsFromState();refreshBidStats();refreshCombos();renderBidScreenTabs();updateBidNameLabel();
+      save();
+      toast(_sentCancel?'취소공고로 보내고 화면탭을 삭제했습니다':'화면탭을 삭제했습니다','ok');
+      try{gistPushNow();}catch(e){}
+      return;
     }
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
