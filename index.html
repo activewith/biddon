@@ -8578,6 +8578,11 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       if(_showJeoksum)_sumParts.push('실적합'+_EOK_FLOOR(r.합산실적)+'억');
       line+=' ['+_sumParts.join('_')+']';
     }
+    // 2026-10-29: 안내(URL) 체크(전체 b.표시안내URL 또는 개별 combo.표시안내URL)가 켜져 있으면
+    // 확정메모 내용을 조합 줄 끝에 공백 없이 [내용]으로 병기 — 확정메세지와 동일 내용
+    if((b.표시안내URL||combo.표시안내URL)&&combo.확정메모&&String(combo.확정메모).trim()){
+      line+='['+String(combo.확정메모).trim()+']';
+    }
     comboLines.push(line);
   });
   // 4. 최대지분율 — 지역(grp==='지역') 업체만, 고유, 정수
