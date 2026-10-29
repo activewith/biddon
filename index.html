@@ -10659,7 +10659,7 @@ function bind(){
             '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed #e5e7eb">'+
               (currentRole()==='super'?(
                 '<button type="button" class="btn btn-sm btn-ghost" id="bkp-restore-btn" style="border-color:#f59e0b;color:#b45309">📂 백업 파일 복원</button>'+
-                '<input type="file" id="bkp-restore-file" accept="application/json,.json" style="display:none">'+
+                '<input type="file" id="bkp-restore-file" accept="application/json,.json,.gz,.json.gz,application/gzip" style="display:none">'+
                 '<span style="font-size:11px;color:#9ca3af">백업 json 파일을 선택하면 현재 데이터를 덮어씁니다</span>'
               ):(
                 '<span style="font-size:11px;color:#9ca3af">📂 백업 파일 복원은 최고관리자만 가능합니다</span>'
