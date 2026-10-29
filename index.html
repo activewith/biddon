@@ -674,6 +674,7 @@ const FLOOR1=function(x){return Math.floor((Number(x)||0)*100)/100;}; // 지분�
 const FLOOR3=function(x){return Math.floor((Number(x)||0)*1000)/1000;};
 const ROUND3=function(x){return Math.round((Number(x)||0)*1000)/1000;}; // 신인도/감점: 소수 4째 자리에서 반올림 → 3째 자리까지 표현
 const FMT_NUM=function(n){return (n==null||n===''||isNaN(n))?'':Number(n).toLocaleString('ko-KR');};
+const DEFAULT_DED_NOTE_TPL='[보완불가 총-N점]';
 const TRIM3=function(x){var _r=Math.round((Number(x)||0)*100)/100;if(Object.is(_r,-0))_r=0;var _s=_r.toFixed(2);if(_s.indexOf('.')>=0)_s=_s.replace(/0+$/,'').replace(/\.$/,'');return _s;}; // 신인도/감점: 소수 3째 자리에서 반올림, 2자리까지 유효숫자만 표기(말단 0 생략, 2026-07-28)
 const FMT_REP=function(x){return TRIM3(ROUND3(x));};
 // 소수점/% 표기: 최대 d자리(기본 2)까지 반올림 후 말단 0 생략(유효숫자만 표기). 2026-07-28 추가.
@@ -865,7 +866,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[]},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[],dedNoteTpl:DEFAULT_DED_NOTE_TPL},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -969,6 +970,7 @@ function gistApplyData(obj){
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
+  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'&&obj.settings.dedNoteTpl.trim())state.settings.dedNoteTpl=obj.settings.dedNoteTpl;
   if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
   ensureDefaultAccounts();
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
@@ -1574,6 +1576,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
+  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'&&obj.settings.dedNoteTpl.trim())state.settings.dedNoteTpl=obj.settings.dedNoteTpl;
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
   if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
   if(obj.dbLegacySnapshotMeta!==undefined)state.dbLegacySnapshotMeta=obj.dbLegacySnapshotMeta;
@@ -1662,6 +1665,7 @@ function load(){
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||null;applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
+  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'&&obj.settings.dedNoteTpl.trim())state.settings.dedNoteTpl=obj.settings.dedNoteTpl;
     if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
     if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
     if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
@@ -3837,7 +3841,18 @@ function getUnrecoverableDedNote(result,calc){
   if(calc.isKEPCO||calc.isRail)return'';
   var v=Math.round((Number(result.순신인도)||0)*100)/100;
   if(!(v<0))return'';
-  return '보완불가 감점 총'+TRIM3(v);
+  return formatDedNote(TRIM3(-v));
+}
+// 2026-10-29: 감점 조합 멘트는 설정>조합>감점 조합에서 편집(state.settings.dedNoteTpl). 템플릿의 N 자리에 총 감점 절대값이 들어감.
+function formatDedNote(absStr){
+  var tpl=(state.settings&&typeof state.settings.dedNoteTpl==='string'&&state.settings.dedNoteTpl.trim())?state.settings.dedNoteTpl.trim():DEFAULT_DED_NOTE_TPL;
+  return tpl.replace(/N/g,absStr);
+}
+// 확정메모가 감점 멘트와 같은 내용인지(괄호 유무 무시) — 같으면 메모 쪽 표시 생략
+function sameAsDedNote(memo,note){
+  if(!note||!memo)return false;
+  var m=String(memo).trim();
+  return m===note||('['+m+']')===note||m===note.replace(/^\[|\]$/g,'').trim();
 }
 function clearGuideUrlFromAllCombos(){
   (state.combos||[]).forEach(function(c,ci){clearGuideUrlFromCombo(ci);});
@@ -8591,8 +8606,8 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     // 2026-10-29: 안내(URL) 체크(전체 b.표시안내URL 또는 개별 combo.표시안내URL)가 켜져 있으면
     // 확정메모 내용을 조합 줄 끝에 공백 없이 [내용]으로 병기 — 확정메세지와 동일 내용
     var _udNote=getUnrecoverableDedNote(r,c);
-    if(_udNote)line+='['+_udNote+']';
-    if((b.표시안내URL||combo.표시안내URL)&&combo.확정메모&&String(combo.확정메모).trim()&&String(combo.확정메모).trim()!==_udNote){
+    if(_udNote)line+=_udNote;
+    if((b.표시안내URL||combo.표시안내URL)&&combo.확정메모&&String(combo.확정메모).trim()&&!sameAsDedNote(combo.확정메모,_udNote)){
       line+='['+String(combo.확정메모).trim()+']';
     }
     comboLines.push(line);
@@ -10895,6 +10910,18 @@ function bind(){
               '단, 계산된 <b>최대지분율</b>을 초과하면 최대지분율보다 낮은 5%단위 값으로 조정합니다 (예: 최대 45% → 40%, 최대 56% → 55%).<br>'+
               '지자체 30억 미만·철도공단·한전 공고는 최대지분율 제한 없이 약정지분율/기본지분율을 그대로 입력합니다.'+
             '</div>'+
+            '<div style="margin-top:16px;padding-top:14px;border-top:1px dashed #e5e7eb">'+
+              '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:10px">⚠️ 감점 조합</div>'+
+              '<label style="font-size:12px;color:#374151;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">참고 멘트'+
+                '<input type="text" id="in-dedNoteTpl" maxlength="60" style="width:260px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit">'+
+                '<button type="button" class="btn btn-sm btn-ghost" id="btn-dedNoteTpl-reset">기본값</button>'+
+              '</label>'+
+              '<div style="font-size:12px;color:#374151;margin-top:8px">미리보기(총 감점 0.13 예시): <b id="dedNoteTpl-preview" style="color:#b91c1c"></b></div>'+
+              '<div style="font-size:11px;color:#6b7280;margin-top:8px;line-height:1.6">'+
+                '※ 순신인도가 음수(감점이 가점보다 큰 조합)이면 <b>조합결과TXT</b>(조합 줄 끝)와 <b>확정메세지</b>(맨 끝 줄)에 이 멘트를 자동으로 붙입니다. 철도공단·한전은 제외.<br>'+
+                '<b>N</b> 자리에 총 감점(순신인도 절대값)이 들어갑니다. 괄호 [ ]도 입력한 그대로 표시됩니다. 비워두면 기본값 <b>'+esc(DEFAULT_DED_NOTE_TPL)+'</b>을 사용합니다.'+
+              '</div>'+
+            '</div>'+
           '</div>'+
         '</div>'+
         (currentRole()==='super'?(
@@ -11234,6 +11261,18 @@ function bind(){
           save();
         });
       }
+      // 감점 조합 참고 멘트 (조합 탭, 전체 계정 공통 — state.settings.dedNoteTpl)
+      (function(){
+        var el=document.getElementById('in-dedNoteTpl');if(!el)return;
+        var pv=document.getElementById('dedNoteTpl-preview');
+        function refresh(){if(pv)pv.textContent=formatDedNote('0.13');}
+        el.value=(state.settings.dedNoteTpl&&String(state.settings.dedNoteTpl).trim())?state.settings.dedNoteTpl:DEFAULT_DED_NOTE_TPL;
+        refresh();
+        el.addEventListener('input',function(){state.settings.dedNoteTpl=el.value.trim()?el.value:DEFAULT_DED_NOTE_TPL;refresh();});
+        el.addEventListener('change',function(){if(!el.value.trim())el.value=DEFAULT_DED_NOTE_TPL;state.settings.dedNoteTpl=el.value;refresh();save();});
+        var rb=document.getElementById('btn-dedNoteTpl-reset');
+        if(rb)rb.addEventListener('click',function(){el.value=DEFAULT_DED_NOTE_TPL;state.settings.dedNoteTpl=DEFAULT_DED_NOTE_TPL;refresh();save();toast('기본값으로 되돌렸습니다','ok');});
+      })();
       if(isAdminOrAbove())bindAccountsTab(mr);
       // ── 업체DB설정 탭 (전기/통신/소방 평균부채·평균유동 — 전체 계정 공통) ──
       (function(){
@@ -11968,8 +12007,8 @@ function _showConfirmPopCore(ci){ return withLegacyDBIfNeeded(function(){
   // "[메모내용]" 형태로 추가. 협정메세지(state.bid.협정메세지)와 달리 이 메모는 확정메세지에만 쓰이는 조합별 값이다.
   // 2026-10-29: 감점 구성이면 "[보완불가 감점 총-N]" 자동 추가(메모와 같은 내용이면 메모 쪽은 생략해 중복 방지)
   var _udNoteC=getUnrecoverableDedNote(_result,_comboCalc);
-  if(_udNoteC)result+='\n['+_udNoteC+']';
-  if(combo.확정메모&&combo.확정메모.trim()&&combo.확정메모.trim()!==_udNoteC)result+='\n['+combo.확정메모.trim()+']';
+  if(_udNoteC)result+='\n'+_udNoteC;
+  if(combo.확정메모&&combo.확정메모.trim()&&!sameAsDedNote(combo.확정메모,_udNoteC))result+='\n['+combo.확정메모.trim()+']';
   var _lhGapInfo=(_globalCalc.isLH&&_result.LH점수모드)?{부족목록:_result.LH부족목록,합산실적:_result.합산실적,합산시평:_result.합산시평,순신인도:_result.순신인도,총점:_result.lh총점,적격:_result.적격}:null;
   var _elig=getEligibilityChecklist(state.bid,_globalCalc,null,_forceRows.length?_result.lh원점수:null,_lhGapInfo);
   if(_elig)result+='\n\n'+_elig;
