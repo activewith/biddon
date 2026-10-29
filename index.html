@@ -3829,6 +3829,16 @@ function clearGuideUrlFromCombo(ci){
   var input=document.querySelector('.combo-confirm-memo[data-ci="'+ci+'"]');
   if(input)input.value='';
 }
+// 2026-10-29: 감점 구성(순신인도<0 — 감점이 가점보다 커서 보완이 안 되는 조합)이면
+// 조합결과TXT·확정메세지에 "[보완불가 감점 총-0.13]" 문구를 자동 병기. 총 감점 = 순신인도 값.
+// 철도공단(감점을 경영상태 점수에서 직접 차감)·한전(신인도 판정 없음)은 제외.
+function getUnrecoverableDedNote(result,calc){
+  if(!result||!calc)return'';
+  if(calc.isKEPCO||calc.isRail)return'';
+  var v=Math.round((Number(result.순신인도)||0)*100)/100;
+  if(!(v<0))return'';
+  return '보완불가 감점 총'+TRIM3(v);
+}
 function clearGuideUrlFromAllCombos(){
   (state.combos||[]).forEach(function(c,ci){clearGuideUrlFromCombo(ci);});
 }
@@ -8580,7 +8590,9 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     }
     // 2026-10-29: 안내(URL) 체크(전체 b.표시안내URL 또는 개별 combo.표시안내URL)가 켜져 있으면
     // 확정메모 내용을 조합 줄 끝에 공백 없이 [내용]으로 병기 — 확정메세지와 동일 내용
-    if((b.표시안내URL||combo.표시안내URL)&&combo.확정메모&&String(combo.확정메모).trim()){
+    var _udNote=getUnrecoverableDedNote(r,c);
+    if(_udNote)line+='['+_udNote+']';
+    if((b.표시안내URL||combo.표시안내URL)&&combo.확정메모&&String(combo.확정메모).trim()&&String(combo.확정메모).trim()!==_udNote){
       line+='['+String(combo.확정메모).trim()+']';
     }
     comboLines.push(line);
@@ -11954,7 +11966,10 @@ function _showConfirmPopCore(ci){ return withLegacyDBIfNeeded(function(){
   }
   // 조합슬롯의 "확정메세지 메모" 입력칸(combo.확정메모, 20자 이내)에 내용이 있으면 메세지 맨 끝(협정 부탁 문구 다음 줄)에
   // "[메모내용]" 형태로 추가. 협정메세지(state.bid.협정메세지)와 달리 이 메모는 확정메세지에만 쓰이는 조합별 값이다.
-  if(combo.확정메모&&combo.확정메모.trim())result+='\n['+combo.확정메모.trim()+']';
+  // 2026-10-29: 감점 구성이면 "[보완불가 감점 총-N]" 자동 추가(메모와 같은 내용이면 메모 쪽은 생략해 중복 방지)
+  var _udNoteC=getUnrecoverableDedNote(_result,_comboCalc);
+  if(_udNoteC)result+='\n['+_udNoteC+']';
+  if(combo.확정메모&&combo.확정메모.trim()&&combo.확정메모.trim()!==_udNoteC)result+='\n['+combo.확정메모.trim()+']';
   var _lhGapInfo=(_globalCalc.isLH&&_result.LH점수모드)?{부족목록:_result.LH부족목록,합산실적:_result.합산실적,합산시평:_result.합산시평,순신인도:_result.순신인도,총점:_result.lh총점,적격:_result.적격}:null;
   var _elig=getEligibilityChecklist(state.bid,_globalCalc,null,_forceRows.length?_result.lh원점수:null,_lhGapInfo);
   if(_elig)result+='\n\n'+_elig;
