@@ -2303,6 +2303,17 @@ function railTechRatingFromScore(score,추정가격){
 function updateRailGroupInfo(){
   var el=document.getElementById('o-rail기술기준');if(!el)return;
   var 추정가격=state.bid.추정가격;
+  var _ttl=el.previousElementSibling;
+  if(railIsFire(state.bid.공종)){
+    // 2026-10-30: 별표5(소방시설) — 기술능력평가 제외, 실적 15점
+    if(_ttl)_ttl.innerHTML='🚒 철도공단 별표5(소방시설) 시공경험 배점기준 <span style="font-weight:400;color:#6b7280">— 기술능력평가 제외</span>';
+    var _t=railTierFor({E5:추정가격,공종:'소방',E4_eff:calcBid().E4_eff});
+    el.innerHTML=!_t?'<span style="color:#dc2626">현재 추정가격(3억 미만 또는 100억 이상) 구간은 100점 배점제 적용 대상이 아닙니다.</span>'
+      :'<b>['+_t.label.replace(' · 별표5 소방','')+']</b> &nbsp; 실적 15점 = 실적계수×15 · 실적계수 = 합산실적 ÷ (설계금액'+(_t.설계금액>_t.설계금액적용?'(50억 간주)':'')+' '+FMT_NUM(Math.round(_t.설계금액적용))+' × '+_t.실적N+') = '+FMT_NUM(Math.round(_t.실적기준금액))+
+       '<div style="font-size:10px;color:#6b7280;margin-top:2px">기술점수 평가 제외 · 실적계수 소수점 셋째자리 반올림 · 설계금액=기초금액</div>';
+    return;
+  }
+  if(_ttl)_ttl.innerHTML='🚄 철도공단 기술점수(경력기술자) 배점기준 <span style="font-weight:400;color:#6b7280">— 추정가격 기준 자동 표시</span>';
   var table=railTechGradeTable(추정가격);
   if(!table){
     el.innerHTML=(추정가격==null||추정가격==='')
@@ -2409,6 +2420,37 @@ function railScoreTier(E5){
   }
   return null;
 }
+// ── 2026-10-30: 철도공단 별표5(소방시설·국가유산공사) — 공종이 '소방'(단독)일 때 적용 ──────────────
+// 별표3(전기·정보통신) 대비 차이: 1.2 기술능력평가 '평가 제외'(기술 0점) → 시공경험(실적) 배점 15점(평점=실적계수×15, 상한 15).
+// 실적계수 = 총실적합계액 ÷ (설계금액 × N). 설계금액 = 기초금액(E4_eff, 추정가격+부가세).
+//   N: 50억~100억 미만 ×3 / 10억~50억 미만 ×3, 단 추정가격 30억 미만은 ×2(붙임1 ④) / 3억~10억 미만 ×0.5(붙임1 ⑤)
+//   붙임1 ③: 소방공사 설계금액 50억 이상이면 설계금액을 50억으로 간주. 붙임1 ⑦: 실적계수 소수점 셋째자리에서 반올림.
+// 경영상태(15)·신인도(±0.9/±0.5)·시공계획(T1만 20)·입찰가격(캡 45/65/65)은 별표3과 동일 → 만점 15+15(+20)+가격캡 = 95.
+// 복합(전기+소방)은 주공종이 전기이므로 기존 별표3 그대로.
+function railIsFire(공종){return normGongjong(공종||'')==='소방';}
+function railTierFor(calc){
+  var base=railScoreTier(calc&&calc.E5);
+  if(!base)return null;
+  var t=Object.assign({},base);
+  if(railIsFire(calc.공종)){
+    t.소방=true;t.기술배점=0;t.실적배점=15;
+    t.실적N=(t.tier==='T1')?3:(t.tier==='T2'?(Number(calc.E5)<3000000000?2:3):0.5);
+    t.설계금액=Number(calc.E4_eff)||0;
+    t.설계금액적용=Math.min(t.설계금액,LIMIT_50);
+    t.실적기준금액=t.설계금액적용*t.실적N;
+    t.label=base.label+' · 별표5 소방';
+  } else {
+    t.소방=false;
+    t.실적기준금액=(Number(calc.E5)||0)*t.실적N;
+  }
+  return t;
+}
+function railPerfScore(합산실적,t){
+  if(!t||!(t.실적기준금액>0))return{계수:0,점수:0};
+  var k=(Number(합산실적)||0)/t.실적기준금액;
+  if(t.소방){k=Math.round(k*100+1e-9)/100;return{계수:k,점수:Math.min(Math.round(k*t.실적배점*1000)/1000,t.실적배점)};}
+  return{계수:k,점수:Math.min(Math.floor(k*t.실적배점*1000)/1000,t.실적배점)};
+}
 // 입찰가격평가 평점 (별표3 3.입찰가격평가): ratio=예상투찰금액/예정가격
 // 2026-09-02: 예비가격을 알 수 없는 사전 판정에서는 이 공식 대신 tier.가격cap점수로 보수적 고정하기로
 // 변경(calcSlot 철도 분기·railSoloScore 둘 다 호출부 삭제) — 함수 자체는 참고용으로 남겨둠(현재 미사용).
@@ -2424,15 +2466,14 @@ function railPriceScore(tier,ratio){
 // 기술점수는 조합 슬롯 Func 수동값이 아니라, 업체명이 철도기술점수 DB와 일치하는 경우의 총합산점수를 사용한다
 // (단독 참여 시나리오에는 조합 슬롯이 없으므로 DB 매칭이 유일한 근거).
 function railSoloScore(c,calc){
-  var tier=calc&&calc.isRail?railScoreTier(calc.E5):null;
+  var tier=calc&&calc.isRail?railTierFor(calc):null;
   if(!tier)return null;
   var pd=getCompPerfData(c,calc.공종||'전기');
   var 실적=Number((calc.use3yr?pd.실적3:pd.실적5)||0);
-  var rail실적계수=(calc.E5>0&&tier.실적N>0)?(실적/(calc.E5*tier.실적N)):0;
-  var rail실적점수=Math.min(Math.floor(rail실적계수*tier.실적배점*1000)/1000,tier.실적배점);
-  var rtEntry=(state.railTechDB||[]).find(function(e){return NFC(e.업체명)===NFC(c.업체명||'');});
+  var rail실적점수=railPerfScore(실적,tier).점수;
+  var rtEntry=tier.소방?null:(state.railTechDB||[]).find(function(e){return NFC(e.업체명)===NFC(c.업체명||'');});
   var funcVal=rtEntry?railTechCompanyTotal(rtEntry):0;
-  var rt=railTechRatingFromScore(funcVal,calc.E5);
+  var rt=tier.소방?null:railTechRatingFromScore(funcVal,calc.E5); // 별표5(소방): 기술능력평가 제외
   var rail기술점수=rt?rt.point:0;
   var eff=getEffectiveDeduction(c,calc);
   var rail경영상태점수=Math.max(0,tier.경영배점-eff.value);
@@ -3278,14 +3319,16 @@ const 적격기준_철도공단 = {
   },
   // 100점 배점제 최종 판정(추정가격 3억~100억). calcSlot()의
   // "else if(calc.isRail&&railScoreTier(...))" 블록 그대로 이동 — 조건·문구·구제로직 동일.
-  judge: function(합산시평,E3,합산실적,E5,감점환산,순신인도,신인도환산,기술점수합계,예정가격,A값,H7,rescue){
+  judge: function(합산시평,E3,합산실적,E5,감점환산,순신인도,신인도환산,기술점수합계,예정가격,A값,H7,rescue,ctx){
     if(E3!=null&&합산시평<=E3){
       return{적격:false,적격사유:'시평 부족 (합산 '+FMT_NUM(Math.round(합산시평))+' / 제한 '+FMT_NUM(E3)+')',감점환산:감점환산,순신인도:순신인도,railData:{}};
     }
-    var railTier=railScoreTier(E5);
-    var rail실적계수=(E5>0&&railTier.실적N>0)?(합산실적/(E5*railTier.실적N)):0;
-    var rail실적점수=Math.min(Math.floor(rail실적계수*railTier.실적배점*1000)/1000,railTier.실적배점);
-    var rail기술등급정보=railTechRatingFromScore(기술점수합계,E5);
+    // 2026-10-30: ctx(calc)로 공종·기초금액을 받아 별표5(소방) 분기 — ctx 없으면 기존 별표3 동작
+    var railTier=railTierFor(ctx||{E5:E5});
+    var _rps=railPerfScore(합산실적,railTier);
+    var rail실적계수=_rps.계수;
+    var rail실적점수=_rps.점수;
+    var rail기술등급정보=railTier.소방?null:railTechRatingFromScore(기술점수합계,E5);
     var rail기술점수=rail기술등급정보?rail기술등급정보.point:0;
     var rail경영상태점수=Math.max(0,railTier.경영배점-감점환산);
     var rail신인도점수=Math.max(-railTier.신인도한도,Math.min(railTier.신인도한도,신인도환산));
@@ -3310,7 +3353,7 @@ const 적격기준_철도공단 = {
       }
     }
     var 적격사유=적격?'적격 ('+rail총점.toFixed(2)+'점)':'부적격 ('+rail총점.toFixed(2)+'점 / 95점 미달)';
-    var railData={rail티어:railTier.tier,rail티어명:railTier.label,rail실적점수:rail실적점수,rail기술점수:rail기술점수,rail기술등급:(rail기술등급정보&&rail기술등급정보.grade)||null,rail경영상태점수:rail경영상태점수,rail신인도점수:rail신인도점수,rail시공계획점수:rail시공계획점수,rail시공계획적용:railTier.시공계획적용,rail가격점수:rail가격점수,rail가격비율:rail가격비율,rail총점:rail총점};
+    var railData={rail티어:railTier.tier,rail티어명:railTier.label,rail실적점수:rail실적점수,rail기술점수:rail기술점수,rail기술등급:(rail기술등급정보&&rail기술등급정보.grade)||null,rail경영상태점수:rail경영상태점수,rail신인도점수:rail신인도점수,rail시공계획점수:rail시공계획점수,rail시공계획적용:railTier.시공계획적용,rail가격점수:rail가격점수,rail가격비율:rail가격비율,rail총점:rail총점,rail소방:!!railTier.소방,rail실적계수:rail실적계수,rail실적기준금액:railTier.실적기준금액,rail실적N:railTier.실적N};
     return{적격:적격,적격사유:적격사유,감점환산:감점환산,순신인도:순신인도,railData:railData};
   }
 };
@@ -5503,7 +5546,7 @@ function calcSlot(combo,calc){
     // ── 철도공단 100점 배점제 적격 판정 (별표3 전기·정보통신공사, 추정가격 3억~100억 구간) ──
     // 3억 미만/100억 이상은 이 분기에 들어오지 않고 아래 일반(else) 게이트 방식(실적/시평/신인도)으로
     // 처리됨 — railScoreTier()가 null 반환. (적격기준_철도공단.judge 참고)
-    var _rjd=적격기준_철도공단.judge(합산시평,calc.E3,합산실적,calc.E5,감점환산,순신인도,신인도환산,기술점수합계,calc.예정가격,calc.A값,calc.H7,{try:_tryCreditRescue,revert:_revertCreditRescue});
+    var _rjd=적격기준_철도공단.judge(합산시평,calc.E3,합산실적,calc.E5,감점환산,순신인도,신인도환산,기술점수합계,calc.예정가격,calc.A값,calc.H7,{try:_tryCreditRescue,revert:_revertCreditRescue},calc);
     적격=_rjd.적격;적격사유=_rjd.적격사유;감점환산=_rjd.감점환산;순신인도=_rjd.순신인도;railData=_rjd.railData;
   } else if(calc.적격모듈===적격기준_한전){
     // 한전(한국전력공사): 기초금액 대비 5년실적 비율만 계산·표시. 시평/신인도를 포함한 적격·부적격 판정은
@@ -9349,7 +9392,9 @@ function buildScoreFootHtml(calc,result){
   if(calc.isRail&&result.rail총점!=null){
     var _rtScore=result.기술점수합계||0;
     html+='<div class="item" style="grid-column:1/-1"><span class="k">철도 점수 상세 ('+esc(result.rail티어명||'')+')</span><span class="v" style="font-size:11px">'+
-      '실적 '+result.rail실적점수.toFixed(2)+'pt | 기술 '+result.rail기술점수.toFixed(1)+'pt'+(result.rail기술등급?'('+result.rail기술등급+'등급, 합산 '+_rtScore.toFixed(3)+')':'(합산 '+_rtScore.toFixed(3)+', 미달)')+' | 경영 '+result.rail경영상태점수.toFixed(2)+'pt | 신인도 '+(result.rail신인도점수>=0?'+':'')+TRIM3(result.rail신인도점수)+'pt | 시공계획 '+(result.rail시공계획적용===false?'평가제외':result.rail시공계획점수.toFixed(1)+'pt(만점고정)')+' | 가격 '+result.rail가격점수.toFixed(2)+'pt(보수적 고정'+(result.rail가격비율!=null?', 참고비율 '+(result.rail가격비율*100).toFixed(2)+'%':'')+')'+' = <b>'+result.rail총점.toFixed(2)+'pt</b> / 95pt'+
+      (result.rail소방
+        ?('실적 '+result.rail실적점수.toFixed(2)+'pt(계수 '+Number(result.rail실적계수||0).toFixed(2)+' = 합산실적/'+FMT_NUM(Math.round(result.rail실적기준금액||0))+') | 기술 평가제외')
+        :('실적 '+result.rail실적점수.toFixed(2)+'pt | 기술 '+result.rail기술점수.toFixed(1)+'pt'+(result.rail기술등급?'('+result.rail기술등급+'등급, 합산 '+_rtScore.toFixed(3)+')':'(합산 '+_rtScore.toFixed(3)+', 미달)')))+' | 경영 '+result.rail경영상태점수.toFixed(2)+'pt | 신인도 '+(result.rail신인도점수>=0?'+':'')+TRIM3(result.rail신인도점수)+'pt | 시공계획 '+(result.rail시공계획적용===false?'평가제외':result.rail시공계획점수.toFixed(1)+'pt(만점고정)')+' | 가격 '+result.rail가격점수.toFixed(2)+'pt(보수적 고정'+(result.rail가격비율!=null?', 참고비율 '+(result.rail가격비율*100).toFixed(2)+'%':'')+')'+' = <b>'+result.rail총점.toFixed(2)+'pt</b> / 95pt'+
       '</span></div>';
   } else if(calc.isRail&&!railScoreTier(calc.E5)){
     var _rtScore2=result.기술점수합계||0;
@@ -9474,7 +9519,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
             (canForceAlloc?'ON 상태에서 지분율을 올릴 업체의 Func칸에 명목 지분율(%)을 직접 입력하세요(실제 계산에는 영향 없음)':'점수계산 버튼이 초록색(95점 이상)일 때만 사용 가능')+
             '">강제할당'+(combo.강제할당?' ON':'')+'</button>':'')+
           (calc.isLH?'<button class="btn btn-sm" style="background:'+lhBtnColor+';color:#fff;font-weight:600" data-lhcalc="'+ci+'">점수계산</button>':'')+
-          (calc.isRail?'<button class="btn btn-sm" style="background:#0369a1;color:#fff;font-weight:600" data-railtech="'+ci+'" title="철도기술점수 DB에서 업체명이 일치하는 업체의 총합산점수를 각 슬롯 Func 칸에 자동 입력">🚄기술</button>':'')+
+          (calc.isRail&&!railIsFire(calc.공종)?'<button class="btn btn-sm" style="background:#0369a1;color:#fff;font-weight:600" data-railtech="'+ci+'" title="철도기술점수 DB에서 업체명이 일치하는 업체의 총합산점수를 각 슬롯 Func 칸에 자동 입력">🚄기술</button>':'')+
           (comboCalc.isKEPCO?'':'<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 시평 합산액을 표시(전체표시와 무관하게 적용)">'+
             '<input type="checkbox" class="combo-sipyung-chk" data-ci="'+ci+'"'+(combo.표시시평합?' checked':'')+'>시평합'+
           '</label>')+
