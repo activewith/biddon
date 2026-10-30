@@ -674,7 +674,8 @@ const FLOOR1=function(x){return Math.floor((Number(x)||0)*100)/100;}; // 지분�
 const FLOOR3=function(x){return Math.floor((Number(x)||0)*1000)/1000;};
 const ROUND3=function(x){return Math.round((Number(x)||0)*1000)/1000;}; // 신인도/감점: 소수 4째 자리에서 반올림 → 3째 자리까지 표현
 const FMT_NUM=function(n){return (n==null||n===''||isNaN(n))?'':Number(n).toLocaleString('ko-KR');};
-const DEFAULT_DED_NOTE_TPL='[보완불가 총-N점]';
+const DEFAULT_DED_NOTE_TPL=''; // 2026-10-30: 기본값 비움(비어 있으면 멘트 미표시)
+const OLD_DEFAULT_DED_NOTE_TPL='[보완불가 총-N점]'; // 10-29 기본값 — 사용자가 직접 입력한 게 아니면 빈 값으로 이전
 const TRIM3=function(x){var _r=Math.round((Number(x)||0)*100)/100;if(Object.is(_r,-0))_r=0;var _s=_r.toFixed(2);if(_s.indexOf('.')>=0)_s=_s.replace(/0+$/,'').replace(/\.$/,'');return _s;}; // 신인도/감점: 소수 3째 자리에서 반올림, 2자리까지 유효숫자만 표기(말단 0 생략, 2026-07-28)
 const FMT_REP=function(x){return TRIM3(ROUND3(x));};
 // 소수점/% 표기: 최대 d자리(기본 2)까지 반올림 후 말단 0 생략(유효숫자만 표기). 2026-07-28 추가.
@@ -866,7 +867,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[],dedNoteTpl:DEFAULT_DED_NOTE_TPL},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[],dedNoteTpl:DEFAULT_DED_NOTE_TPL,dedNoteTplV:2},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -970,7 +971,7 @@ function gistApplyData(obj){
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
-  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'&&obj.settings.dedNoteTpl.trim())state.settings.dedNoteTpl=obj.settings.dedNoteTpl;
+  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'){state.settings.dedNoteTpl=(obj.settings.dedNoteTplV!==2&&obj.settings.dedNoteTpl.trim()===OLD_DEFAULT_DED_NOTE_TPL)?'':obj.settings.dedNoteTpl;state.settings.dedNoteTplV=2;}
   if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
   ensureDefaultAccounts();
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
@@ -1576,7 +1577,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||new Date().toISOString();applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
-  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'&&obj.settings.dedNoteTpl.trim())state.settings.dedNoteTpl=obj.settings.dedNoteTpl;
+  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'){state.settings.dedNoteTpl=(obj.settings.dedNoteTplV!==2&&obj.settings.dedNoteTpl.trim()===OLD_DEFAULT_DED_NOTE_TPL)?'':obj.settings.dedNoteTpl;state.settings.dedNoteTplV=2;}
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
   if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
   if(obj.dbLegacySnapshotMeta!==undefined)state.dbLegacySnapshotMeta=obj.dbLegacySnapshotMeta;
@@ -1665,7 +1666,7 @@ function load(){
   if(obj.settings&&obj.settings.eligTables&&typeof obj.settings.eligTables==='object'){state.settings.eligTables=obj.settings.eligTables;state.settings.eligTablesUpdated=obj.settings.eligTablesUpdated||null;applyEligTablesFromSettings();}
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
-  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'&&obj.settings.dedNoteTpl.trim())state.settings.dedNoteTpl=obj.settings.dedNoteTpl;
+  if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'){state.settings.dedNoteTpl=(obj.settings.dedNoteTplV!==2&&obj.settings.dedNoteTpl.trim()===OLD_DEFAULT_DED_NOTE_TPL)?'':obj.settings.dedNoteTpl;state.settings.dedNoteTplV=2;}
     if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
     if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
     if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
@@ -3845,7 +3846,8 @@ function getUnrecoverableDedNote(result,calc){
 }
 // 2026-10-29: 감점 조합 멘트는 설정>조합>감점 조합에서 편집(state.settings.dedNoteTpl). 템플릿의 N 자리에 총 감점 절대값이 들어감.
 function formatDedNote(absStr){
-  var tpl=(state.settings&&typeof state.settings.dedNoteTpl==='string'&&state.settings.dedNoteTpl.trim())?state.settings.dedNoteTpl.trim():DEFAULT_DED_NOTE_TPL;
+  var tpl=(state.settings&&typeof state.settings.dedNoteTpl==='string')?state.settings.dedNoteTpl.trim():DEFAULT_DED_NOTE_TPL;
+  if(!tpl)return''; // 비어 있으면 멘트를 붙이지 않음
   return tpl.replace(/N/g,absStr);
 }
 // 확정메모가 감점 멘트와 같은 내용인지(괄호 유무 무시) — 같으면 메모 쪽 표시 생략
@@ -10915,11 +10917,12 @@ function bind(){
               '<label style="font-size:12px;color:#374151;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">참고 멘트'+
                 '<input type="text" id="in-dedNoteTpl" maxlength="60" style="width:260px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit">'+
                 '<button type="button" class="btn btn-sm btn-ghost" id="btn-dedNoteTpl-reset">기본값</button>'+
+                '<span style="font-size:12px;font-weight:400;color:#9ca3af;margin-left:6px">예) [보완불가 총-0.13점]</span>'+
               '</label>'+
               '<div style="font-size:12px;color:#374151;margin-top:8px">미리보기(총 감점 0.13 예시): <b id="dedNoteTpl-preview" style="color:#b91c1c"></b></div>'+
               '<div style="font-size:11px;color:#6b7280;margin-top:8px;line-height:1.6">'+
                 '※ 순신인도가 음수(감점이 가점보다 큰 조합)이면 <b>조합결과TXT</b>(조합 줄 끝)와 <b>확정메세지</b>(맨 끝 줄)에 이 멘트를 자동으로 붙입니다. 철도공단·한전은 제외.<br>'+
-                '<b>N</b> 자리에 총 감점(순신인도 절대값)이 들어갑니다. 괄호 [ ]도 입력한 그대로 표시됩니다. 비워두면 기본값 <b>'+esc(DEFAULT_DED_NOTE_TPL)+'</b>을 사용합니다.'+
+                '<b>N</b> 자리에 총 감점(순신인도 절대값)이 들어갑니다. 괄호 [ ]도 입력한 그대로 표시됩니다. 비워두면(기본값) 멘트를 붙이지 않습니다.'+
               '</div>'+
             '</div>'+
           '</div>'+
@@ -11266,12 +11269,12 @@ function bind(){
         var el=document.getElementById('in-dedNoteTpl');if(!el)return;
         var pv=document.getElementById('dedNoteTpl-preview');
         function refresh(){if(pv)pv.textContent=formatDedNote('0.13');}
-        el.value=(state.settings.dedNoteTpl&&String(state.settings.dedNoteTpl).trim())?state.settings.dedNoteTpl:DEFAULT_DED_NOTE_TPL;
+        el.value=(typeof state.settings.dedNoteTpl==='string')?state.settings.dedNoteTpl:DEFAULT_DED_NOTE_TPL;
         refresh();
-        el.addEventListener('input',function(){state.settings.dedNoteTpl=el.value.trim()?el.value:DEFAULT_DED_NOTE_TPL;refresh();});
-        el.addEventListener('change',function(){if(!el.value.trim())el.value=DEFAULT_DED_NOTE_TPL;state.settings.dedNoteTpl=el.value;refresh();save();});
+        el.addEventListener('input',function(){state.settings.dedNoteTpl=el.value;state.settings.dedNoteTplV=2;refresh();});
+        el.addEventListener('change',function(){state.settings.dedNoteTpl=el.value;state.settings.dedNoteTplV=2;refresh();save();});
         var rb=document.getElementById('btn-dedNoteTpl-reset');
-        if(rb)rb.addEventListener('click',function(){el.value=DEFAULT_DED_NOTE_TPL;state.settings.dedNoteTpl=DEFAULT_DED_NOTE_TPL;refresh();save();toast('기본값으로 되돌렸습니다','ok');});
+        if(rb)rb.addEventListener('click',function(){el.value=DEFAULT_DED_NOTE_TPL;state.settings.dedNoteTpl=DEFAULT_DED_NOTE_TPL;state.settings.dedNoteTplV=2;refresh();save();toast('기본값으로 되돌렸습니다','ok');});
       })();
       if(isAdminOrAbove())bindAccountsTab(mr);
       // ── 업체DB설정 탭 (전기/통신/소방 평균부채·평균유동 — 전체 계정 공통) ──
