@@ -3885,13 +3885,14 @@ function getUnrecoverableDedNote(result,calc){
   if(calc.isKEPCO||calc.isRail)return'';
   var v=Math.round((Number(result.순신인도)||0)*100)/100;
   if(!(v<0))return'';
-  return formatDedNote(TRIM3(-v));
+  return formatDedNote(TRIM3(v)); // 2026-11-05: N = 순신인도 값(부호 포함, 예: -0.39)
 }
-// 2026-10-29: 감점 조합 멘트는 설정>조합>감점 조합에서 편집(state.settings.dedNoteTpl). 템플릿의 N 자리에 총 감점 절대값이 들어감.
+// 2026-10-29: 감점 조합 멘트는 설정>조합>감점 조합에서 편집(state.settings.dedNoteTpl). 템플릿의 N 자리에 순신인도 값(부호 포함)이 들어감.
+// 템플릿에 '-N'처럼 부호를 직접 적은 경우 '--0.39'가 되지 않도록 그 '-'는 흡수.
 function formatDedNote(absStr){
   var tpl=(state.settings&&typeof state.settings.dedNoteTpl==='string')?state.settings.dedNoteTpl.trim():DEFAULT_DED_NOTE_TPL;
   if(!tpl)return''; // 비어 있으면 멘트를 붙이지 않음
-  return tpl.replace(/N/g,absStr);
+  return tpl.replace(/-?N/g,absStr);
 }
 // 확정메모가 감점 멘트와 같은 내용인지(괄호 유무 무시) — 같으면 메모 쪽 표시 생략
 function sameAsDedNote(memo,note){
@@ -10964,10 +10965,10 @@ function bind(){
                 '<button type="button" class="btn btn-sm btn-ghost" id="btn-dedNoteTpl-reset">기본값</button>'+
                 '<span style="font-size:12px;font-weight:400;color:#9ca3af;margin-left:6px">멘트에 대문자 N이 들어가면 그 자리마다 숫자로 바뀝니다.</span>'+
               '</label>'+
-              '<div style="font-size:12px;color:#374151;margin-top:8px">미리보기(총 감점 0.13 예시): <b id="dedNoteTpl-preview" style="color:#b91c1c"></b></div>'+
+              '<div style="font-size:12px;color:#374151;margin-top:8px">미리보기(순신인도 -0.13 예시): <b id="dedNoteTpl-preview" style="color:#b91c1c"></b></div>'+
               '<div style="font-size:11px;color:#6b7280;margin-top:8px;line-height:1.6">'+
                 '※ 순신인도가 음수(감점이 가점보다 큰 조합)이면 <b>조합결과TXT</b>(조합 줄 끝)와 <b>확정메세지</b>(맨 끝 줄)에 이 멘트를 자동으로 붙입니다. 철도공단·한전은 제외.<br>'+
-                '<b>N</b> 자리에 총 감점(순신인도 절대값)이 들어갑니다. 괄호 [ ]도 입력한 그대로 표시됩니다. 기본값은 [보완불가]이고, 비워두면 멘트를 붙이지 않습니다.'+
+                '<b>N</b> 자리에 순신인도 값이 부호까지 포함되어(예: -0.39) 들어갑니다. 괄호 [ ]도 입력한 그대로 표시됩니다. 기본값은 [보완불가]이고, 비워두면 멘트를 붙이지 않습니다.'+
               '</div>'+
             '</div>'+
           '</div>'+
@@ -11313,7 +11314,7 @@ function bind(){
       (function(){
         var el=document.getElementById('in-dedNoteTpl');if(!el)return;
         var pv=document.getElementById('dedNoteTpl-preview');
-        function refresh(){if(pv)pv.textContent=formatDedNote('0.13');}
+        function refresh(){if(pv)pv.textContent=formatDedNote('-0.13');}
         el.value=(typeof state.settings.dedNoteTpl==='string')?state.settings.dedNoteTpl:DEFAULT_DED_NOTE_TPL;
         refresh();
         el.addEventListener('input',function(){state.settings.dedNoteTpl=el.value;state.settings.dedNoteTplV=3;refresh();});
