@@ -123,7 +123,7 @@ tr.hover:hover{background:#f8fafc}
 .combo.ok{border-color:var(--ok);box-shadow:0 0 0 2px rgba(22,163,74,.1)}
 .combo.warn{border-color:var(--warn)}
 /* 2026-10-20: 조합 '전송' 체크 — 체크된 조합 카드 전체를 어둡게(흐림 없음)(입력은 그대로 가능, 전송 체크박스만 유리 위에 노출) */
-.combo{position:relative}
+.combo{position:relative;isolation:isolate} /* 2026-11-05: 전송 라벨(z6)이 sticky 공고입력 패널(z4) 위로 뜨던 문제 — 카드 내부 쌓임맥락으로 한정 */
 .combo.sent::after{content:'';position:absolute;inset:0;background:rgba(15,23,42,.38);pointer-events:none;z-index:5;border-radius:inherit}
 .combo-sent-lbl{margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;font-weight:700;color:#0f172a;background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;position:relative;z-index:6;user-select:none}
 .combo-sent-lbl input{width:15px;height:15px;margin:0;cursor:pointer}
