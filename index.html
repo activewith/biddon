@@ -479,6 +479,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
         <button class="btn" id="btn-paste-text" title="스캔 PDF 등 직접 추출이 안 될 때 텍스트를 붙여넣어 분석" style="background:#2563eb;color:#fff;border-color:#1d4ed8">📋 공고문분석(텍스트)</button>
         <button class="btn" id="btn-reset-bid" style="background:#111827;color:#fff;border-color:#111827" title="이 공고의 조합결과TXT를 [취소공고]로 보내고(취소일 기록, 1개월 보관) 입력값을 초기화합니다">공고취소</button>
         <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 메모 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 한줄요약/메모</button>
+        <label class="btn btn-ghost" id="lbl-투찰확인" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;border-color:#0f766e;color:#0f766e;font-weight:700" title="체크하면, 실적 유형 업체가 대표사로 조합된 경우 협정마감일 17:00에 투찰 확인 알림을 띄웁니다. 확인하지 않으면 다음날 09:30에 1회 더 알림(그때까지 이 탭은 자동삭제 보류)"><input type="checkbox" id="chk-투찰확인" style="width:15px;height:15px;margin:0;cursor:pointer">투찰확인</label>
         <div id="o-주공정기간" class="main-proc-warn" style="display:none" title="공고문분석에서 추출한 주공정 작업 예정기간"></div>
       </div>
       <!-- 업계평균 입력은 DB탭에서 관리 -->
@@ -4462,6 +4463,50 @@ function getBaseAmountAlerts(){
   }catch(e){}
   return out;
 }
+// ████ 투찰확인 알람 (2026-11-05) ████
+// 공고입력의 [투찰확인] 체크(b.투찰확인) + 조합 중 대표사(분담 제외 지분율 최댓값, 동률이면 앞 슬롯 — 산출알람과 동일 판정)의
+// 슬롯 유형이 '실적'인 조합이 하나라도 있으면 대상.
+// - 1차: 협정마감일 17:00 ~ 당일 24:00 사이 (PC가 꺼져 있었으면 그날 안에 처음 켤 때)
+// - 2차: 미확인 시 다음날 09:30 ~ 다음날 24:00 사이 1회. 그 이후에는 알림 종료.
+// - 알림창 [확인] → b.투찰확인완료=true. 미확인 상태에서는 다음날까지 탭 자동삭제를 보류(autoRemoveExpiredBidScreens).
+function getBidCheckJeokReps(scr){
+  var out=[];
+  ((scr&&scr.combos)||[]).forEach(function(combo){
+    var rest=((combo&&combo.slots)||[]).filter(function(r){return r&&(r.업체명||'').trim()!==''&&!isDamGrp(r.grp);});
+    if(!rest.length)return;
+    var rep=rest[0],repPct=-Infinity;
+    rest.forEach(function(r){var p=Number(r.지분율)||0;if(p>repPct){repPct=p;rep=r;}});
+    var nm=(rep.업체명||'').trim();
+    if(rep.grp==='실적'&&out.indexOf(nm)<0)out.push(nm);
+  });
+  return out;
+}
+function isBidCheckPending(scr){
+  var b=scr&&scr.bid;
+  return !!(b&&b.투찰확인&&!b.투찰확인완료&&b.협정마감일_YMD&&getBidCheckJeokReps(scr).length);
+}
+function getBidCheckAlerts(){
+  var out=[];
+  try{
+    var now=new Date();
+    (state.bidScreens||[]).forEach(function(scr,i){
+      if(!isBidCheckPending(scr))return;
+      var b=scr.bid;
+      var d=new Date(b.협정마감일_YMD+'T00:00:00');
+      if(isNaN(d.getTime()))return;
+      var t1=new Date(d.getTime());t1.setHours(17,0,0,0);
+      var d1=new Date(d.getTime());d1.setDate(d1.getDate()+1);
+      var t2=new Date(d1.getTime());t2.setHours(9,30,0,0);
+      var d2=new Date(d1.getTime());d2.setDate(d2.getDate()+1);
+      var phase=null;
+      if(now>=t1&&now<d1)phase='d';
+      else if(now>=t2&&now<d2)phase='n';
+      if(!phase)return;
+      out.push({screenIndex:i,공고명:(b.공고명||scr.name||'(제목없음)'),협정마감일:b.협정마감일_YMD,phase:phase,reps:getBidCheckJeokReps(scr)});
+    });
+  }catch(e){}
+  return out;
+}
 // 2026-10-01: "산출 알람" — 업체등록 모달의 메모 옆 [산출] 체크 업체(c.산출알람on)가 대표사로 조합된 공고는
 // 협정마감일 1일 전(D-1, am10:00 이후)부터 "[업체명]의 투찰 금액을 산출하세요." 알림을 띄운다.
 // - 대표사 판정은 sortComboRowsForDisplay와 동일: 조합 슬롯 중 분담/소방/통신 유형을 뺀 업체 중 지분율 최댓값(동률이면 앞 슬롯)
@@ -4681,8 +4726,9 @@ function showExpiryAlertModal(){
   var bidList=getBidMemoAlerts();
   var baseList=getBaseAmountAlerts();
   var calcList=getCalcAlarmAlerts();
+  var checkList=getBidCheckAlerts();
   var root=MODAL_ROOT;
-  if(!list.length&&!bidList.length&&!baseList.length&&!calcList.length){
+  if(!list.length&&!bidList.length&&!baseList.length&&!calcList.length&&!checkList.length){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:360px">'+
       '<h3>⚠ 만료임박 확인 알림</h3><p style="color:var(--muted);font-size:13px">신용평가(7일 이내)·안전보건(1개월 이내) 만료 예정, 일자리 B조건 연1회 재확인, 업체·공고 메모 알람 도달, 기초금액/A값 미입력 임박, 투찰금액 산출 알림 항목이 없습니다.</p>'+
       '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
@@ -4727,6 +4773,12 @@ function showExpiryAlertModal(){
            '<td style="padding:5px 8px;font-weight:600;color:#0369a1;cursor:pointer;text-decoration:underline" data-scrgo="'+item.screenIndex+'" title="이 공고 화면으로 이동">'+esc(item.공고명)+'</td>'+
            '<td style="padding:5px 8px;font-size:12px"><span style="color:#b45309;font-weight:700">'+esc(item.업체명)+'의 투찰 금액을 산출하세요.</span> <span style="color:#6b7280">('+dday+' · 협정마감일 '+esc(item.협정마감일)+')</span></td></tr>';
   }).join('');
+  var checkRows=checkList.map(function(item){
+    var when=item.phase==='d'?'협정마감일 17:00':'다음날 09:30 재알림(마지막)';
+    return '<tr><td style="padding:5px 8px;text-align:center"><button type="button" class="bid-check-ok" data-scridx="'+item.screenIndex+'" style="font-size:11px;padding:2px 8px;background:#0f766e;color:#fff;border:1px solid #0f766e;border-radius:4px;cursor:pointer;font-weight:700" title="투찰 확인 완료 — 이 공고 알림 종료(마감일 지난 탭은 다음 정리 때 자동삭제)">확인</button></td>'+
+           '<td style="padding:5px 8px;font-weight:600;color:#0369a1;cursor:pointer;text-decoration:underline" data-scrgo="'+item.screenIndex+'" title="이 공고 화면으로 이동">'+esc(item.공고명)+'</td>'+
+           '<td style="padding:5px 8px;font-size:12px"><span style="color:#b45309;font-weight:700">투찰 여부를 확인하세요 — 대표사(실적): '+esc(item.reps.join(', '))+'</span> <span style="color:#6b7280">('+when+' · 협정마감일 '+esc(item.협정마감일)+')</span></td></tr>';
+  }).join('');
   // 2026-09-21: 알림창 가로폭 +30%(48vw→62vw, 최대 560px→728px) — 상세/최종수정 컬럼이 잘려 가로 스크롤이 생기던 문제 완화
   root.innerHTML='<div class="modal-back"><div class="modal" style="width:62vw;min-width:340px;max-width:728px">'+
     '<h3 style="color:#dc2626">⚠ 만료임박 확인 알림</h3>'+
@@ -4750,9 +4802,22 @@ function showExpiryAlertModal(){
       '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">업체등록의 [산출]을 체크한 업체가 대표사로 조합된 공고입니다 · 협정마감일 1일 전(주말이면 직전 금요일)부터 표시 · 이미 산출했으면 [제외] 체크 · 공고명을 누르면 해당 화면으로 이동 · 알림을 멈추려면 업체등록에서 [산출] 체크 해제</p>'+
       '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+calcRows+'</tbody></table>'
     ):'')+
+    (checkList.length?(
+      '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">✅ 투찰확인 ('+checkList.length+'건)</div>'+
+      '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">[투찰확인]을 체크한 공고 중 실적 유형 업체가 대표사인 조합이 있는 공고입니다 · 협정마감일 17:00 알림, 확인하지 않으면 다음날 09:30에 1회 더 알림 · [확인]을 누르면 알림이 끝나고 마감일 지난 탭은 다음 정리 때 자동삭제됩니다</p>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:50px">확인</th><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+checkRows+'</tbody></table>'
+    ):'')+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
     '</div></div>';
   $('#m-cancel').onclick=function(){root.innerHTML='';};
+  root.querySelectorAll('.bid-check-ok').forEach(function(btn){
+    btn.onclick=function(){
+      var idx=Number(this.dataset.scridx);
+      var scr=state.bidScreens&&state.bidScreens[idx];
+      if(scr&&scr.bid){scr.bid.투찰확인완료=true;save();}
+      showExpiryAlertModal(); // 재렌더링(확인한 항목은 목록에서 빠짐)
+    };
+  });
   root.querySelectorAll('.exp-exclude-cb').forEach(function(cb){
     cb.onchange=function(){
       var nm=this.dataset.comp;
@@ -5010,7 +5075,8 @@ function checkExpiryAlertsOnBoot(){
     var hasBidAlert=getBidMemoAlerts().length>0;
     var hasBaseAlert=getBaseAmountAlerts().length>0;
     var hasCalcAlert=getCalcAlarmAlerts().length>0;
-    if(hasAlert||hasBidAlert||hasBaseAlert||hasCalcAlert)showExpiryAlertModal();
+    var hasCheckAlert=getBidCheckAlerts().length>0;
+    if(hasAlert||hasBidAlert||hasBaseAlert||hasCalcAlert||hasCheckAlert)showExpiryAlertModal();
   }catch(e){}
 }
 // 2026-08-20: 메모 알람 — 부팅 시점에 이미 도달한 알람은 checkExpiryAlertsOnBoot()가 다른 만료 항목과
@@ -5024,6 +5090,7 @@ var _메모알람알림됨=new Set();
 var _공고메모알람알림됨=new Set();
 var _기초금액알람알림됨=new Set();
 var _산출알람알림됨=new Set(); // 키=screenIndex|업체명|YYYY-MM-DD (하루 1회)
+var _투찰확인알림됨=new Set(); // 키=screenIndex|협정마감일|phase(d=당일17:00, n=다음날09:30)
 function initMemoAlarmWatcher(){
   if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용: 부팅 팝업/알람/백업 생략
   try{
@@ -5043,6 +5110,9 @@ function initMemoAlarmWatcher(){
   try{
     var _today1=new Date().toISOString().slice(0,10);
     getCalcAlarmAlerts().forEach(function(item){_산출알람알림됨.add(item.screenIndex+'|'+item.업체명+'|'+_today1);});
+  }catch(e){}
+  try{
+    getBidCheckAlerts().forEach(function(item){_투찰확인알림됨.add(item.screenIndex+'|'+item.협정마감일+'|'+item.phase);});
   }catch(e){}
   setInterval(checkMemoAlarmsLive,60*1000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)checkMemoAlarmsLive();});
@@ -5065,7 +5135,11 @@ function checkMemoAlarmsLive(){
     var calcDue=getCalcAlarmAlerts().filter(function(item){
       return !_산출알람알림됨.has(item.screenIndex+'|'+item.업체명+'|'+_today0);
     });
-    if(!due.length&&!bidDue.length&&!baseDue.length&&!calcDue.length)return;
+    var checkDue=getBidCheckAlerts().filter(function(item){
+      return !_투찰확인알림됨.has(item.screenIndex+'|'+item.협정마감일+'|'+item.phase);
+    });
+    if(!due.length&&!bidDue.length&&!baseDue.length&&!calcDue.length&&!checkDue.length)return;
+    checkDue.forEach(function(item){_투찰확인알림됨.add(item.screenIndex+'|'+item.협정마감일+'|'+item.phase);});
     due.forEach(function(c){_메모알람알림됨.add(c.업체명+'|'+c.메모알람일시);});
     bidDue.forEach(function(item){_공고메모알람알림됨.add(item.screenIndex+'|'+item.일시);});
     baseDue.forEach(function(item){_기초금액알람알림됨.add(item.screenIndex+'|'+_today0);});
@@ -10120,6 +10194,9 @@ function bind(){
     if(_cj)_cj.addEventListener('change',function(){state.bid.표시실적합=this.checked;save();});
     if(_cs)_cs.addEventListener('change',function(){state.bid.표시시평합=this.checked;save();});
     if(_cu)_cu.addEventListener('change',function(){state.bid.표시안내URL=this.checked;if(this.checked)syncGuideUrlToAllCombos();else clearGuideUrlFromAllCombos();save();});
+    // 2026-11-05: 투찰확인 체크 — 다시 체크하면 이전 확인완료 기록은 초기화(알림 재대상)
+    var _tc=$('#chk-투찰확인');
+    if(_tc)_tc.addEventListener('change',function(){state.bid.투찰확인=this.checked;state.bid.투찰확인완료=false;save();});
   })();
 
   // 저장된 값을 inputs에 복원
@@ -12356,6 +12433,11 @@ function autoRemoveExpiredBidScreens(){
     if(!ymd)continue;
     var d=new Date(ymd+'T00:00:00');
     if(isNaN(d.getTime())||d>=today)continue; // 파싱 실패했거나 아직 마감일 당일/이전이면 유지
+    // 2026-11-05: 투찰확인 미확인 탭은 다음날(2차 알림일)까지 삭제 보류 — 확인하거나 그 다음날이 되면 기존대로 삭제
+    if(typeof isBidCheckPending==='function'&&isBidCheckPending(scr)){
+      var _d1=new Date(d.getTime());_d1.setDate(_d1.getDate()+1);
+      if(_d1>=today)continue;
+    }
     removedNames.push(scr.name);
     state.bidScreens.splice(i,1);
     if(i===state.activeBidScreenIndex){
@@ -12449,6 +12531,7 @@ function restoreBidInputsFromState(){
   var _cj=$('#chk-표시실적합');if(_cj)_cj.checked=!!b.표시실적합;
   var _cs=$('#chk-표시시평합');if(_cs)_cs.checked=!!b.표시시평합;
   var _cu=$('#chk-표시안내URL');if(_cu)_cu.checked=!!b.표시안내URL;
+  var _tcR=$('#chk-투찰확인');if(_tcR)_tcR.checked=!!b.투찰확인;
   refreshCompanyAvgDisplay();
   updateBidNameLabel();
   refreshDbFixedSelect();
