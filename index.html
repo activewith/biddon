@@ -7422,6 +7422,23 @@ function _tryKW(t,key,r){
   }
 }
 function parseMoney(s){if(!s)return null;var n=Number(s.replace(/[,\s]/g,''));return isNaN(n)?null:n;}
+function _detectCustomInstitution(t){
+  var list=customInstitutionsList();
+  if(!list.length)return null;
+  var pats=list.filter(function(c){return c&&c.name;}).map(function(c){
+    var core=c.name.replace(/^한\s*국\s*/,'').replace(/\s+/g,'');
+    var body=core.split('').map(function(ch){return ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}).join('\\s*');
+    return {name:c.name,re:new RegExp('(?<![가-힣])(?:한\\s*국\\s*)?'+body)};
+  });
+  var agencyLines=t.match(/(?:발\s*주\s*기\s*관|수\s*요\s*기\s*관|공\s*고\s*기\s*관)[^\n]{0,80}/g);
+  if(agencyLines&&agencyLines.length){
+    for(var i=0;i<agencyLines.length;i++)for(var j=0;j<pats.length;j++)if(pats[j].re.test(agencyLines[i]))return pats[j].name;
+    return null;
+  }
+  var issuerLines=t.match(/[^\n]{0,60}공\s*고\s*제\s*\d{4}\s*[-–]\s*\d+\s*호/g)||[];
+  for(var k=0;k<issuerLines.length;k++)for(var q=0;q<pats.length;q++)if(pats[q].re.test(issuerLines[k]))return pats[q].name;
+  return null;
+}
 function extractBidFields(t){
   var r={};var m;
   // ── LH 사전 감지: 시평제한 파싱 등에서 분기 활용 ──────────────────
@@ -7700,6 +7717,12 @@ function extractBidFields(t){
   (function(){
     // ── 조달청 먼저 확인 (더 구체적 문구) ─────────────────────────────────
     // "조달청 시설공사 적격심사세부기준"은 조달청 공고의 낙찰방법에만 쓰이는 고유 문구
+    // ── 2026-11-09: 사용자 추가 발주처(설정>적격UPDATE "조달청 적격기준 적용 발주처") 자동 감지 ──
+    // 발주기관/수요기관/공고기관 줄에 등록 발주처명이 있으면 그 이름으로 확정(고정 기관보다 우선).
+    // 해당 줄이 없을 때만 "OOO … 공고 제N호" 형태의 공고주체 줄로 판단.
+    // 이름 앞에 다른 한글이 붙으면 불일치(예: '가스공사'는 '도시가스공사'에 안 걸림), 단 '한국' 접두는 허용('한국가스공사').
+    var _cust=_detectCustomInstitution(t);
+    if(_cust){r.적격기준=_cust;return;}
     var isLH_=_isLHpre; // 사전 감지 결과 재사용
     if(isLH_){r.적격기준='LH';return;}
     // ── 도로공사 확인 ──────────────────────────────────────────────────
