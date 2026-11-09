@@ -3804,7 +3804,7 @@ function refreshCustomInstitutionSelect(){
   Array.prototype.slice.call(sel.querySelectorAll('option[data-custom-inst]')).forEach(function(o){o.remove();});
   customInstitutionsList().forEach(function(c){
     var op=document.createElement('option');
-    op.value=c.name;op.textContent=c.name;op.setAttribute('data-custom-inst','1');
+    op.value=c.name;op.textContent=c.name+'[조달]';op.setAttribute('data-custom-inst','1'); // 2026-11-09: 조달청 적격기준 적용 발주처 표시
     sel.appendChild(op);
   });
   if(keep)sel.value=keep;
