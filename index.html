@@ -7422,14 +7422,40 @@ function _tryKW(t,key,r){
   }
 }
 function parseMoney(s){if(!s)return null;var n=Number(s.replace(/[,\s]/g,''));return isNaN(n)?null:n;}
-function _detectCustomInstitution(t){
-  var list=customInstitutionsList();
-  if(!list.length)return null;
-  var pats=list.filter(function(c){return c&&c.name;}).map(function(c){
+function _customInstPats(){
+  return customInstitutionsList().filter(function(c){return c&&c.name;}).map(function(c){
     var core=c.name.replace(/^한\s*국\s*/,'').replace(/\s+/g,'');
     var body=core.split('').map(function(ch){return ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}).join('\\s*');
     return {name:c.name,re:new RegExp('(?<![가-힣])(?:한\\s*국\\s*)?'+body)};
   });
+}
+// 2026-11-09: '낙찰방법' 문구 다음에 적힌 기준 기관명으로 적격기준 최종 결정(사용자 요청).
+// 예) 수요기관이 한국농어촌공사여도 "낙찰방법 조달청 시설공사 적격심사세부기준" 이면 조달청.
+// 기관명이 없는 경우("적격심사", "관리규정외(기타)…")는 null → 기존 감지(발주기관 줄 → 고정 기관 순)로 진행.
+function _detectByNakchal(t){
+  var segs=t.match(/낙\s*찰\s*방\s*법\s*[:：]?[ \t]*[^\n]{0,150}/g);
+  if(!segs)return null;
+  var cands=_customInstPats().concat([
+    {name:'조달청',re:/조\s*달\s*청/},
+    {name:'LH',re:/한\s*국\s*토\s*지\s*주\s*택\s*공\s*사|(?<![A-Za-z])LH(?![A-Za-z])/},
+    {name:'도로공사',re:/도\s*로\s*공\s*사/},
+    {name:'수자원공사',re:/수\s*자\s*원\s*공\s*사|K[\s-]*water/i},
+    {name:'인천공항',re:/인\s*천\s*(?:국\s*제\s*)?공\s*항\s*공\s*사/},
+    {name:'철도공단',re:/철\s*도\s*(?:시\s*설\s*)?공\s*단/},
+    {name:'한전',re:/한\s*국\s*전\s*력\s*공\s*사/},
+    {name:'지자체',re:/지\s*방\s*자\s*치\s*단\s*체|행\s*정\s*안\s*전\s*부/}
+  ]);
+  for(var i=0;i<segs.length;i++){
+    var seg=segs[i].replace(/^낙\s*찰\s*방\s*법\s*[:：]?/,'');
+    var best=null,bestIdx=1e9;
+    cands.forEach(function(c){var m=seg.match(c.re);if(m&&m.index<bestIdx){bestIdx=m.index;best=c.name;}});
+    if(best)return best;
+  }
+  return null;
+}
+function _detectCustomInstitution(t){
+  var pats=_customInstPats();
+  if(!pats.length)return null;
   var agencyLines=t.match(/(?:발\s*주\s*기\s*관|수\s*요\s*기\s*관|공\s*고\s*기\s*관)[^\n]{0,80}/g);
   if(agencyLines&&agencyLines.length){
     for(var i=0;i<agencyLines.length;i++)for(var j=0;j<pats.length;j++)if(pats[j].re.test(agencyLines[i]))return pats[j].name;
@@ -7721,6 +7747,8 @@ function extractBidFields(t){
     // 발주기관/수요기관/공고기관 줄에 등록 발주처명이 있으면 그 이름으로 확정(고정 기관보다 우선).
     // 해당 줄이 없을 때만 "OOO … 공고 제N호" 형태의 공고주체 줄로 판단.
     // 이름 앞에 다른 한글이 붙으면 불일치(예: '가스공사'는 '도시가스공사'에 안 걸림), 단 '한국' 접두는 허용('한국가스공사').
+    var _nak=_detectByNakchal(t);
+    if(_nak){r.적격기준=_nak;return;}
     var _cust=_detectCustomInstitution(t);
     if(_cust){r.적격기준=_cust;return;}
     var isLH_=_isLHpre; // 사전 감지 결과 재사용
