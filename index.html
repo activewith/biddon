@@ -8679,10 +8679,21 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   var summary=getOneLineSummary(b, c, true);
   // 3. 조합결과: calcSlot 활용 → 지분율 내림차순 정렬 + 순신인도 표시
   var comboLines=[];
+  // 2026-11-10: 타조합 중복 업체 적색+밑줄 표시용 — 업체명(실명) 기준으로 몇 개 조합에 들어갔는지 카운트하고,
+  // 조합 라인 안의 업체 표시명을 사설영역 문자(\uE000 idx \uE002 표시명 \uE001)로 감싸 둔다.
+  // 텍스트(복사/저장/공고취소 보관)에서는 마커를 제거하고, 팝업 화면(HTML)에서만 2개 이상 조합에 쓰인 업체를 강조한다.
+  var _dupNames=[],_dupIdx={},_dupCnt={},_badHas=false;
+  function _dupMark(realNm,disp){
+    realNm=(realNm||'').trim();if(!realNm)return disp;
+    if(_dupIdx[realNm]==null){_dupIdx[realNm]=_dupNames.length;_dupNames.push(realNm);}
+    return '\uE000'+_dupIdx[realNm]+'\uE002'+disp+'\uE001';
+  }
   state.combos.forEach(function(combo){
     var r=calcSlot(combo,c);
     var active=r.ROW.filter(function(row){return(row.업체명||'').trim()!=='';});
     if(!active.length)return;
+    var _seenInCombo={};
+    active.forEach(function(row){var _k=(row.업체명||'').trim();if(_seenInCombo[_k])return;_seenInCombo[_k]=1;_dupCnt[_k]=(_dupCnt[_k]||0)+1;});
     // 2026-08-06: LH 강제할당 — 사용자가 Func칸에 입력한 명목 지분율이 있는 업체의 표시를
     // "명목 지분율[실제 지분율/점수계산 결과]"로 치환. 실제 계산에 쓰인 지분율(r.ROW의 값)은 그대로 둠.
     var forceRows=getForceAllocRows(combo,r);
@@ -8704,6 +8715,9 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     var line=active.map(function(row){
       var _dbE3=state.db.find(function(x){return x.업체명===row.업체명;});
       var nm=(_dbE3&&_dbE3.약어)?_dbE3.약어:(row.업체명||'').trim();
+      var _nmRaw=nm;
+      var _mk=function(d){return _dupMark(row.업체명,d);};
+      nm=_mk(nm);
       // 한전(한국전력공사): 지분율(%)·신인도 표기 없이 업체명+Func(업종 등 수동입력값)만 표시(적격판정 없음). 2026-08-13 확정메세지와 동일하게 통일.
       // 2026-10-22(사용자 확정): 한전이라도 공종이 복합(분담이행)이 아닌 공동이행(같은 공종을 지분율로 나눠 참여) 공고는
       // 지분율을 표시한다. 신인도 표기 없음은 동일. 복합(전기+통신/소방/포장/분담)은 기존대로 지분율 미표시.
@@ -8712,7 +8726,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
         if(!isComplexGongjong(normGongjong(state.bid.공종))){
           return nm+' '+TRIMDEC(Number(row.지분율)||0)+(_funcTxt3?' '+_funcTxt3:'');
         }
-        return (isDamGrp(row.grp)?stripDamPrefix(nm):nm)+(_funcTxt3?' '+_funcTxt3:'');
+        return (isDamGrp(row.grp)?_mk(stripDamPrefix(_nmRaw)):nm)+(_funcTxt3?' '+_funcTxt3:'');
       }
       var _fr=forceMap[r.ROW.indexOf(row)];
       if(_fr){
@@ -8724,7 +8738,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       // 2026-10-22: 포장(업체명 직접입력)도 동일 형식 — 구 '분담' 유형(지분율 표시) 분기는 폐지
       if(isDamGrp(row.grp)){
         var _catTxt=(row.Func!=null&&row.Func!=='')?String(row.Func):row.grp;
-        return '['+_catTxt+']'+stripDamPrefix(nm);
+        return '['+_catTxt+']'+_mk(stripDamPrefix(_nmRaw));
       }
       var sn=ROUND3((row.신인도||0)-(row.감점||0));
       var _hasNum=hasDed&&sn!==0;
@@ -8779,6 +8793,12 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     // 2026-11-05: 안내(URL)/확정메모는 확정메세지에만 표시 — 조합결과TXT에는 넣지 않음(2026-10-29 병기 방식 폐지)
     var _udNote=getUnrecoverableDedNote(r,c);
     if(_udNote)line+=_udNote;
+    // 2026-11-10: 부적격 조합(조합카드 배지와 같은 기준 — comboCalcFor로 조합별 사정률 반영)은 팝업에서 줄 전체를 적색 표시.
+    // 한전은 적격판정 자체가 없으므로 제외. 마커(\uE003)는 텍스트 출력 시 제거됨.
+    if(!c.isKEPCO){
+      var _rEl=calcSlot(combo,comboCalcFor(combo,c));
+      if(_rEl.used>0&&!_rEl.적격){line='\uE003'+line;_badHas=true;}
+    }
     comboLines.push(line);
   });
   // 4. 최대지분율 — 지역(grp==='지역') 업체만, 고유, 정수
@@ -8883,9 +8903,22 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       out=out.concat(remainLines);
     }
   }
-  var txt=out.join('\n');
+  var _rawTxt=out.join('\n');
+  var txt=_rawTxt.replace(/\uE000\d+\uE002/g,'').replace(/[\uE001\uE003]/g,'');
   if(window.__CT_RETURN_ONLY)return txt; // 2026-10-16: 공고취소 시 텍스트만 받아 취소공고로 보관(팝업 없음)
-  // 팝업으로 표시
+  // 팝업으로 표시 — 2개 이상 조합에 들어간 업체는 굵게, 부적격 조합 줄은 전체 적색
+  var _dupHas=false;
+  var _ctHtml=_rawTxt.split('\n').map(function(ln){
+    var bad=ln.charAt(0)==='\uE003';if(bad)ln=ln.slice(1);
+    var h=_ctLineHtml(ln);
+    return bad?'<span style="color:#dc2626">'+h+'</span>':h;
+  }).join('\n');
+  function _ctLineHtml(_ln){ return _ln.split(/(\uE000\d+\uE002[^\uE001]*\uE001)/).map(function(seg){
+    var m=/^\uE000(\d+)\uE002([^\uE001]*)\uE001$/.exec(seg);
+    if(!m)return esc(seg);
+    if((_dupCnt[_dupNames[+m[1]]]||0)>1){_dupHas=true;return '<b>'+esc(m[2])+'</b>';}
+    return esc(m[2]);
+  }).join(''); }
   var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:480px;max-width:96vw;padding:0;overflow:hidden">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:2px solid var(--border)">'+
@@ -8893,7 +8926,8 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       '<button id="m-ct-close" class="btn btn-ghost" style="padding:2px 8px">닫기</button>'+
     '</div>'+
     '<div style="padding:12px 16px">'+
-      '<textarea id="m-ct-txt" rows="18" style="width:100%;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;resize:vertical;line-height:1.6;box-sizing:border-box;white-space:pre">'+esc(txt)+'</textarea>'+
+      '<div id="m-ct-txt" contenteditable="true" spellcheck="false" style="width:100%;height:340px;overflow:auto;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;resize:vertical;line-height:1.6;box-sizing:border-box;white-space:pre;outline:none;background:#fff">'+_ctHtml+'</div>'+
+      ((_dupHas||_badHas)?'<div style="font-size:11px;color:#64748b;margin-top:4px">※ '+(_dupHas?'<b>굵게</b> = 다른 조합과 중복된 업체':'')+(_dupHas&&_badHas?' · ':'')+(_badHas?'<span style="color:#dc2626">적색 줄</span> = 부적격 조합':'')+' (복사/저장 텍스트에는 서식 없음)</div>':'')+
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'+
         '<button class="btn btn-ghost" id="m-ct-copy" style="padding:4px 12px;font-size:12px">📋 복사</button>'+
         '<button class="btn" id="m-ct-save" style="background:#059669;padding:4px 14px;font-size:13px;font-weight:700">💾 저장</button>'+
@@ -8904,10 +8938,10 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   mr.querySelector('.modal-back').addEventListener('click',function(ev){if(ev.target===this)mr.innerHTML='';});
   document.getElementById('m-ct-copy').onclick=function(){
     var t=document.getElementById('m-ct-txt');
-    copyToClipboard(t.value, '복사 완료');
+    copyToClipboard(t.innerText, '복사 완료');
   };
   document.getElementById('m-ct-save').onclick=function(){
-    var content=document.getElementById('m-ct-txt').value;
+    var content=document.getElementById('m-ct-txt').innerText;
     var blob=new Blob([content],{type:'text/plain;charset=utf-8'});
     var a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='조합결과_'+new Date().toISOString().slice(0,10)+'.txt';
