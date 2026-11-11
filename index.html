@@ -415,7 +415,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
 <main>
   <section id="tab-bid">
     <div class="panel">
-      <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span><span id="o-kepco-badge" style="display:none;font-size:11px;font-weight:700;color:#fff;background:#7c3aed;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle">⚡ 한전적격</span>
+      <h2>1. 공고 입력 <span id="o-공고명-label" style="font-size:12px;font-weight:400;color:#2563eb;margin-left:6px"></span><span id="o-kepco-badge" style="display:none;font-size:11px;font-weight:700;color:#fff;background:#7c3aed;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle">⚡ 한전적격</span><span id="o-주공정기간" class="main-proc-warn" style="display:none;margin-left:0" title="공고문분석에서 추출한 주공정 작업 예정기간"></span>
         <button type="button" class="btn btn-toggle-bidinput btn-sm" id="btn-toggle-bidinput" style="margin-left:auto;font-size:11px;padding:3px 10px;font-weight:700" title="공고 입력 내용을 접거나 펼칩니다">숨기기</button>
       </h2>
       <div id="bid-input-collapsible">
@@ -480,7 +480,6 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
         <button class="btn" id="btn-reset-bid" style="background:#111827;color:#fff;border-color:#111827" title="이 공고의 조합결과TXT를 [취소공고]로 보내고(취소일 기록, 1개월 보관) 입력값을 초기화합니다">공고취소</button>
         <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 메모 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 한줄요약/메모</button>
         <label class="btn btn-ghost" id="lbl-투찰확인" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;border-color:#0f766e;color:#0f766e;font-weight:700" title="체크하면, 실적 유형 업체가 대표사로 조합된 경우 협정마감일 17:00에 투찰 확인 알림을 띄웁니다. 확인하지 않으면 다음날 09:30에 1회 더 알림(그때까지 이 탭은 자동삭제 보류)"><input type="checkbox" id="chk-투찰확인" style="width:15px;height:15px;margin:0;cursor:pointer">투찰확인</label>
-        <div id="o-주공정기간" class="main-proc-warn" style="display:none" title="공고문분석에서 추출한 주공정 작업 예정기간"></div>
       </div>
       <!-- 업계평균 입력은 DB탭에서 관리 -->
       <div class="summary" style="margin-top:10px">
@@ -1952,18 +1951,7 @@ function applyBidInputCollapse(collapsed){
       btn.style.marginLeft='auto';
     }
   }
-  // 2026-10-13: 접힌 상태에서도 주공정예정기간 깜빡임 문구가 보이도록 제목줄(공고문분석 버튼 앞)로 이동, 펼치면 원래 자리로 복귀.
-  var mp=document.getElementById('o-주공정기간');
-  if(mp&&btn&&btn.parentNode){
-    if(!mp._origParent){mp._origParent=mp.parentNode;mp._origNext=mp.nextSibling;}
-    if(collapsed){
-      btn.parentNode.insertBefore(mp,pb&&pb.parentNode===btn.parentNode?pb:btn);
-      mp.style.marginLeft='12px'; // 버튼들의 우측 정렬(margin-left:auto)은 건드리지 않음 — 문구가 숨겨진 공고에서도 버튼 위치 불변
-    }else if(mp._origParent){
-      mp._origParent.insertBefore(mp,mp._origNext&&mp._origNext.parentNode===mp._origParent?mp._origNext:null);
-      mp.style.marginLeft='';
-    }
-  }
+  // 2026-11-11: 주공정예정기간 문구는 제목줄 '한전적격' 배지 바로 오른쪽에 고정(접힘/펼침과 무관) — 이동 로직 제거.
   syncTopStickyHeight(); // 접힘/펼침으로 패널 높이가 바뀌어도 sticky 오프셋(헤더 높이)엔 영향 없지만, 관련 리사이즈 타이밍에 맞춰 안전하게 한 번 더 동기화
 }
 function toggleBidInputPanel(){
