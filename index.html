@@ -479,7 +479,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
         <button class="btn" id="btn-paste-text" title="스캔 PDF 등 직접 추출이 안 될 때 텍스트를 붙여넣어 분석" style="background:#2563eb;color:#fff;border-color:#1d4ed8">📋 공고문분석(텍스트)</button>
         <button class="btn" id="btn-reset-bid" style="background:#111827;color:#fff;border-color:#111827" title="이 공고의 조합결과TXT를 [취소공고]로 보내고(취소일 기록, 1개월 보관) 입력값을 초기화합니다">공고취소</button>
         <button class="btn btn-ghost" id="btn-msg-summary" title="한줄요약 및 메모 보기/복사" style="border-color:#7c3aed;color:#7c3aed">📋 한줄요약/메모</button>
-        <label class="btn btn-ghost" id="lbl-투찰확인" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;border-color:#0f766e;color:#0f766e;font-weight:700" title="체크하면, 실적 유형 업체가 대표사로 조합된 경우 협정마감일 17:00에 투찰 확인 알림을 띄웁니다. 확인하지 않으면 다음날 09:30에 1회 더 알림(그때까지 이 탭은 자동삭제 보류)"><input type="checkbox" id="chk-투찰확인" style="width:15px;height:15px;margin:0;cursor:pointer">투찰확인</label>
+        <label class="btn btn-ghost" id="lbl-투찰확인" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;border-color:#0f766e;color:#0f766e;font-weight:700" title="체크하면, 업체DB에서 실적업체로 분류된 업체가 대표사로 조합된 경우 협정마감일 17:00에 투찰 확인 알림을 띄웁니다. 확인하지 않으면 다음날 09:30에 1회 더 알림(그때까지 이 탭은 자동삭제 보류)"><input type="checkbox" id="chk-투찰확인" style="width:15px;height:15px;margin:0;cursor:pointer">투찰확인</label>
       </div>
       <!-- 업계평균 입력은 DB탭에서 관리 -->
       <div class="summary" style="margin-top:10px">
@@ -4520,7 +4520,7 @@ function getBaseAmountAlerts(){
 }
 // ████ 투찰확인 알람 (2026-11-05) ████
 // 공고입력의 [투찰확인] 체크(b.투찰확인) + 조합 중 대표사(분담 제외 지분율 최댓값, 동률이면 앞 슬롯 — 산출알람과 동일 판정)의
-// 슬롯 유형이 '실적'인 조합이 하나라도 있으면 대상.
+// 업체가 업체DB에서 '실적업체'(c.is실적)로 체크된 조합이 하나라도 있으면 대상(슬롯 유형 무관, 2026-11-11 정정).
 // - 1차: 협정마감일 17:00 ~ 당일 24:00 사이 (PC가 꺼져 있었으면 그날 안에 처음 켤 때)
 // - 2차: 미확인 시 다음날 09:30 ~ 다음날 24:00 사이 1회. 그 이후에는 알림 종료.
 // - 알림창 [확인] → b.투찰확인완료=true. 미확인 상태에서는 다음날까지 탭 자동삭제를 보류(autoRemoveExpiredBidScreens).
@@ -4532,7 +4532,9 @@ function getBidCheckJeokReps(scr){
     var rep=rest[0],repPct=-Infinity;
     rest.forEach(function(r){var p=Number(r.지분율)||0;if(p>repPct){repPct=p;rep=r;}});
     var nm=(rep.업체명||'').trim();
-    if(rep.grp==='실적'&&out.indexOf(nm)<0)out.push(nm);
+    // 2026-11-11: 실적사 판정은 슬롯 유형(grp)이 아니라 업체DB '분류>실적업체'(c.is실적) 체크 기준
+    var c=(state.db||[]).find(function(x){return x&&(x.업체명||'').trim()===nm;});
+    if(c&&c.is실적&&out.indexOf(nm)<0)out.push(nm);
   });
   return out;
 }
@@ -4859,7 +4861,7 @@ function showExpiryAlertModal(){
     ):'')+
     (checkList.length?(
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">✅ 투찰확인 ('+checkList.length+'건)</div>'+
-      '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">[투찰확인]을 체크한 공고 중 실적 유형 업체가 대표사인 조합이 있는 공고입니다 · 협정마감일 17:00 알림, 확인하지 않으면 다음날 09:30에 1회 더 알림 · [확인]을 누르면 알림이 끝나고 마감일 지난 탭은 다음 정리 때 자동삭제됩니다</p>'+
+      '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">[투찰확인]을 체크한 공고 중 실적업체(업체DB 분류)가 대표사인 조합이 있는 공고입니다 · 협정마감일 17:00 알림, 확인하지 않으면 다음날 09:30에 1회 더 알림 · [확인]을 누르면 알림이 끝나고 마감일 지난 탭은 다음 정리 때 자동삭제됩니다</p>'+
       '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:50px">확인</th><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+checkRows+'</tbody></table>'
     ):'')+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
