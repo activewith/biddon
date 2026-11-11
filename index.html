@@ -13065,6 +13065,9 @@ function checkRefYMNoticeOnBoot(){
   }catch(e){}
 }
 function boot(){
+  // 2026-11-11: 중복 실행 방지 — 시작 Pull 대기 중 로그인하면 doLogin()과 initAuthFlow()가 각각 boot()를 불러
+  // bind()가 2번 실행되고 모든 버튼 리스너가 2중 등록됨(확인창 2번 + 두 번째가 다음 탭/항목에 적용되던 버그).
+  if(window.__bootDone)return;window.__bootDone=true;
   load();
   applyEligTablesFromSettings(); // load()도 자체 호출하지만, 안전하게 한 번 더(멱등)
   applyCustomInstitutionsFromSettings(); // 커스텀 발주처(조달청 적격기준 적용) 드롭다운·레지스트리 동기화(멱등)
@@ -13126,6 +13129,7 @@ async function initAuthFlow(){
   // 로그인 판정 전에 먼저 Pull해서 최신 계정목록을 확보함(실패해도 기본계정으로는 로그인 가능하도록 무시).
   try{ await gistPull(); }catch(e){}
   var sess=getSession();
+  if(window._appBooted)return; // Pull 대기 중 이미 로그인해서 doLogin()이 boot()를 실행한 경우
   if(sess&&findAccount(sess.id)){
     showApp();
     window._appBooted=true;
