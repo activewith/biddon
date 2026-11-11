@@ -907,6 +907,66 @@ const GIST_WORKER_URL = 'https://bidgist.aw-82b.workers.dev';
 const GIST_APP_KEY    = 'ckdgmd9797!';
 const GIST_LAST_PUSH_KEY = 'jodal_gist_last_push'; // 마지막 push 성공 시각(yyMMddHHmmss) — Gist 버튼 idle 라벨에 표시
 const GIST_AUTO_PUSH_INTERVAL_KEY = 'jodal_gist_autopush_interval_min'; // 자동 Push 주기(분), 기본 15, 5~30 범위
+
+// ████ 2026-11-11: 클라우드에 올라가지 않은 로컬 변경 감지 ████
+// 문제: 자동 Push(15분 주기) 전에 창을 닫으면, 다음 실행 시 부팅 Pull이 로컬 변경을 클라우드 옛 값으로 덮어써 사라졌음.
+// 방식(사용자 결정 '(나)'): 마지막으로 클라우드와 맞춘 시점(Push/Pull 성공)의 로컬 데이터 지문(해시)을 저장해 두고,
+// 다음 실행 때 로컬 데이터 지문이 달라져 있으면 Pull 전에 "이 기기 데이터 올리기 / 클라우드 데이터 받기"를 물어본다.
+// 지문에서 제외: bidScreens·activeBidScreenIndex·bid·combos(활성 탭 런타임 뷰), 계정별 activeIndex(탭 선택만 바뀐 것은 변경으로 보지 않음).
+const GIST_SYNCED_HASH_KEY='jodal_gist_synced_hash_v1';
+const LAST_LOCAL_SAVE_KEY='jodal_last_local_save';
+const LAST_LOGIN_UID_KEY='jodal_last_login_uid';
+function _fnvHash(str){var h=0x811c9dc5;for(var i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16)+':'+str.length;}
+function _syncHashOfObj(o){
+  if(!o||typeof o!=='object')return '';
+  var parts=[];
+  for(var k in o){
+    if(!Object.prototype.hasOwnProperty.call(o,k))continue;
+    if(k==='bidScreens'||k==='activeBidScreenIndex'||k==='bid'||k==='combos')continue; // 활성 탭의 런타임 뷰(실제 내용은 bidScreensByUser 파티션에 저장됨)
+    var v=o[k];
+    if(k==='bidScreensByUser'&&v&&typeof v==='object'){
+      var m={};Object.keys(v).forEach(function(u){var pp=v[u];m[u]=(pp&&typeof pp==='object')?(pp.screens||null):pp;});v=m;
+    }
+    var js;try{js=JSON.stringify(v);}catch(e){js='';}
+    parts.push(k+'='+js);
+  }
+  return _fnvHash(parts.join('\u0001'));
+}
+function _localStoreHash(){try{var raw=localStorage.getItem(STORE_KEY);return raw?_syncHashOfObj(JSON.parse(raw)):'';}catch(e){return '';}}
+function _recordSyncedHash(){try{var h=_localStoreHash();if(h)localStorage.setItem(GIST_SYNCED_HASH_KEY,JSON.stringify({h:h,at:new Date().toISOString()}));}catch(e){}}
+// 클라우드와 맞춘 뒤 로컬이 바뀌었으면 {syncedAt,lastSave} 반환, 아니면 null. 기준 지문이 없으면(이번 배포 후 첫 실행) null → 기존처럼 Pull.
+function getUnsyncedLocalChange(){
+  try{
+    var raw=localStorage.getItem(GIST_SYNCED_HASH_KEY);if(!raw)return null;
+    var s=JSON.parse(raw);if(!s||!s.h)return null;
+    var h=_localStoreHash();if(!h||h===s.h)return null;
+    return{syncedAt:s.at||'',lastSave:localStorage.getItem(LAST_LOCAL_SAVE_KEY)||''};
+  }catch(e){return null;}
+}
+function _fmtSyncTs(iso){if(!iso)return '-';var d=new Date(iso);if(isNaN(d.getTime()))return '-';var p=function(n){return(n<10?'0':'')+n;};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
+// 로그인 화면(z-index 5000) 위에 뜨는 선택창. 'push' | 'pull' 반환.
+function askUnsyncedLocalChoice(info){
+  return new Promise(function(resolve){
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:6000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center';
+    ov.innerHTML='<div style="background:#fff;border-radius:10px;padding:20px 22px;width:min(460px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.35);font-size:13px;color:#1f2937;line-height:1.6">'+
+      '<div style="font-weight:700;font-size:15px;color:#b45309;margin-bottom:8px">⚠ 클라우드에 올라가지 않은 변경이 있습니다</div>'+
+      '<div>이 기기에서 마지막으로 클라우드와 맞춘 뒤 수정한 내용이 아직 Push되지 않았습니다.</div>'+
+      '<div style="margin:8px 0;padding:6px 10px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;font-size:12px">마지막 동기화: <b>'+_fmtSyncTs(info.syncedAt)+'</b><br>이 기기 마지막 저장: <b>'+_fmtSyncTs(info.lastSave)+'</b></div>'+
+      '<div style="font-size:12px;color:#4b5563">· <b>이 기기 데이터 올리기</b>: 이 기기의 내용을 클라우드에 Push합니다. 그 사이 다른 기기에서 Push한 내용(업체DB·설정·계정 등)은 덮어써집니다(다른 계정의 공고 탭은 유지).<br>· <b>클라우드 데이터 받기</b>: 클라우드 내용을 받아옵니다. 이 기기에서 Push하지 않은 변경은 사라집니다.</div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">'+
+        '<button type="button" id="unsync-pull" style="padding:7px 12px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;cursor:pointer;font-weight:600">클라우드 데이터 받기</button>'+
+        '<button type="button" id="unsync-push" style="padding:7px 12px;border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:6px;cursor:pointer;font-weight:700">이 기기 데이터 올리기</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    function done(v){if(ov.parentNode)ov.parentNode.removeChild(ov);resolve(v);}
+    ov.querySelector('#unsync-push').onclick=function(){done('push');};
+    ov.querySelector('#unsync-pull').onclick=function(){
+      if(!confirm('이 기기에서 Push하지 않은 변경이 사라집니다. 클라우드 데이터를 받을까요?'))return;
+      done('pull');
+    };
+  });
+}
 function getGistAutoPushIntervalMin(){
   var v;try{v=parseInt(localStorage.getItem(GIST_AUTO_PUSH_INTERVAL_KEY),10);}catch(e){}
   if(!v||isNaN(v))v=15;
@@ -1006,6 +1066,7 @@ async function gistPull(){
     var obj;try{obj=JSON.parse(text);}catch(e){gistStatus('err','응답 오류');return;}
     gistApplyData(obj);
     window._lastGistPullOkAt=Date.now(); // 2026-11-11: 부팅 직후 중복 Pull 생략 판단용
+    _recordSyncedHash(); // 2026-11-11: 클라우드와 맞춘 시점의 로컬 지문 기록(gistApplyData가 방금 localStorage에 저장함)
     _gistDirty=false; // 방금 클라우드 값으로 맞췄으므로 Push할 변경 없음(부팅 시 load→save가 세운 플래그로 15분 뒤 불필요한 Push가 나가던 것 방지)
     renderBidScreenTabs();restoreBidInputsFromState();refreshDB();refreshBidStats();refreshCombos();
     // 2026-08-14: pull로 다른 기기에서 등록한 외부앱이 새로 들어올 수 있으므로, 이미 열려있던 iframe은
@@ -1024,7 +1085,7 @@ async function gistPull(){
 // 나머지 계정 파티션은 remote의 최신 값을 그대로 유지한 뒤 push함. 이렇게 하지 않으면 두 계정이
 // 서로 다른 기기에서 동시에 저장할 때 나중에 push하는 쪽이 상대방 화면 파티션까지 통째로 덮어써 버림.
 // (주의) db/groups/accounts/settings 등 다른 공유 필드는 여전히 전체 덮어쓰기 방식이라 이 병합의 대상이 아님 — 그 부분은 그대로 마지막 저장이 우선함.
-async function mergeRemoteBidScreensBeforePush(){
+async function mergeRemoteBidScreensBeforePush(uidOverride){
   try{
     var pr=await fetch(GIST_WORKER_URL+'/pull',{headers:{'X-App-Key':GIST_APP_KEY}});
     if(!pr.ok)return;
@@ -1032,20 +1093,22 @@ async function mergeRemoteBidScreensBeforePush(){
     if(!remote||typeof remote.bidScreensByUser!=='object')return;
     var merged=Object.assign({},remote.bidScreensByUser);
     var s=getSession();
-    if(s&&state.bidScreensByUser&&state.bidScreensByUser[s.id]){
-      merged[s.id]=state.bidScreensByUser[s.id]; // 내 계정 파티션만 로컬 최신값으로 덮어씀
+    var _sid=(s&&s.id)||uidOverride||''; // 2026-11-11: 로그인 전(부팅 선택창에서 '올리기')에는 마지막 로그인 계정 파티션을 로컬값으로
+    if(_sid&&state.bidScreensByUser&&state.bidScreensByUser[_sid]){
+      merged[_sid]=state.bidScreensByUser[_sid]; // 내 계정 파티션만 로컬 최신값으로 덮어씀
     }
     state.bidScreensByUser=merged;
   }catch(e){console.warn('merge pull 실패, 로컬 상태로 push 진행',e);}
 }
-async function gistPushNow(){
+async function gistPushNow(opts){
   if(window.__VIEW_ONLY)return; // 2026-10-06 조회 전용 모드에서는 어떤 경로로도 Push 하지 않음(PC 데이터 덮어쓰기 방지)
   window._gistLastPushOk=false;
   gistStatus('syncing');
   try{
     syncActiveBidScreen();
     persistCurrentUserBidScreens();
-    await mergeRemoteBidScreensBeforePush();
+    _gistDirty=false; // 2026-11-11: 이 시점 상태를 올림 — Push 도중 save()가 일어나면 다시 true가 되어 다음 주기에 올라감
+    await mergeRemoteBidScreensBeforePush(opts&&opts.uid);
     // 2026-08-14: state.bidScreens/activeBidScreenIndex는 현재 로그인 계정 파티션(state.bidScreensByUser[내계정])의
     // 런타임 뷰일 뿐 — 바로 위 persistCurrentUserBidScreens()가 그 파티션에 이미 동일 내용을 반영했고,
     // Pull 적용 시에도 gistApplyData는 이 두 필드를 전혀 읽지 않고 bidScreensByUser에서 다시 만들어씀
@@ -1063,6 +1126,7 @@ async function gistPushNow(){
     if(!r.ok){_gistDirty=true;gistStatus('err','Push '+r.status);return;} // 2026-11-11: 실패 시 dirty 복구 → 다음 주기에 재시도(예전엔 플래그가 꺼진 채 남아 다음 수정 전까지 Push 안 됨)
     try{localStorage.setItem(GIST_LAST_PUSH_KEY,formatGistPushTs(new Date()));}catch(e){}
     window._gistLastPushOk=true;
+    if(!_gistDirty){try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){}_recordSyncedHash();} // 2026-11-11: 올린 내용 = 로컬 → 동기화 지문 기록
     gistStatus('ok','☁ Push 완료');
     setTimeout(function(){gistStatus('');},2500);
   }catch(e){_gistDirty=true;gistStatus('err','Push 오류');console.warn('gistPush',e);}
@@ -1643,6 +1707,7 @@ function save(){
     persistCurrentUserBidScreens();
     try{stampTempCompanyUsage();}catch(e2){}
     localStorage.setItem(STORE_KEY,JSON.stringify(state));
+    try{localStorage.setItem(LAST_LOCAL_SAVE_KEY,new Date().toISOString());}catch(e3){}
   }catch(e){console.warn(e);}
   _gistDirty=true;
 }
@@ -12870,7 +12935,7 @@ function getSession(){
     return s;
   }catch(e){return null;}
 }
-function setSession(acc){sessionStorage.setItem(SESSION_KEY,JSON.stringify({id:acc.id,role:acc.role,name:acc.name||acc.id}));}
+function setSession(acc){sessionStorage.setItem(SESSION_KEY,JSON.stringify({id:acc.id,role:acc.role,name:acc.name||acc.id}));try{localStorage.setItem(LAST_LOGIN_UID_KEY,acc.id);}catch(e){}}
 function clearSession(){sessionStorage.removeItem(SESSION_KEY);}
 function currentRole(){var s=getSession();return s?s.role:null;}
 function isAdminOrAbove(){var r=currentRole();return r==='admin'||r==='super';}
@@ -13087,7 +13152,7 @@ function boot(){
   applyEligTablesFromSettings(); // load()도 자체 호출하지만, 안전하게 한 번 더(멱등)
   applyCustomInstitutionsFromSettings(); // 커스텀 발주처(조달청 적격기준 적용) 드롭다운·레지스트리 동기화(멱등)
   ensureDefaultAccounts();
-  (function(){var _s=getSession();if(_s)loadBidScreensForUser(_s.id);})();
+  (function(){var _s=getSession();if(_s){loadBidScreensForUser(_s.id);try{localStorage.setItem(LAST_LOGIN_UID_KEY,_s.id);}catch(e){}}})(); // 2026-11-11: 마지막 로그인 계정 기록(부팅 선택창 '올리기' 시 공고 탭 파티션 반영용)
   renderBidScreenTabs();
   refreshDB();
   refreshRailTechTab();
@@ -13109,7 +13174,7 @@ function boot(){
     renderBidScreenTabs();
   });
   // 2026-11-11: initAuthFlow()가 로그인 판정 직전에 이미 Pull했으면(1분 이내) 다시 받지 않음 — 예전엔 부팅마다 Pull 2회(동기화 데이터 약 600KB를 두 번 다운로드 + 전체 화면 2회 재렌더)
-  if(!(window._lastGistPullOkAt&&Date.now()-window._lastGistPullOkAt<60000))gistPull();
+  if(!window._skipBootPull&&!(window._lastGistPullOkAt&&Date.now()-window._lastGistPullOkAt<60000))gistPull();
   startGistAutoPush();
   checkExpiryAlertsOnBoot();
   checkTempCompanyAlertOnBoot();
@@ -13138,12 +13203,23 @@ function boot(){
 async function initAuthFlow(){
   bindLoginUI();
   load();
+  var _unsynced=window.__VIEW_ONLY?null:getUnsyncedLocalChange(); // 2026-11-11: save() 전에 판정(부팅 save가 지문을 바꾸지 않게)
   ensureDefaultAccounts();
   save();
+  if(_unsynced){
+    var _choice=await askUnsyncedLocalChoice(_unsynced);
+    if(_choice==='push'){
+      var _uid='';try{var _ss=getSession();_uid=(_ss&&_ss.id)||localStorage.getItem(LAST_LOGIN_UID_KEY)||'';}catch(e){}
+      try{await gistPushNow({uid:_uid});}catch(e){}
+      if(window._gistLastPushOk){window._lastGistPullOkAt=Date.now();} // 로컬=클라우드 → 부팅 Pull 생략
+      else{window._skipBootPull=true;alert('클라우드 올리기(Push)에 실패했습니다.\n이 기기 데이터는 그대로 유지됩니다. 로그인 후 ☁ 버튼의 [수동 Push]로 다시 시도하세요.');}
+      _unsynced='done';
+    }
+  }
   // 새 기기에서는 로그인 화면이 뜨는 시점에 아직 클라우드 계정목록을 받아오기 전이라
   // 로컬 기본계정(최고관리자·admin) 외 커스텀 계정은 로그인이 안 됐음.
   // 로그인 판정 전에 먼저 Pull해서 최신 계정목록을 확보함(실패해도 기본계정으로는 로그인 가능하도록 무시).
-  try{ await gistPull(); }catch(e){}
+  if(_unsynced!=='done'){ try{ await gistPull(); }catch(e){} }
   var sess=getSession();
   if(window._appBooted)return; // Pull 대기 중 이미 로그인해서 doLogin()이 boot()를 실행한 경우
   if(sess&&findAccount(sess.id)){
