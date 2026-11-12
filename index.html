@@ -12968,6 +12968,8 @@ function ensureDefaultAccounts(){
   if(!Array.isArray(state.accounts))state.accounts=[];
   var s=state.accounts.find(function(a){return a.id===SUPER_ID;});
   if(s){s.role='super';s.fixed=true;if(!s.name)s.name='최고관리자';} // 권한만 보정(비밀번호는 건드리지 않음)
+  // 구버전이 열려 있던 기기가 Push하면 최고관리자 계정에 예전 평문 비밀번호를 다시 써넣음 → 해시가 있으면 평문은 버림(로그인은 해시로만 판정)
+  state.accounts.forEach(function(x){if(x&&x.pwHash&&('pw' in x))delete x.pw;});
 }
 function findAccount(id){return (state.accounts||[]).find(function(a){return a.id===id;});}
 
