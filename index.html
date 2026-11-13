@@ -874,7 +874,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[],dedNoteTpl:DEFAULT_DED_NOTE_TPL,dedNoteTplV:3},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},투찰알람:{autoCheckEok:30},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[],dedNoteTpl:DEFAULT_DED_NOTE_TPL,dedNoteTplV:3},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -1067,7 +1067,7 @@ function gistApplyData(obj){
   if(obj.bid)Object.assign(state.bid,obj.bid);
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&obj.settings.기초배율!=null&&!isNaN(obj.settings.기초배율)&&Number(obj.settings.기초배율)>0)state.settings.기초배율=Number(obj.settings.기초배율);
-  if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);
+  if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);if(obj.settings&&obj.settings.투찰알람&&typeof obj.settings.투찰알람==='object'){if(!state.settings.투찰알람)state.settings.투찰알람={autoCheckEok:30};Object.assign(state.settings.투찰알람,obj.settings.투찰알람);}
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
@@ -1690,7 +1690,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.groups)state.groups=obj.groups;
   if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
   if(obj.settings&&obj.settings.기초배율!=null&&!isNaN(obj.settings.기초배율)&&Number(obj.settings.기초배율)>0)state.settings.기초배율=Number(obj.settings.기초배율);
-  if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);
+  if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);if(obj.settings&&obj.settings.투찰알람&&typeof obj.settings.투찰알람==='object'){if(!state.settings.투찰알람)state.settings.투찰알람={autoCheckEok:30};Object.assign(state.settings.투찰알람,obj.settings.투찰알람);}
   if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
   if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
@@ -1780,7 +1780,7 @@ function load(){
     if(Array.isArray(obj.kepcoCombos)&&obj.kepcoCombos.length>0){state.kepcoCombos=obj.kepcoCombos;state.kepcoCombos.forEach(function(c){normalizeSlotGrp(c&&c.slots);});}
     if(obj.settings&&obj.settings.keywords)Object.assign(state.settings.keywords,obj.settings.keywords);
     if(obj.settings&&obj.settings.기초배율!=null&&!isNaN(obj.settings.기초배율)&&Number(obj.settings.기초배율)>0)state.settings.기초배율=Number(obj.settings.기초배율);
-    if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);
+    if(obj.settings&&obj.settings.기초알람&&typeof obj.settings.기초알람==='object')Object.assign(state.settings.기초알람,obj.settings.기초알람);if(obj.settings&&obj.settings.투찰알람&&typeof obj.settings.투찰알람==='object'){if(!state.settings.투찰알람)state.settings.투찰알람={autoCheckEok:30};Object.assign(state.settings.투찰알람,obj.settings.투찰알람);}
     if(obj.settings&&Array.isArray(obj.settings.regionList)&&obj.settings.regionList.length)state.settings.regionList=obj.settings.regionList.slice();
     if(obj.settings&&obj.settings.companyAvg)Object.assign(state.settings.companyAvg,obj.settings.companyAvg);
   if(obj.settings&&obj.settings.eligNotes)Object.assign(state.settings.eligNotes,obj.settings.eligNotes);
@@ -4575,6 +4575,18 @@ function getBaseAmountAlerts(){
   return out;
 }
 // ████ 투찰확인 알람 (2026-11-05) ████
+// 2026-11-13: 설정>공고/적격>알림설정>투찰알람 — 추정가격이 N억 이상인 공고는 [투찰확인]을 자동 체크한 것으로 본다.
+// N이 비어있으면(null) 자동체크 미사용. 사용자가 그 공고의 체크박스를 직접 바꾼 적이 있으면(b.투찰확인수동) 직접 지정한 값을 따른다.
+function isBidCheckOn(b){
+  if(!b)return false;
+  if(b.투찰확인)return true;
+  if(b.투찰확인수동)return false;
+  var cfg=(state.settings&&state.settings.투찰알람)||{};
+  var th=cfg.autoCheckEok;
+  if(th==null||th===''||isNaN(Number(th)))return false;
+  var est=Number(b.추정가격);
+  return est>0&&est>=Number(th)*1e8;
+}
 // 공고입력의 [투찰확인] 체크(b.투찰확인) + 조합 중 대표사(분담 제외 지분율 최댓값, 동률이면 앞 슬롯 — 산출알람과 동일 판정)의
 // 업체가 업체DB에서 '실적업체'(c.is실적)로 체크된 조합이 하나라도 있으면 대상(슬롯 유형 무관, 2026-11-11 정정).
 // - 1차: 협정마감일 16:00 ~ 당일 24:00 사이 (PC가 꺼져 있었으면 그날 안에 처음 켤 때)
@@ -4597,7 +4609,7 @@ function getBidCheckJeokReps(scr){
 }
 function isBidCheckPending(scr){
   var b=scr&&scr.bid;
-  return !!(b&&b.투찰확인&&!b.투찰확인완료&&b.협정마감일_YMD&&getBidCheckJeokReps(scr).length);
+  return !!(b&&isBidCheckOn(b)&&!b.투찰확인완료&&b.협정마감일_YMD&&getBidCheckJeokReps(scr).length);
 }
 function getBidCheckAlerts(){
   var out=[];
@@ -10123,6 +10135,7 @@ function updateMainProcPeriodLabel(){
   else{el.textContent='';el.style.display='none';}
 }
 function refreshBidStats(){
+  try{var _tcS=$('#chk-투찰확인');if(_tcS&&state.bid)_tcS.checked=isBidCheckOn(state.bid);}catch(_e){} // 2026-11-13 투찰알람 자동체크 반영
   try{updateMainProcPeriodLabel();}catch(_e){}
   var c=calcBid();
   updateBaseMultPlaceholders();
@@ -10435,7 +10448,7 @@ function bind(){
     if(_cu)_cu.addEventListener('change',function(){state.bid.표시안내URL=this.checked;if(this.checked)syncGuideUrlToAllCombos();else clearGuideUrlFromAllCombos();save();});
     // 2026-11-05: 투찰확인 체크 — 다시 체크하면 이전 확인완료 기록은 초기화(알림 재대상)
     var _tc=$('#chk-투찰확인');
-    if(_tc)_tc.addEventListener('change',function(){state.bid.투찰확인=this.checked;state.bid.투찰확인완료=false;save();});
+    if(_tc)_tc.addEventListener('change',function(){state.bid.투찰확인=this.checked;state.bid.투찰확인수동=true;state.bid.투찰확인완료=false;save();});
   })();
 
   // 저장된 값을 inputs에 복원
@@ -11094,6 +11107,7 @@ function bind(){
             '<button type="button" class="settings-subtabbtn" data-substab="region">🗺️ 지역편집</button>'+
             '<button type="button" class="settings-subtabbtn" data-substab="regionmemo">📝 지역메모</button>'+
             '<button type="button" class="settings-subtabbtn" data-substab="eligmemo">📝 적격(발주처)메모</button>'+
+            '<button type="button" class="settings-subtabbtn" data-substab="alarm">🔔 알림설정</button>'+
             '<button type="button" class="settings-subtabbtn" data-substab="eligupdate">🔄 적격UPDATE</button>'+
           '</div>'+
           '<div class="settings-subtabpage" data-substabpage="analyzer">'+
@@ -11107,23 +11121,6 @@ function bind(){
                 '<input type="number" step="0.01" min="0.01" id="skw-기초배율" value="'+esc(String(state.settings.기초배율!=null?state.settings.기초배율:1.1))+'" style="width:80px;text-align:right;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px">'+
                 '<span style="font-size:12px;color:#374151">= 기초금액(자동)</span>'+
                 '<button type="button" class="btn btn-ghost btn-sm" id="skw-기초배율-reset" style="font-size:11px;padding:2px 8px;margin-left:8px">기본값(1.1)</button>'+
-              '</div>'+
-            '</div>'+
-            '<div style="margin:0 16px 12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
-              '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:6px">기초금액 확인 자동 알람 <span style="font-weight:400;font-size:11px;color:#6b7280">(기초금액 및 A값이 미발표 된 공고의 경우 확인하도록 자동알람 발생)</span></div>'+
-              '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">'+
-                '<span style="font-size:12px;color:#374151">협정마감일 -</span>'+
-                '<input type="number" step="1" min="0" id="skw-기초알람-days" value="'+esc(String((state.settings.기초알람&&state.settings.기초알람.daysBefore!=null)?state.settings.기초알람.daysBefore:5))+'" style="width:60px;text-align:right;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px">'+
-                '<span style="font-size:12px;color:#374151">일 전 am10:00 (기본값 -5일)</span>'+
-                '<button type="button" class="btn btn-sm" id="skw-기초알람-save" style="background:#6366f1">저장</button>'+
-                '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer;margin-left:4px">'+
-                  '<input type="checkbox" id="skw-기초알람-daily" '+((!state.settings.기초알람||state.settings.기초알람.dailyAfter!==false)?'checked':'')+'>이 후 기초금액 입력 전까지 매일 알람'+
-                '</label>'+
-              '</div>'+
-              '<div style="margin-top:6px">'+
-                '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer">'+
-                  '<input type="checkbox" id="skw-기초알람-지자체30억제외" '+((!state.settings.기초알람||state.settings.기초알람.excludeJijaUnder30!==false)?'checked':'')+'>지자체 30억 미만 공고 제외'+
-                '</label>'+
               '</div>'+
             '</div>'+
             '<div style="padding:10px 16px 6px;font-size:11px;color:#6b7280;line-height:1.5">'+
@@ -11192,6 +11189,35 @@ function bind(){
             '</div>'+
             '<div style="display:flex;justify-content:flex-end;gap:6px;padding:4px 16px 12px">'+
               '<button class="btn" id="eligmemo-save" style="background:#059669">저장</button>'+
+            '</div>'+
+          '</div>'+
+          '<div class="settings-subtabpage" data-substabpage="alarm" style="display:none">'+
+            '<div style="margin:10px 16px 12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
+              '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:6px">기초금액 확인 자동 알람 <span style="font-weight:400;font-size:11px;color:#6b7280">(기초금액 및 A값이 미발표 된 공고의 경우 확인하도록 자동알람 발생)</span></div>'+
+              '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">'+
+                '<span style="font-size:12px;color:#374151">협정마감일 -</span>'+
+                '<input type="number" step="1" min="0" id="skw-기초알람-days" value="'+esc(String((state.settings.기초알람&&state.settings.기초알람.daysBefore!=null)?state.settings.기초알람.daysBefore:5))+'" style="width:60px;text-align:right;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px">'+
+                '<span style="font-size:12px;color:#374151">일 전 am10:00 (기본값 -5일)</span>'+
+                '<button type="button" class="btn btn-sm" id="skw-기초알람-save" style="background:#6366f1">저장</button>'+
+                '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer;margin-left:4px">'+
+                  '<input type="checkbox" id="skw-기초알람-daily" '+((!state.settings.기초알람||state.settings.기초알람.dailyAfter!==false)?'checked':'')+'>이 후 기초금액 입력 전까지 매일 알람'+
+                '</label>'+
+              '</div>'+
+              '<div style="margin-top:6px">'+
+                '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#374151;cursor:pointer">'+
+                  '<input type="checkbox" id="skw-기초알람-지자체30억제외" '+((!state.settings.기초알람||state.settings.기초알람.excludeJijaUnder30!==false)?'checked':'')+'>지자체 30억 미만 공고 제외'+
+                '</label>'+
+              '</div>'+
+            '</div>'+
+            '<div style="margin:0 16px 12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#f8fafc">'+
+              '<div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:6px">투찰알람 <span style="font-weight:400;font-size:11px;color:#6b7280">(공고입력의 [투찰확인] 자동 체크 — 비우면 자동체크 기능 사용 안 함)</span></div>'+
+              '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">'+
+                '<span style="font-size:12px;color:#374151">추정가격</span>'+
+                '<input type="number" step="0.1" min="0" id="skw-투찰알람-eok" placeholder="미사용" value="'+esc((state.settings.투찰알람&&state.settings.투찰알람.autoCheckEok!=null&&state.settings.투찰알람.autoCheckEok!=='')?String(state.settings.투찰알람.autoCheckEok):'')+'" style="width:70px;text-align:right;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px">'+
+                '<span style="font-size:12px;color:#374151">억 이상 공고에는 자동 체크한다.</span>'+
+                '<button type="button" class="btn btn-sm" id="skw-투찰알람-save" style="background:#6366f1">저장</button>'+
+              '</div>'+
+              '<div style="font-size:11px;color:#6b7280;margin-top:6px;line-height:1.5">공고에서 [투찰확인]을 직접 해제하면 그 공고는 자동 체크하지 않습니다.</div>'+
             '</div>'+
           '</div>'+
           '<div class="settings-subtabpage" data-substabpage="eligupdate" style="display:none">'+
@@ -11352,6 +11378,20 @@ function bind(){
           state.settings.기초알람.excludeJijaUnder30=!!(_jijaExEl&&_jijaExEl.checked);
           save();
           toast('기초금액 확인 자동 알람 설정 저장','ok');
+        };
+      })();
+      (function(){
+        var _eokEl=document.getElementById('skw-투찰알람-eok');
+        var _btn=document.getElementById('skw-투찰알람-save');
+        if(!_btn)return;
+        _btn.onclick=function(){
+          if(!state.settings.투찰알람)state.settings.투찰알람={autoCheckEok:30};
+          var raw=_eokEl?String(_eokEl.value).trim():'';
+          var v=Number(raw);
+          state.settings.투찰알람.autoCheckEok=(raw!==''&&!isNaN(v)&&v>=0)?v:null;
+          save();
+          var _tcN=$('#chk-투찰확인');if(_tcN)_tcN.checked=isBidCheckOn(state.bid);
+          toast(state.settings.투찰알람.autoCheckEok!=null?('투찰알람: 추정가격 '+state.settings.투찰알람.autoCheckEok+'억 이상 자동 체크'):'투찰알람 자동체크 사용 안 함','ok');
         };
       })();
       document.getElementById('skw-save').onclick=function(){
@@ -12770,7 +12810,7 @@ function restoreBidInputsFromState(){
   var _cj=$('#chk-표시실적합');if(_cj)_cj.checked=!!b.표시실적합;
   var _cs=$('#chk-표시시평합');if(_cs)_cs.checked=!!b.표시시평합;
   var _cu=$('#chk-표시안내URL');if(_cu)_cu.checked=!!b.표시안내URL;
-  var _tcR=$('#chk-투찰확인');if(_tcR)_tcR.checked=!!b.투찰확인;
+  var _tcR=$('#chk-투찰확인');if(_tcR)_tcR.checked=isBidCheckOn(b);
   refreshCompanyAvgDisplay();
   updateBidNameLabel();
   refreshDbFixedSelect();
