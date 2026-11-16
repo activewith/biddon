@@ -176,6 +176,9 @@ tr.hover:hover{background:#f8fafc}
 .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal{background:#fff;border-radius:8px;padding:18px;min-width:340px;max-width:95vw;max-height:90vh;overflow:auto}
 .modal h3{margin:0 0 12px 0}
+/* 2026-11-16: 만료임박 확인 알림 표 — 열 너비 고정 + 줄바꿈(가로 스크롤 제거) */
+.exp-alert-tbl{table-layout:fixed}
+.exp-alert-tbl th,.exp-alert-tbl td{white-space:normal;word-break:keep-all;overflow-wrap:anywhere;vertical-align:top}
 .modal>h3,.modal>div:first-child{cursor:move;user-select:none}
 .modal.dragging{opacity:.97}
 .form-grid{display:grid;grid-template-columns:140px 1fr;gap:8px;align-items:center;margin-bottom:12px}
@@ -4914,27 +4917,27 @@ function showExpiryAlertModal(){
     (list.length?(
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:6px 0 4px">🏢 업체 ('+list.length+'건)</div>'+
       '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">신용평가 만료 7일 전 / 안전보건 만료 1개월 전 / 일자리 B조건 연1회 재확인(4/1~4/15) 기준 · 체크 시 해당 업체는 다음부터 알림에서 제외됩니다 · "최종수정"은 재무/자격 관련 정보(시평액·실적·부채유동비율·공사업등록일·신용평가·안전보건시스템·공사업종)가 실제로 바뀐 날짜로(메모 등 단순 수정은 반영 안 됨), 만료된 자격 정보가 실제로 갱신되었는지 판단하는 데 참고하세요</p>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px">업체명</th><th class="l" style="padding:5px 8px">상세</th><th class="l" style="padding:5px 8px">최종수정</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      '<table class="exp-alert-tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px;width:30%">업체명</th><th class="l" style="padding:5px 8px">상세</th><th class="l" style="padding:5px 8px;width:84px">최종수정</th></tr></thead><tbody>'+rows+'</tbody></table>'
     ):'')+
     (bidList.length?(
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">📋 공고 메모 알람 ('+bidList.length+'건)</div>'+
       '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">한줄요약/메모 창에서 지정한 알람 날짜가 지난 공고입니다 · 공고명을 누르면 해당 화면으로 이동, 끄기를 누르면 그 알람만 해제됩니다</p>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:50px">끄기</th><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+bidRows+'</tbody></table>'
+      '<table class="exp-alert-tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:50px">끄기</th><th class="l" style="padding:5px 8px;width:40%">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+bidRows+'</tbody></table>'
     ):'')+
     (baseList.length?(
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">📐 기초금액/A값 미입력 ('+baseList.length+'건)</div>'+
       '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">협정마감일이 임박했는데 기초금액과 A값이 모두 비어있는 공고입니다 · 공고명을 누르면 해당 화면으로 이동 · 기초금액 또는 A값을 입력하면 자동으로 알림에서 빠집니다 · 알림 기준(며칠 전부터, 매일 반복 여부)은 설정 &gt; 공고/적격 &gt; 공고문분석에서 조정</p>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+baseRows+'</tbody></table>'
+      '<table class="exp-alert-tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th class="l" style="padding:5px 8px;width:40%">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+baseRows+'</tbody></table>'
     ):'')+
     (calcList.length?(
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">🧮 투찰금액 산출 ('+calcList.length+'건)</div>'+
       '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">업체등록의 [산출]을 체크한 업체가 대표사로 조합된 공고입니다 · 협정마감일 1일 전(주말이면 직전 금요일)부터 표시 · 이미 산출했으면 [제외] 체크 · 공고명을 누르면 해당 화면으로 이동 · 알림을 멈추려면 업체등록에서 [산출] 체크 해제</p>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+calcRows+'</tbody></table>'
+      '<table class="exp-alert-tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:36px">제외</th><th class="l" style="padding:5px 8px;width:40%">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+calcRows+'</tbody></table>'
     ):'')+
     (checkList.length?(
       '<div style="font-weight:700;font-size:13px;color:#1e293b;margin:14px 0 4px">✅ 투찰확인 ('+checkList.length+'건)</div>'+
       '<p style="font-size:12px;color:var(--muted);margin-bottom:8px">[투찰확인]을 체크한 공고 중 실적업체(업체DB 분류)가 대표사인 조합이 있는 공고입니다 · 협정마감일 16:00부터 [확인]을 누를 때까지 10분마다 알림(다음날 09:20~10:00 재알림, 10:00에 종료) · 노란 문구를 누르면 "공고명 공고번호"(1줄) + "투찰여부 확인부탁드립니다."(2줄)가 복사됩니다 · [확인]을 누르면 알림이 끝나고 마감일 지난 탭은 다음 정리 때 자동삭제됩니다</p>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:50px">확인</th><th class="l" style="padding:5px 8px">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+checkRows+'</tbody></table>'
+      '<table class="exp-alert-tbl" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="padding:5px 8px;width:50px">확인</th><th class="l" style="padding:5px 8px;width:40%">공고명</th><th class="l" style="padding:5px 8px">상세</th></tr></thead><tbody>'+checkRows+'</tbody></table>'
     ):'')+
     '<div style="text-align:right;margin-top:12px"><button class="btn btn-ghost" id="m-cancel">닫기</button></div>'+
     '</div></div>';
