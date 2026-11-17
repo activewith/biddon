@@ -877,7 +877,7 @@ const state={
   db:[],
   groups:[],
   bid:_initBid,
-  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},투찰알람:{autoCheckEok:30},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[],dedNoteTpl:DEFAULT_DED_NOTE_TPL,dedNoteTplV:3},
+  settings:{keywords:{기초금액:'',추정가격:'',시평제한:'',분담시평:'',지역의무지분:'',최소지분율:'',구성업체수:'',배수:'',투찰률:'',A값:'',lh순공사원가:'',lh지분율기준:''},기초배율:1.1,기초알람:{daysBefore:5,dailyAfter:true,excludeJijaUnder30:true},투찰알람:{autoCheckEok:30},regionList:DEFAULT_REGIONS.slice(),companyAvg:{전기_평균부채:null,전기_평균유동:null,통신_평균부채:null,통신_평균유동:null,소방_평균부채:null,소방_평균유동:null,기준연도:null,수정일시:null,_archivedFor:null},eligNotes:{},eligGuideUrls:{},regionNotes:{},eligTables:null,eligTablesUpdated:null,customInstitutions:[],dedNoteTpl:DEFAULT_DED_NOTE_TPL,dedNoteTplV:3,dedNoteInTxt:true,dedNoteInConfirm:false},
   combos:_initCombos,
   kepcoBid:_initKepcoBid,
   kepcoCombos:_initKepcoCombos,
@@ -1080,6 +1080,7 @@ function gistApplyData(obj){
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'){state.settings.dedNoteTpl=(obj.settings.dedNoteTplV!==3&&(obj.settings.dedNoteTpl.trim()===OLD_DEFAULT_DED_NOTE_TPL||obj.settings.dedNoteTpl.trim()===''))?DEFAULT_DED_NOTE_TPL:obj.settings.dedNoteTpl;state.settings.dedNoteTplV=3;}
+  if(obj.settings){state.settings.dedNoteInTxt=(typeof obj.settings.dedNoteInTxt==='boolean')?obj.settings.dedNoteInTxt:true;state.settings.dedNoteInConfirm=(typeof obj.settings.dedNoteInConfirm==='boolean')?obj.settings.dedNoteInConfirm:false;}
   if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
   ensureDefaultAccounts();
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
@@ -1703,6 +1704,7 @@ function restoreStateFromBackupObj(obj){
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'){state.settings.dedNoteTpl=(obj.settings.dedNoteTplV!==3&&(obj.settings.dedNoteTpl.trim()===OLD_DEFAULT_DED_NOTE_TPL||obj.settings.dedNoteTpl.trim()===''))?DEFAULT_DED_NOTE_TPL:obj.settings.dedNoteTpl;state.settings.dedNoteTplV=3;}
+  if(obj.settings){state.settings.dedNoteInTxt=(typeof obj.settings.dedNoteInTxt==='boolean')?obj.settings.dedNoteInTxt:true;state.settings.dedNoteInConfirm=(typeof obj.settings.dedNoteInConfirm==='boolean')?obj.settings.dedNoteInConfirm:false;}
   if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
   if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
   if(obj.dbLegacySnapshotMeta!==undefined)state.dbLegacySnapshotMeta=obj.dbLegacySnapshotMeta;
@@ -1793,6 +1795,7 @@ function load(){
   if(obj.settings&&Array.isArray(obj.settings.customInstitutions)){state.settings.customInstitutions=obj.settings.customInstitutions;applyCustomInstitutionsFromSettings();}
   if(obj.settings&&obj.settings._A조건초기화월!=null)state.settings._A조건초기화월=obj.settings._A조건초기화월;
   if(obj.settings&&typeof obj.settings.dedNoteTpl==='string'){state.settings.dedNoteTpl=(obj.settings.dedNoteTplV!==3&&(obj.settings.dedNoteTpl.trim()===OLD_DEFAULT_DED_NOTE_TPL||obj.settings.dedNoteTpl.trim()===''))?DEFAULT_DED_NOTE_TPL:obj.settings.dedNoteTpl;state.settings.dedNoteTplV=3;}
+  if(obj.settings){state.settings.dedNoteInTxt=(typeof obj.settings.dedNoteInTxt==='boolean')?obj.settings.dedNoteInTxt:true;state.settings.dedNoteInConfirm=(typeof obj.settings.dedNoteInConfirm==='boolean')?obj.settings.dedNoteInConfirm:false;}
     if(Array.isArray(obj.accounts))state.accounts=obj.accounts;
     if(Array.isArray(obj.railTechDB))state.railTechDB=obj.railTechDB;
     if(obj.dbLegacySnapshot!==undefined)state.dbLegacySnapshot=obj.dbLegacySnapshot;
@@ -4008,6 +4011,12 @@ function formatDedNote(absStr){
   var tpl=(state.settings&&typeof state.settings.dedNoteTpl==='string')?state.settings.dedNoteTpl.trim():DEFAULT_DED_NOTE_TPL;
   if(!tpl)return''; // 비어 있으면 멘트를 붙이지 않음
   return tpl.replace(/-?N/g,absStr);
+}
+// 2026-11-17: 감점 멘트 삽입 위치 설정 — 조합결과TXT(기본 체크) / 확정메세지(기본 해제)
+function dedNoteEnabledFor(where){
+  var st=state.settings||{};
+  if(where==='confirm')return st.dedNoteInConfirm===true;
+  return st.dedNoteInTxt!==false;
 }
 // 확정메모가 감점 멘트와 같은 내용인지(괄호 유무 무시) — 같으면 메모 쪽 표시 생략
 function sameAsDedNote(memo,note){
@@ -8959,7 +8968,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     }
     // 감점 조합 참고 멘트(보완불가 등)는 조합결과TXT에도 병기
     // 2026-11-05: 안내(URL)/확정메모는 확정메세지에만 표시 — 조합결과TXT에는 넣지 않음(2026-10-29 병기 방식 폐지)
-    var _udNote=getUnrecoverableDedNote(r,c);
+    var _udNote=dedNoteEnabledFor('txt')?getUnrecoverableDedNote(r,c):''; // 2026-11-17: 설정>조합>감점 조합 '조합결과TXT' 체크 시에만
     if(_udNote)line+=_udNote;
     // 2026-11-10: 부적격 조합(조합카드 배지와 같은 기준 — comboCalcFor로 조합별 사정률 반영)은 팝업에서 줄 전체를 적색 표시.
     // 한전은 적격판정 자체가 없으므로 제외. 마커(\uE003)는 텍스트 출력 시 제거됨.
@@ -11307,9 +11316,13 @@ function bind(){
                 '<button type="button" class="btn btn-sm btn-ghost" id="btn-dedNoteTpl-reset">기본값</button>'+
                 '<span style="font-size:12px;font-weight:400;color:#9ca3af;margin-left:6px">멘트에 대문자 N이 들어가면 그 자리마다 숫자로 바뀝니다.</span>'+
               '</label>'+
+              '<div style="font-size:12px;color:#374151;font-weight:600;margin-top:8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">삽입 위치'+
+                '<label style="font-weight:400;display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="chk-dedNoteInTxt">조합결과TXT</label>'+
+                '<label style="font-weight:400;display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="chk-dedNoteInConfirm">확정메세지</label>'+
+              '</div>'+
               '<div style="font-size:12px;color:#374151;margin-top:8px">미리보기(순신인도 -0.13 예시): <b id="dedNoteTpl-preview" style="color:#b91c1c"></b></div>'+
               '<div style="font-size:11px;color:#6b7280;margin-top:8px;line-height:1.6">'+
-                '※ 순신인도가 음수(감점이 가점보다 큰 조합)이면 <b>조합결과TXT</b>(조합 줄 끝)와 <b>확정메세지</b>(맨 끝 줄)에 이 멘트를 자동으로 붙입니다. 철도공단·한전은 제외.<br>'+
+                '※ 순신인도가 음수(감점이 가점보다 큰 조합)이면 <b>삽입 위치</b>에서 체크한 곳(<b>조합결과TXT</b>: 조합 줄 끝 / <b>확정메세지</b>: 맨 끝 줄)에만 이 멘트를 자동으로 붙입니다. 기본값은 조합결과TXT만 체크. 철도공단·한전은 제외.<br>'+
                 '<b>N</b> 자리에 순신인도 값이 부호까지 포함되어(예: -0.39) 들어갑니다. 괄호 [ ]도 입력한 그대로 표시됩니다. 기본값은 [보완불가]이고, 비워두면 멘트를 붙이지 않습니다.'+
               '</div>'+
             '</div>'+
@@ -11677,6 +11690,9 @@ function bind(){
         el.addEventListener('change',function(){state.settings.dedNoteTpl=el.value;state.settings.dedNoteTplV=3;refresh();save();});
         var rb=document.getElementById('btn-dedNoteTpl-reset');
         if(rb)rb.addEventListener('click',function(){el.value=DEFAULT_DED_NOTE_TPL;state.settings.dedNoteTpl=DEFAULT_DED_NOTE_TPL;state.settings.dedNoteTplV=3;refresh();save();toast('기본값으로 되돌렸습니다','ok');});
+        var ct=document.getElementById('chk-dedNoteInTxt'),cc=document.getElementById('chk-dedNoteInConfirm');
+        if(ct){ct.checked=dedNoteEnabledFor('txt');ct.addEventListener('change',function(){state.settings.dedNoteInTxt=ct.checked;save();});}
+        if(cc){cc.checked=dedNoteEnabledFor('confirm');cc.addEventListener('change',function(){state.settings.dedNoteInConfirm=cc.checked;save();});}
       })();
       if(isAdminOrAbove())bindAccountsTab(mr);
       // ── 업체DB설정 탭 (전기/통신/소방 평균부채·평균유동 — 전체 계정 공통) ──
@@ -12411,7 +12427,7 @@ function _showConfirmPopCore(ci){ return withLegacyDBIfNeeded(function(){
   // 조합슬롯의 "확정메세지 메모" 입력칸(combo.확정메모, 20자 이내)에 내용이 있으면 메세지 맨 끝(협정 부탁 문구 다음 줄)에
   // "[메모내용]" 형태로 추가. 협정메세지(state.bid.협정메세지)와 달리 이 메모는 확정메세지에만 쓰이는 조합별 값이다.
   // 2026-10-29: 감점 구성이면 "[보완불가 감점 총-N]" 자동 추가(메모와 같은 내용이면 메모 쪽은 생략해 중복 방지)
-  var _udNoteC=getUnrecoverableDedNote(_result,_comboCalc);
+  var _udNoteC=dedNoteEnabledFor('confirm')?getUnrecoverableDedNote(_result,_comboCalc):''; // 2026-11-17: '확정메세지' 체크 시에만
   if(_udNoteC)result+='\n'+_udNoteC;
   if(combo.확정메모&&combo.확정메모.trim()&&!sameAsDedNote(combo.확정메모,_udNoteC))result+='\n['+combo.확정메모.trim()+']';
   var _lhGapInfo=(_globalCalc.isLH&&_result.LH점수모드)?{부족목록:_result.LH부족목록,합산실적:_result.합산실적,합산시평:_result.합산시평,순신인도:_result.순신인도,총점:_result.lh총점,적격:_result.적격}:null;
