@@ -1,0 +1,12 @@
+{
+  "name": "biddon-tests",
+  "private": true,
+  "description": "입찰적격도구(index.html) 회귀 테스트 — index.html은 수정하지 않고 jsdom으로 불러와 함수만 검사",
+  "scripts": {
+    "test": "node --test --test-reporter=spec",
+    "snapshot:update": "UPDATE_SNAPSHOT=1 node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}
