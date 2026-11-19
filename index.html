@@ -5387,6 +5387,23 @@ function 기준약칭(v){
 }
 // 확정메세지/조합결과TXT 상단 헤더(공고명·공고번호(지역)·추정가격·마감일) — state.bid의 저장된 구조화 필드에서 항상 재생성.
 // 협정메세지 텍스트가 지워지거나 비어 있어도 이 정보만은 사라지지 않도록 하기 위한 용도(공고문분석 시 state.bid.공고명/공고번호/마감일에 별도 저장됨).
+// 2026-11-19: 마감일 "표시용" 날짜 — 협정마감일_YMD(원본)는 그대로 두고 표시만 보정.
+// (1) 도로공사: 협정마감일=투찰마감일로 공고되므로 실무 협정마감은 하루 전 → -1일.
+// (2) 보정 결과가 토/일이면 직전 금요일로 당김.
+// 탭 자동삭제·투찰확인 알림 등은 원본 협정마감일_YMD 기준 유지.
+function deadlineDisplayDate(b){
+  if(!b||!b.협정마감일_YMD)return null;
+  var p=String(b.협정마감일_YMD).split('-');
+  if(p.length!==3)return null;
+  var y=parseInt(p[0],10),m=parseInt(p[1],10),d=parseInt(p[2],10);
+  if(isNaN(y)||isNaN(m)||isNaN(d))return null;
+  var dt=new Date(y,m-1,d);
+  if(b.적격기준==='도로공사')dt.setDate(dt.getDate()-1);
+  var w=dt.getDay();
+  if(w===6)dt.setDate(dt.getDate()-1);
+  else if(w===0)dt.setDate(dt.getDate()-2);
+  return {m:dt.getMonth()+1,d:dt.getDate()};
+}
 function buildBidMsgHeader(b){
   var lines=[];
   if(b.공고명)lines.push(b.공고명);
@@ -5397,13 +5414,11 @@ function buildBidMsgHeader(b){
     var _kc=calcBid();
     if(_kc.E4_eff>0)lines.push('기초금액 '+FMT_NUM(Math.round(_kc.E4_eff)));
   } else if(b.추정가격!=null&&b.추정가격!==''&&!isNaN(b.추정가격))lines.push('추정가격 '+FMT_NUM(b.추정가격)+'원');
-  if(b.협정마감일_YMD){
-    var _ymdH=String(b.협정마감일_YMD).split('-');
-    if(_ymdH.length===3){
-      var 마감표시=_ymdH[1]+'/'+_ymdH[2];
-      var 기준=기준약칭(b.적격기준);
-      lines.push('마감 '+마감표시+(기준?' ('+기준+')':''));
-    }
+  var _dlH=deadlineDisplayDate(b);
+  if(_dlH){
+    var 마감표시=('0'+_dlH.m).slice(-2)+'/'+('0'+_dlH.d).slice(-2);
+    var 기준=기준약칭(b.적격기준);
+    lines.push('마감 '+마감표시+(기준?' ('+기준+')':''));
   }
   return lines.join('\n');
 }
@@ -5456,10 +5471,8 @@ function getOneLineSummary(b, c, hideLHNote) {
   
   var parts=[];
   var 마감str='';
-  if(b.협정마감일_YMD){
-    var _ymdP=String(b.협정마감일_YMD).split('-');
-    if(_ymdP.length===3){var _mm=parseInt(_ymdP[1],10);var _dd=parseInt(_ymdP[2],10);if(!isNaN(_mm)&&!isNaN(_dd))마감str='('+_mm+'/'+_dd+'마감)';}
-  }
+  var _dlP=deadlineDisplayDate(b);
+  if(_dlP)마감str='('+_dlP.m+'/'+_dlP.d+'마감)';
   // 2026-08-06: 메세지/요약 맨 앞에 표시 시점의 월 표기, 2026-08-11: 협정마감일 병기.
   // 2026-08-27 정정(2차): "오늘"도 탭생성일도 아니라 #in-기준월(b._기준월)에 사용자가 직접 확인/수정한
   // 값 — jobAMonthTag/bidRefYM과 동일 소스(비어있는 옛 탭만 하위호환으로 오늘 표시).
