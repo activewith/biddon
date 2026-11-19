@@ -4592,7 +4592,7 @@ function isBidCheckOn(b){
 // - 1차: 협정마감일 16:00 ~ 당일 24:00 사이 (PC가 꺼져 있었으면 그날 안에 처음 켤 때)
 // - 2차: 미확인 시 다음날 09:20 ~ 10:00 사이. 10:00에 알림 종료.
 // - 2026-11-12: [확인]을 누르기 전까지 위 두 구간 안에서 10분마다 다시 알림(BID_CHECK_REPEAT_MS)
-// - 알림창 [확인] → b.투찰확인완료=true. 미확인 상태에서는 다음날까지 탭 자동삭제를 보류(autoRemoveExpiredBidScreens).
+// - 알림창 [확인] → b.투찰확인완료=true. 미확인 상태에서는 2차 알림일까지 탭 자동삭제를 보류(autoRemoveExpiredBidScreens). 2026-11-19: 알림은 보정 마감일 기준(bidCheckAlarmDays).
 function getBidCheckJeokReps(scr){
   var out=[];
   ((scr&&scr.combos)||[]).forEach(function(combo){
@@ -4618,17 +4618,19 @@ function getBidCheckAlerts(){
     (state.bidScreens||[]).forEach(function(scr,i){
       if(!isBidCheckPending(scr))return;
       var b=scr.bid;
-      var d=new Date(b.협정마감일_YMD+'T00:00:00');
-      if(isNaN(d.getTime()))return;
+      var _ad=bidCheckAlarmDays(b); // 2026-11-19: 보정 마감일(도로공사 -1일, 토/일→금) 기준
+      if(!_ad)return;
+      var d=_ad.d1;
       var t1=new Date(d.getTime());t1.setHours(16,0,0,0);
       var d1=new Date(d.getTime());d1.setDate(d1.getDate()+1);
-      var t2=new Date(d1.getTime());t2.setHours(9,20,0,0);
-      var t2end=new Date(d1.getTime());t2end.setHours(10,0,0,0); // 2026-11-12: 다음날 10:00 알림 종료
+      var t2=new Date(_ad.d2.getTime());t2.setHours(9,20,0,0);
+      var t2end=new Date(_ad.d2.getTime());t2end.setHours(10,0,0,0); // 2026-11-12: 2차 알림 10:00 종료
       var phase=null;
       if(now>=t1&&now<d1)phase='d';
       else if(now>=t2&&now<t2end)phase='n';
       if(!phase)return;
-      out.push({screenIndex:i,공고명:(b.공고명||scr.name||'(제목없음)'),공고번호:String(b.공고번호||'').trim(),협정마감일:b.협정마감일_YMD,phase:phase,reps:getBidCheckJeokReps(scr)});
+      var _mdTxt=(d.getMonth()+1)+'/'+d.getDate();
+      out.push({screenIndex:i,공고명:(b.공고명||scr.name||'(제목없음)'),공고번호:String(b.공고번호||'').trim(),협정마감일:b.협정마감일_YMD,마감표시:_mdTxt,phase:phase,reps:getBidCheckJeokReps(scr)});
     });
   }catch(e){}
   return out;
@@ -4900,13 +4902,13 @@ function showExpiryAlertModal(){
            '<td style="padding:5px 8px;font-size:12px"><span style="color:#b45309;font-weight:700">'+esc(item.업체명)+'의 투찰 금액을 산출하세요.</span> <span style="color:#6b7280">('+dday+' · 협정마감일 '+esc(item.협정마감일)+')</span></td></tr>';
   }).join('');
   var checkRows=checkList.map(function(item){
-    var when=item.phase==='d'?'협정마감일 16:00~ · 10분마다':'다음날 09:20~10:00 · 10분마다(10:00 종료)';
+    var when=item.phase==='d'?'마감일 16:00~ · 10분마다':'다음 평일 09:20~10:00 · 10분마다(10:00 종료)';
     // 2026-11-12: 공고명 + 공고번호 표시, 문구 클릭 시 "공고명 공고번호⏎투찰여부 확인부탁드립니다."(2줄) 클립보드 복사
     var nameNo=item.공고명+(item.공고번호?' '+item.공고번호:'');
     var copyTxt=nameNo+'\n투찰여부 확인부탁드립니다.'; // 2026-11-12: 공고명+공고번호 다음 줄에 문구
     return '<tr><td style="padding:5px 8px;text-align:center"><button type="button" class="bid-check-ok" data-scridx="'+item.screenIndex+'" style="font-size:11px;padding:2px 8px;background:#0f766e;color:#fff;border:1px solid #0f766e;border-radius:4px;cursor:pointer;font-weight:700" title="투찰 확인 완료 — 이 공고 알림 종료(마감일 지난 탭은 다음 정리 때 자동삭제)">확인</button></td>'+
            '<td style="padding:5px 8px;font-weight:600;color:#0369a1;cursor:pointer;text-decoration:underline" data-scrgo="'+item.screenIndex+'" title="이 공고 화면으로 이동">'+esc(item.공고명)+(item.공고번호?' <span style="color:#475569;font-weight:500">'+esc(item.공고번호)+'</span>':'')+'</td>'+
-           '<td style="padding:5px 8px;font-size:12px"><span class="bid-check-copy" data-copy="'+esc(copyTxt)+'" style="color:#b45309;font-weight:700;cursor:pointer;text-decoration:underline dotted" title="클릭하면 복사: '+esc(copyTxt)+'">투찰여부 확인부탁드립니다.</span> <span style="color:#b45309">— 대표사(실적): '+esc(item.reps.join(', '))+'</span> <span style="color:#6b7280">('+when+' · 협정마감일 '+esc(item.협정마감일)+')</span></td></tr>';
+           '<td style="padding:5px 8px;font-size:12px"><span class="bid-check-copy" data-copy="'+esc(copyTxt)+'" style="color:#b45309;font-weight:700;cursor:pointer;text-decoration:underline dotted" title="클릭하면 복사: '+esc(copyTxt)+'">투찰여부 확인부탁드립니다.</span> <span style="color:#b45309">— 대표사(실적): '+esc(item.reps.join(', '))+'</span> <span style="color:#6b7280">('+when+' · 마감 '+esc(item.마감표시||item.협정마감일)+')</span></td></tr>';
   }).join('');
   // 2026-09-21: 알림창 가로폭 +30%(48vw→62vw, 최대 560px→728px) — 상세/최종수정 컬럼이 잘려 가로 스크롤이 생기던 문제 완화
   root.innerHTML='<div class="modal-back"><div class="modal" style="width:62vw;min-width:340px;max-width:728px">'+
@@ -5391,7 +5393,7 @@ function 기준약칭(v){
 // (1) 도로공사: 협정마감일=투찰마감일로 공고되므로 실무 협정마감은 하루 전 → -1일.
 // (2) 보정 결과가 토/일이면 직전 금요일로 당김.
 // 탭 자동삭제·투찰확인 알림 등은 원본 협정마감일_YMD 기준 유지.
-function deadlineDisplayDate(b){
+function deadlineAdjustedDate(b){
   if(!b||!b.협정마감일_YMD)return null;
   var p=String(b.협정마감일_YMD).split('-');
   if(p.length!==3)return null;
@@ -5402,7 +5404,20 @@ function deadlineDisplayDate(b){
   var w=dt.getDay();
   if(w===6)dt.setDate(dt.getDate()-1);
   else if(w===0)dt.setDate(dt.getDate()-2);
-  return {m:dt.getMonth()+1,d:dt.getDate()};
+  return dt;
+}
+function deadlineDisplayDate(b){
+  var dt=deadlineAdjustedDate(b);
+  return dt?{m:dt.getMonth()+1,d:dt.getDate()}:null;
+}
+// 2026-11-19: 투찰확인 알림 날짜 — 1차=보정 마감일 16:00, 2차=그 다음 평일 09:20(토/일 건너뜀).
+// 탭 자동삭제는 원본 협정마감일 기준이되, 미확인 탭은 2차 알림일까지 삭제 보류.
+function bidCheckAlarmDays(b){
+  var d1=deadlineAdjustedDate(b);
+  if(!d1)return null;
+  var d2=new Date(d1.getTime());
+  do{d2.setDate(d2.getDate()+1);}while(d2.getDay()===0||d2.getDay()===6);
+  return {d1:d1,d2:d2};
 }
 function buildBidMsgHeader(b){
   var lines=[];
@@ -12776,6 +12791,9 @@ function autoRemoveExpiredBidScreens(){
     // 2026-11-05: 투찰확인 미확인 탭은 다음날(2차 알림일)까지 삭제 보류 — 확인하거나 그 다음날이 되면 기존대로 삭제
     if(typeof isBidCheckPending==='function'&&isBidCheckPending(scr)){
       var _d1=new Date(d.getTime());_d1.setDate(_d1.getDate()+1);
+      // 2026-11-19: 2차 알림일(보정 마감일의 다음 평일)이 더 늦으면 그날까지 보류
+      var _ad=(typeof bidCheckAlarmDays==='function')?bidCheckAlarmDays(scr.bid):null;
+      if(_ad&&_ad.d2>_d1)_d1=_ad.d2;
       if(_d1>=today)continue;
     }
     removedNames.push(scr.name);
