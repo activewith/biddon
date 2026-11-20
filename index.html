@@ -3612,7 +3612,10 @@ function kepcoSoloScore(c,calc){
   var 일자리=Math.max(0,Math.min(3,Number(c.일자리가점)||0));
   var 안전=0;
   if(state.bid.한전안전가점&&tier.key!=='U3'){var ps=parseSafetySystem(c.안전보건시스템||'');if(ps.valid&&ps.type)안전=0.1;}
-  var 신인도=Math.round((일자리+안전)*100)/100;
+  // 2026-11-20: 변전전기원 양성·보유실적(최대 3.5) — 공고 옵션을 켠 경우만, 업체등록의 변전전기원 등록값으로 오늘 기준 산정
+  var 변전=0,bjw=null;
+  if(state.bid.한전변전가점){bjw=calcBjwScore(c.변전전기원,new Date());변전=bjw.score;}
+  var 신인도=Math.round((일자리+안전+변전)*100)/100;
   var 합=Math.round((시공+경영+신인도)*100)/100;
   var 수행=Math.min(합,tier.cap);
   var total=Math.round((수행+tier.price)*100)/100;
@@ -3627,7 +3630,7 @@ function kepcoSoloScore(c,calc){
     else needPerf=Math.ceil(need시공/tier.perfMax*tier.perfFull*S);
   }
   return{supported:true,tier:tier,S:S,실적:실적,배수:배수,시공:시공,경영:경영,경영방식:경영방식,fin:fin,credit:cr,
-         일자리:일자리,안전:안전,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
+         일자리:일자리,안전:안전,변전:변전,bjw:bjw,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
          ok:scoreOK&&regionOK&&gjOK,need시공:need시공,needPerf:needPerf,perfImpossible:perfImpossible,gj:gj};
 }
 function renderKepcoSolo(calc){
@@ -3646,7 +3649,9 @@ function renderKepcoSolo(calc){
     head+='<label class="small" style="display:flex;align-items:center;gap:3px">사정가격(VAT포함) '+
       '<input type="text" data-kepco-solo="사정가격" value="'+(Number(b.한전사정가격)>0?FMT_NUM(b.한전사정가격):'')+'" placeholder="'+FMT_NUM(Math.round((calc.E5||0)*1.1))+' (추정×1.1)" style="width:130px;padding:2px 4px;font-size:12px"></label>'+
       '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="변전소 토건공사 양식 기준서에만 있는 안전보건경영시스템(ISO45001/KOSHA-MS) +0.1 가점. 전기공사 양식에는 이 항목이 없습니다">'+
-      '<input type="checkbox" data-kepco-solo="안전가점"'+(b.한전안전가점?' checked':'')+'>안전보건 +0.1(변전 양식)</label>';
+      '<input type="checkbox" data-kepco-solo="안전가점"'+(b.한전안전가점?' checked':'')+'>안전보건 +0.1(변전 양식)</label>'+
+      '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="기준서에 \'변전전기원 양성 또는 보유실적(3.5점)\' 항목이 있는 공고만 체크. 업체등록 화면(자사)의 변전전기원 등록값으로 오늘 기준 평점을 계산해 신인도에 더합니다">'+
+      '<input type="checkbox" data-kepco-solo="변전가점"'+(b.한전변전가점?' checked':'')+'>변전전기원 3.5</label>';
   }
   head+='</div>';
   if(isPerf){
@@ -3682,7 +3687,7 @@ function renderKepcoSolo(calc){
       '<td style="'+td+';color:'+perfColor+';font-weight:700">'+(Math.floor(r.배수*1000)/1000).toFixed(3)+'배</td>'+
       '<td style="'+td+'">'+TRIMDEC(r.시공)+'</td>'+
       '<td style="'+td+'" title="'+esc(경영t)+'">'+TRIMDEC(r.경영)+' <span style="color:#6b7280;font-size:10px">('+esc(경영t)+')</span></td>'+
-      '<td style="'+td+'">'+TRIMDEC(r.신인도)+(r.안전?' <span style="color:#6b7280;font-size:10px">(안전+0.1)</span>':'')+'</td>'+
+      '<td style="'+td+'">'+TRIMDEC(r.신인도)+(r.안전?' <span style="color:#6b7280;font-size:10px">(안전+0.1)</span>':'')+(r.bjw?' <span style="color:'+(r.변전>=3.5?'#6b7280':'#b45309')+';font-size:10px" title="변전전기원 평점 '+TRIMDEC(r.bjw.평점)+' (양성 '+TRIMDEC(r.bjw.양성)+' + 보유 '+TRIMDEC(r.bjw.보유)+')">(변전+'+TRIMDEC(r.변전)+')</span>':'')+'</td>'+
       '<td style="'+td+';font-weight:700;color:'+(r.scoreOK?'#047857':'#dc2626')+'">'+TRIMDEC(r.합)+' / '+r.tier.cap+'</td>'+
       '<td style="'+td+'">'+TRIMDEC(r.total)+'</td>'+
       '<td style="'+td+';text-align:center">'+verdict+'</td>'+
@@ -3701,6 +3706,7 @@ function _bindKepcoSolo(root){
     el.addEventListener('change',function(){
       if(k==='실적공고')state.bid.한전실적공고=!!el.checked;
       else if(k==='안전가점')state.bid.한전안전가점=!!el.checked;
+      else if(k==='변전가점')state.bid.한전변전가점=!!el.checked;
       else if(k==='사정가격'){var v=parseMoney(el.value);state.bid.한전사정가격=(v!=null&&v>0)?v:null;}
       save();refreshCombos();
     });
@@ -4506,6 +4512,139 @@ function showFinResetReviewModal(특이목록,일반목록,finY){
     doFinResetConfirm(resetList,unchecked,finY);
   };
 }
+// ████ SECTION: 변전전기원 양성·보유실적 (한전 변전 양식, 2026-11-20) ████
+// 근거(한전 적격심사기준 "나. 변전전기원 양성 또는 보유실적(3.5점)"):
+//  평점 = 양성실적 + 보유실적 → 5점↑ 3.5 / 3점↑ 2.4 / 2점↑ 1.2 / 그 외 0
+//  양성: 업체 비용부담 양성과정 5년 이내 수료, 1인당 2.5(상한 2.5) → 화면에서는 맨 위 1행 고정
+//  보유: 공고일 현재 근무자(국민연금 처리일 기준), 1급 3.0 / 2급 2.5 → 인원 합산
+// 평가일은 오늘(입찰공고일 대용). 취득일이 평가일 이후이거나 만료일이 평가일 이전인 행은 제외.
+var BJW_HOLD_PT={'1':3.0,'2':2.5},BJW_TRAIN_PT=2.5;
+function _bjwDate(v){
+  var d=String(v||'').replace(/[^0-9]/g,'');
+  if(d.length===6)d='20'+d;
+  if(d.length!==8)return null;
+  var dt=new Date(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8));
+  return (isNaN(dt.getTime())||dt.getMonth()!==(+d.slice(4,6)-1))?null:dt;
+}
+function bjwNormDate(v){var dt=_bjwDate(v);return dt?_ymdLocal(dt):String(v||'').trim();}
+function bjwRows(data){
+  var out=[];if(!data)return out;
+  if(data.양성)out.push({r:data.양성,train:true});
+  (data.보유||[]).forEach(function(r){if(r)out.push({r:r,train:false});});
+  return out;
+}
+function bjwRowExpiry(r,isTrain){
+  var e=_bjwDate(r&&r.만료일);if(e)return e;
+  if(isTrain){var a=_bjwDate(r&&r.취득일);if(a)return new Date(a.getFullYear()+5,a.getMonth(),a.getDate());}
+  return null;
+}
+function bjwRowValid(r,isTrain,at){
+  if(!r||!BJW_HOLD_PT[String(r.급)])return false;
+  var a=_bjwDate(r.취득일);
+  if(isTrain&&!a)return false;
+  if(a&&a>at)return false;
+  var e=bjwRowExpiry(r,isTrain);
+  if(e&&e<at)return false;
+  return true;
+}
+function calcBjwScore(data,at){
+  at=at||new Date();at=new Date(at.getFullYear(),at.getMonth(),at.getDate());
+  data=data||{};
+  var 양성=bjwRowValid(data.양성,true,at)?BJW_TRAIN_PT:0,보유=0,n1=0,n2=0;
+  (data.보유||[]).forEach(function(r){
+    if(!bjwRowValid(r,false,at))return;
+    var g=String(r.급);보유+=BJW_HOLD_PT[g];if(g==='1')n1++;else n2++;
+  });
+  보유=Math.round(보유*100)/100;
+  var 평점=Math.round((양성+보유)*100)/100;
+  var score=평점>=5?3.5:평점>=3?2.4:평점>=2?1.2:0;
+  return{양성:양성,보유:보유,n1:n1,n2:n2,평점:평점,score:score};
+}
+function bjwScoreText(r){
+  return '오늘 기준 평점 '+TRIMDEC(r.평점)+' (양성 '+TRIMDEC(r.양성)+' + 보유 '+TRIMDEC(r.보유)+' : 1급 '+r.n1+'명·2급 '+r.n2+'명) → <span style="color:'+(r.score>=3.5?'#047857':(r.score>0?'#b45309':'#dc2626'))+'">'+TRIMDEC(r.score)+'점</span> / 3.5';
+}
+function bjwRowHTML(r,isTrain){
+  r=r||{};
+  var g=String(r.급||'');
+  var st='padding:3px 4px;border-bottom:1px solid #ede9fe;text-align:center';
+  return '<tr data-bjw-row="'+(isTrain?'train':'hold')+'"'+(isTrain?' style="background:#f5f3ff"':'')+'>'+
+    '<td class="bjw-no" style="'+st+';color:#6b7280;width:34px"></td>'+
+    '<td style="'+st+';width:44px">'+(isTrain?'<b style="color:#7c3aed" title="업체 비용부담 양성과정 5년 이내 수료 실적 — 1명만 반영(상한 2.5점)">양성</b>':'보유')+'</td>'+
+    '<td style="'+st+'"><input class="bjw-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:90px"></td>'+
+    '<td style="'+st+'"><select class="bjw-급" style="width:66px"><option value="">-</option><option value="1"'+(g==='1'?' selected':'')+'>1급</option><option value="2"'+(g==='2'?' selected':'')+'>2급</option></select></td>'+
+    '<td style="'+st+'"><input class="bjw-취득일" value="'+esc(r.취득일||'')+'" placeholder="'+(isTrain?'수료일 YYMMDD':'YYMMDD')+'" style="width:108px" title="'+(isTrain?'양성과정 수료일':'자격 취득일')+' (YYMMDD 또는 YYYY-MM-DD)"></td>'+
+    '<td style="'+st+'"><input class="bjw-만료일" value="'+esc(r.만료일||'')+'" placeholder="'+(isTrain?'비우면 수료+5년':'YYMMDD')+'" style="width:108px" title="만료 30일 전부터 만료임박(알람) 확인에 표시됩니다"></td>'+
+    '<td style="'+st+';width:30px">'+(isTrain?'':'<button type="button" class="bjw-del" title="이 인원 삭제" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px">×</button>')+'</td>'+
+  '</tr>';
+}
+function bjwBodyHTML(data){
+  data=data||{};
+  var h=bjwRowHTML(data.양성,true);
+  var hold=(data.보유||[]);
+  if(!hold.length)hold=[{}];
+  hold.forEach(function(r){h+=bjwRowHTML(r,false);});
+  return h;
+}
+function bjwPanelHTML(data){
+  var th='padding:3px 4px;border-bottom:1px solid #c4b5fd;font-size:11px;color:#5b21b6;text-align:center;font-weight:700';
+  return '<div style="border:1px solid #ddd6fe;background:#faf5ff;border-radius:6px;padding:8px">'+
+    '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px">'+
+      '<span style="font-size:12px;color:#5b21b6;font-weight:700">⚡ 한전 변전전기원 양성·보유실적</span>'+
+      '<span id="m-bjw-score" style="margin-left:auto;font-size:12px;font-weight:700;color:#111827"></span>'+
+    '</div>'+
+    '<table style="border-collapse:collapse;width:100%;background:#fff">'+
+      '<thead><tr><th style="'+th+'">번호</th><th style="'+th+'">구분</th><th style="'+th+'">이름</th><th style="'+th+'">급수</th><th style="'+th+'">취득일</th><th style="'+th+'">만료일</th><th style="'+th+'"></th></tr></thead>'+
+      '<tbody id="m-bjw-body">'+bjwBodyHTML(data)+'</tbody>'+
+    '</table>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'+
+      '<button type="button" id="m-bjw-add" class="btn btn-sm" style="background:#7c3aed">+ 인원 추가</button>'+
+      '<span style="font-size:10px;color:#6b7280;line-height:1.4">양성(맨 위 1명): 수료일 기준 5년 · 보유: 국민연금 가입 근무자, 1급 3.0 / 2급 2.5 · 평점 5↑ 3.5 / 3↑ 2.4 / 2↑ 1.2 · 만료 30일 전부터 알람</span>'+
+    '</div>'+
+  '</div>';
+}
+function readBjwPanel(){
+  var body=document.getElementById('m-bjw-body');if(!body)return null;
+  function rd(tr){
+    return{이름:tr.querySelector('.bjw-이름').value.trim(),급:tr.querySelector('.bjw-급').value,
+           취득일:bjwNormDate(tr.querySelector('.bjw-취득일').value),만료일:bjwNormDate(tr.querySelector('.bjw-만료일').value)};
+  }
+  var tr0=body.querySelector('tr[data-bjw-row="train"]');
+  var 보유=[];
+  body.querySelectorAll('tr[data-bjw-row="hold"]').forEach(function(tr){var r=rd(tr);if(r.이름||r.급||r.취득일||r.만료일)보유.push(r);});
+  return{양성:tr0?rd(tr0):{},보유:보유};
+}
+function _bjwRefresh(){
+  var body=document.getElementById('m-bjw-body');if(!body)return;
+  body.querySelectorAll('tr').forEach(function(tr,i){var n=tr.querySelector('.bjw-no');if(n)n.textContent=i;});
+  var sc=document.getElementById('m-bjw-score');
+  if(sc)sc.innerHTML=bjwScoreText(calcBjwScore(readBjwPanel()));
+}
+function bjwFillPanel(data){
+  var body=document.getElementById('m-bjw-body');if(!body)return;
+  body.innerHTML=bjwBodyHTML(data);
+  var chk=document.getElementById('m-is자사');if(chk)chk.dispatchEvent(new Event('change'));
+  _bjwRefresh();
+}
+function bindBjwPanel(){
+  var body=document.getElementById('m-bjw-body');if(!body)return;
+  var chk=document.getElementById('m-is자사'),lab=document.getElementById('m-bjw-label'),pan=document.getElementById('m-bjw-panel');
+  if(chk&&pan){
+    chk.addEventListener('change',function(){var on=chk.checked;pan.style.display=on?'':'none';if(lab)lab.style.display=on?'':'none';});
+  }
+  body.addEventListener('input',_bjwRefresh);
+  body.addEventListener('change',_bjwRefresh);
+  body.addEventListener('focusout',function(e){
+    var t=e.target;
+    if(t&&t.classList&&(t.classList.contains('bjw-취득일')||t.classList.contains('bjw-만료일'))){t.value=bjwNormDate(t.value);_bjwRefresh();}
+  });
+  body.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('.bjw-del');if(!b)return;
+    var tr=b.closest('tr');if(tr)tr.remove();_bjwRefresh();
+  });
+  var add=document.getElementById('m-bjw-add');
+  if(add)add.addEventListener('click',function(){body.insertAdjacentHTML('beforeend',bjwRowHTML({},false));_bjwRefresh();});
+  _bjwRefresh();
+}
 // ── 만료 임박 경고 (신용평가 D-7 / 안전보건 D-30 / 일자리B조건 연1회 재확인) ──────
 function getExpiryAlerts(c){
   var alerts=[];
@@ -4530,6 +4669,15 @@ function getExpiryAlerts(c){
   var hasB=(Number(c.일자리가점||0)===0.5||Number(c.일자리가점||0)===3.0);
   if(hasB&&c._B저장연도!==bY&&!isPastJobBGrace(today,bY)){
     alerts.push({kind:'일자리B조건',custom:'연 1회 재확인 필요(4/15까지 업체등록 저장 안하면 자동 해제)'});
+  }
+  // 2026-11-20: 변전전기원(자사만) — 인원별 만료일 30일 전부터 알림(만료 후에도 수정/삭제 전까지 유지). 양성은 만료일 비우면 수료일+5년.
+  if(c.is자사&&c.변전전기원){
+    bjwRows(c.변전전기원).forEach(function(o){
+      if(!BJW_HOLD_PT[String(o.r.급)])return;
+      var e=bjwRowExpiry(o.r,o.train);if(!e)return;
+      var dB=Math.round((e-today)/86400000);
+      if(dB<=30)alerts.push({kind:'변전전기원',custom:(o.train?'양성 ':'')+(o.r.이름||'(이름없음)')+' '+(dB<0?'만료됨':'D-'+dB)+'('+_ymdLocal(e)+')'});
+    });
   }
   // 2026-08-20: 메모 알람 — 업체등록에서 사용자가 켜고 지정한 날짜(시각은 항상 오전 10시 고정)가 지나면(끄기 전까지 계속) 알림에 포함
   if(c.메모알람on&&c.메모알람일시){
@@ -7052,16 +7200,18 @@ function openCompanyModal(idx){
       '<label>계좌정보</label><input id="m-계좌정보" autocomplete="off" placeholder="은행명 계좌번호 예금주명 (예: 농협 37021002515 명인)" value="'+esc(c.계좌정보||'')+'">'+
       '<label>분류</label>'+
       '<div style="display:flex;gap:16px;align-items:center;padding:4px 0">'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="1회성 업체. 마지막 조합구성 후 90일간 사용이 없으면 삭제/유지 확인 알림이 뜹니다">'+
+          '<input type="checkbox" id="m-is임시" '+(c.is임시?'checked':'')+'>'+
+          '<span class="badge type-임시">1회성(임시)</span></label>'+
         '<label style="display:flex;align-items:center;gap:5px;cursor:pointer">'+
           '<input type="checkbox" id="m-is실적" '+(c.is실적?'checked':'')+'>'+
           '<span class="badge type-실적">실적업체</span></label>'+
         '<label style="display:flex;align-items:center;gap:5px;cursor:pointer">'+
           '<input type="checkbox" id="m-is자사" '+(c.is자사?'checked':'')+'>'+
           '<span class="badge type-자사">자사</span></label>'+
-        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="1회성 업체. 마지막 조합구성 후 90일간 사용이 없으면 삭제/유지 확인 알림이 뜹니다">'+
-          '<input type="checkbox" id="m-is임시" '+(c.is임시?'checked':'')+'>'+
-          '<span class="badge type-임시">1회성(임시)</span></label>'+
       '</div>'+
+      '<label id="m-bjw-label" style="color:#6d28d9;font-weight:700;align-self:start;padding-top:8px'+(c.is자사?'':';display:none')+'">변전전기원</label>'+
+      '<div id="m-bjw-panel"'+(c.is자사?'':' style="display:none"')+'>'+bjwPanelHTML(c.변전전기원)+'</div>'+
       '<label style="color:#0369a1;font-weight:700">그룹</label>'+
       '<div id="m-group-area" style="padding:4px 0;position:relative">'+
         renderGroupPickerHTML('m',c.groups)
@@ -7178,6 +7328,7 @@ function openCompanyModal(idx){
     });
     updAll();
   })();
+  bindBjwPanel();
   $('#m-cancel').onclick=function(){root.innerHTML=''};
   attachCompanyAutocomplete('m-업체명',function(c){
     fv('m-사업자번호',c.사업자번호||'');
@@ -7191,6 +7342,7 @@ function openCompanyModal(idx){
     if($('#m-is실적'))$('#m-is실적').checked=!!c.is실적;
     if($('#m-is자사'))$('#m-is자사').checked=!!c.is자사;
     if($('#m-is임시'))$('#m-is임시').checked=!!c.is임시;
+    bjwFillPanel(c.변전전기원);
     var ja=Number(c.일자리가점||0);
     if($('#m-일자리A'))$('#m-일자리A').checked=ja>=2.5;
     if($('#m-일자리B'))$('#m-일자리B').checked=(ja===0.5||ja===3.0);
@@ -7299,6 +7451,8 @@ function openCompanyModal(idx){
     if(_finChanged)obj.수정일시=new Date().toISOString();
     // 1회성(임시): 새로 체크된 시점을 임시지정일로 기록(조합 이력이 없을 때 90일 기준일). 해제하면 지정일 삭제.
     if(obj.is임시){if(!(_oldC&&_oldC.is임시))obj.임시지정일=_ymdLocal(new Date());}else{obj.임시지정일='';}
+    // 2026-11-20 변전전기원: 자사일 때만 패널 값을 저장. 자사 해제 시 기존 등록값은 그대로 두되 알람·점수에서는 제외(is자사 조건).
+    if(obj.is자사){var _bjwV=readBjwPanel();if(_bjwV)obj.변전전기원=_bjwV;}
     if(!obj.업체명){toast('업체명을 입력하세요','bad');return;}
     if(isNew)state.db.push(stampNewCompanyDefaults(obj));
     else state.db[idx]=Object.assign({},state.db[idx],obj);
@@ -7378,15 +7532,15 @@ function showCertImageModal(preloaded){
       '<label>메모</label><input id="m-c-참고" value="'+esc(p.참고||'')+'" placeholder="메모">'+
       '<label>분류</label>'+
       '<div style="display:flex;gap:16px;align-items:center;padding:4px 0">'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="1회성 업체. 마지막 조합구성 후 90일간 사용이 없으면 삭제/유지 확인 알림이 뜹니다">'+
+          '<input type="checkbox" id="m-c-is임시" '+(p.is임시?'checked':'')+'>'+
+          '<span class="badge type-임시">1회성(임시)</span></label>'+
         '<label style="display:flex;align-items:center;gap:5px;cursor:pointer">'+
           '<input type="checkbox" id="m-c-is실적" '+(p.is실적?'checked':'')+'>'+
           '<span class="badge type-실적">실적업체</span></label>'+
         '<label style="display:flex;align-items:center;gap:5px;cursor:pointer">'+
           '<input type="checkbox" id="m-c-is자사" '+(p.is자사?'checked':'')+'>'+
           '<span class="badge type-자사">자사</span></label>'+
-        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="1회성 업체. 마지막 조합구성 후 90일간 사용이 없으면 삭제/유지 확인 알림이 뜹니다">'+
-          '<input type="checkbox" id="m-c-is임시" '+(p.is임시?'checked':'')+'>'+
-          '<span class="badge type-임시">1회성(임시)</span></label>'+
       '</div>'+
       '<label style="color:#0369a1;font-weight:700">그룹</label>'+
       '<div id="m-c-group-area" style="padding:4px 0;position:relative">'+renderGroupPickerHTML('m-c',p.groups)+'</div>'+
@@ -10752,7 +10906,7 @@ function bind(){
     }
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,기초배율:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,한전변전가점:false,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
     (function(){var _rm=$('#in-기준월');if(_rm)_rm.value=state.bid._기준월;})(); // 2026-08-27: 공고 초기화 시 기준월도 이번 달로 리셋(재확인 필요)
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
