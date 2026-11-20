@@ -74,16 +74,25 @@ test('업체등록: 1회성(임시) 맨 왼쪽, 자사 체크 시에만 변전�
   assert.strictEqual(w.eval('state.db[' + idx + '].is자사'), true);
 });
 
-test('한전 단독판정: [변전전기원 3.5] 체크 시에만 신인도에 가산', () => {
-  const c = { 업체명: '자사A', is자사: true, 실적5: 1e9, 일자리가점: 0,
-    변전전기원: { 양성: {}, 보유: [{ 급: '2' }, { 급: '2' }] } };
+test('한전 단독판정: [변전전기원 3.5] 체크 시 시공경험 = 실적 11.5 + 변전전기원', () => {
   const calc = { E5: 5e8, 공종: '전기' };
+  const base = { 업체명: '자사A', is자사: true, 실적5: 1e10, 일자리가점: 0 };
+  const full = Object.assign({}, base, { 변전전기원: { 양성: {}, 보유: [{ 급: '2' }, { 급: '2' }] } });
+  const none = Object.assign({}, base);
   w.eval('state.bid.한전변전가점=false');
-  const off = plain(w.kepcoSoloScore(c, calc));
+  const off = plain(w.kepcoSoloScore(none, calc));
   w.eval('state.bid.한전변전가점=true');
-  const on = plain(w.kepcoSoloScore(c, calc));
+  const onFull = plain(w.kepcoSoloScore(full, calc));
+  const onNone = plain(w.kepcoSoloScore(none, calc));
   w.eval('state.bid.한전변전가점=false');
-  assert.strictEqual(off.변전, 0);
-  assert.strictEqual(on.변전, 3.5);
-  assert.strictEqual(Math.round((on.신인도 - off.신인도) * 100) / 100, 3.5);
+  assert.strictEqual(off.시공, 15);
+  assert.deepStrictEqual([onFull.실적점, onFull.변전, onFull.시공], [11.5, 3.5, 15]);
+  assert.deepStrictEqual([onNone.실적점, onNone.변전, onNone.시공], [11.5, 0, 11.5]);
+  assert.strictEqual(onFull.신인도, off.신인도);            // 신인도에는 더하지 않음
+  assert.ok(onNone.합 < off.합);
+});
+
+test('공고문분석: 변전전기원 문구 감지', () => {
+  assert.strictEqual(plain(w.extractBidFields('한국전력공사 공사 적격심사 시공경험 ○ 변전전기원 양성 또는 보유실적 3.5')).한전변전, '해당');
+  assert.strictEqual(plain(w.extractBidFields('일반 전기공사 적격심사')).한전변전, undefined);
 });
