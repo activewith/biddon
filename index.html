@@ -130,6 +130,19 @@ tr.hover:hover{background:#f8fafc}
 .combo-sent-lbl{margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;font-weight:700;color:#0f172a;background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;position:relative;z-index:6;user-select:none}
 .combo-sent-lbl input{width:15px;height:15px;margin:0;cursor:pointer}
 .combo.sent .combo-sent-lbl{background:#fde047;border-color:#ca8a04}
+/* 2026-11-20: 전송 체크 시각(전송 라벨 왼쪽) — 어둡게 덮는 막(z5) 위에 표시 */
+.combo-sent-time{margin-left:auto;font-size:11px;font-weight:600;color:#0f172a;background:#fff;border:1px solid var(--border);border-radius:4px;padding:1px 6px;position:relative;z-index:6;white-space:nowrap}
+.combo-sent-time+.combo-sent-lbl{margin-left:0}
+/* 2026-11-20: 조합 순서 이동(▲▼/위치 선택) + 비교 조합 */
+.combo-move{display:inline-flex;align-items:center;gap:2px;position:relative;z-index:6}
+.combo-move button{padding:0 5px;height:20px;font-size:10px;line-height:18px;border:1px solid var(--border);background:#fff;border-radius:4px;cursor:pointer;color:#334155}
+.combo-move button:disabled{opacity:.35;cursor:default}
+.combo-move select{height:20px;font-size:11px;padding:0 2px;border:1px solid var(--border);border-radius:4px;background:#fff;font-family:inherit;max-width:86px}
+.combo-cmp-lbl{display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;font-weight:700;color:#9a3412;background:#fff;border:1px solid #fdba74;border-radius:5px;padding:1px 7px;position:relative;z-index:6;user-select:none}
+.combo-cmp-lbl input{width:14px;height:14px;margin:0;cursor:pointer}
+.combo.compare{border:3px solid #ea580c!important;box-shadow:0 0 0 1px rgba(234,88,12,.25)!important}
+.combo.compare .combo-cmp-lbl{background:#ffedd5;border-color:#ea580c}
+.combo-cmp-divider{font-size:12px;font-weight:700;color:#c2410c;text-align:center;border-top:2px dashed #fb923c;padding-top:4px;margin-top:4px}
 .combo-head{background:#f1f5f9;padding:6px 10px;display:flex;align-items:center;gap:10px;font-weight:600;font-size:12px;flex-wrap:wrap}
 .combo-head .name{font-size:13px;color:#0f172a}
 .combo-actions-row{background:#f1f5f9;padding:4px 10px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
@@ -8876,7 +8889,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   // 2. 한줄요약
   var summary=getOneLineSummary(b, c, true);
   // 3. 조합결과: calcSlot 활용 → 지분율 내림차순 정렬 + 순신인도 표시
-  var comboLines=[];
+  var comboLines=[],cmpLines=[]; // 2026-11-20: 비교 조합은 cmpLines로 분리 → "-비교-" 아래에 표시
   // 2026-11-10: 타조합 중복 업체 적색+밑줄 표시용 — 업체명(실명) 기준으로 몇 개 조합에 들어갔는지 카운트하고,
   // 조합 라인 안의 업체 표시명을 사설영역 문자(\uE000 idx \uE002 표시명 \uE001)로 감싸 둔다.
   // 텍스트(복사/저장/공고취소 보관)에서는 마커를 제거하고, 팝업 화면(HTML)에서만 2개 이상 조합에 쓰인 업체를 강조한다.
@@ -8891,7 +8904,8 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     var active=r.ROW.filter(function(row){return(row.업체명||'').trim()!=='';});
     if(!active.length)return;
     var _seenInCombo={};
-    active.forEach(function(row){var _k=(row.업체명||'').trim();if(_seenInCombo[_k])return;_seenInCombo[_k]=1;_dupCnt[_k]=(_dupCnt[_k]||0)+1;});
+    // 2026-11-20: 비교 조합은 같은 지역사를 일부러 겹쳐 넣는 용도라 중복 업체 카운트에서 제외
+    if(!combo.비교)active.forEach(function(row){var _k=(row.업체명||'').trim();if(_seenInCombo[_k])return;_seenInCombo[_k]=1;_dupCnt[_k]=(_dupCnt[_k]||0)+1;});
     // 2026-08-06: LH 강제할당 — 사용자가 Func칸에 입력한 명목 지분율이 있는 업체의 표시를
     // "명목 지분율[실제 지분율/점수계산 결과]"로 치환. 실제 계산에 쓰인 지분율(r.ROW의 값)은 그대로 둠.
     var forceRows=getForceAllocRows(combo,r);
@@ -8997,7 +9011,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       var _rEl=calcSlot(combo,comboCalcFor(combo,c));
       if(_rEl.used>0&&!_rEl.적격){line='\uE003'+line;_badHas=true;}
     }
-    comboLines.push(line);
+    (combo.비교?cmpLines:comboLines).push(line);
   });
   // 4. 최대지분율 — 지역(grp==='지역') 업체만, 고유, 정수
   var seen={};var maxLines=[];
@@ -9078,6 +9092,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   if(msgText)out.push(msgText);
   out.push('');out.push(summary);out.push('');
   out=out.concat(comboLines);
+  if(cmpLines.length){out.push('');out.push('-비교-');out=out.concat(cmpLines);}
   // 지역메모: 설정 > 공고/적격 > 지역메모에서 "조합txt추가"를 체크해둔 지역의 메모를, 조합결과TXT의
   // 조합리스트(comboLines) 바로 다음 줄에 한 줄 띄우고 추가한다(최대지분율 섹션보다 앞).
   // 여러 지역이 선택돼 있고 그 중 여러 곳이 체크돼 있으면 각 지역 메모를 순서대로 이어붙인다.
@@ -9801,8 +9816,51 @@ function buildNeedHtml(comboCalc,result){
   return parts.join(' / ');
 }
 
+// 2026-11-20: 조합 순서 — '비교' 체크된 조합은 항상 맨 아래로(각 그룹 안의 순서는 유지). 순서가 바뀌면 true.
+function normalizeComboOrder(arr){
+  if(!Array.isArray(arr))return false;
+  var a=arr.filter(function(c){return !(c&&c.비교);}),b=arr.filter(function(c){return !!(c&&c.비교);});
+  var na=a.concat(b),changed=false;
+  for(var i=0;i<arr.length;i++){if(arr[i]!==na[i]){changed=true;break;}}
+  if(changed){arr.length=0;Array.prototype.push.apply(arr,na);}
+  return changed;
+}
+// 조합 이동 — target: 'front'(같은 그룹 맨 앞) | 'up' | 'down' | 숫자 k(조합 #k+1 바로 뒤로). 같은 그룹(일반/비교) 안에서만 이동.
+function moveCombo(from,target){
+  var arr=state.combos;if(!arr[from])return false;
+  var item=arr[from],cmp=!!item.비교;
+  var grp=[];arr.forEach(function(c,i){if(!!c.비교===cmp)grp.push(i);});
+  var pos=grp.indexOf(from),to;
+  if(target==='front')to=grp[0];
+  else if(target==='up'){if(pos<=0)return false;to=grp[pos-1];}
+  else if(target==='down'){if(pos>=grp.length-1)return false;to=grp[pos+1];}
+  else{
+    var k=Number(target);if(!(k>=0)||k===from||!arr[k]||!!arr[k].비교!==cmp)return false;
+    to=k<from?k+1:k;
+  }
+  if(to===from)return false;
+  arr.splice(from,1);arr.splice(to,0,item);
+  normalizeComboOrder(arr);
+  return true;
+}
+// 조합 이동 컨트롤 HTML(▲▼ + "위치" 선택)
+function comboMoveHtml(ci){
+  var arr=state.combos,cmp=!!arr[ci].비교,grp=[];
+  arr.forEach(function(c,i){if(!!c.비교===cmp)grp.push(i);});
+  var pos=grp.indexOf(ci);
+  var opts='<option value="">위치</option>';
+  if(pos>0)opts+='<option value="front">맨 앞으로</option>';
+  grp.forEach(function(k,gi){if(k===ci||gi===pos-1)return;opts+='<option value="'+k+'">#'+(k+1)+' 뒤로</option>';});
+  return '<span class="combo-move" title="조합 순서 이동 — 조합결과TXT 표시 순서도 이 순서를 따릅니다'+(cmp?' (비교 조합끼리만 이동)':' (비교 조합은 항상 맨 아래)')+'">'+
+    '<button type="button" data-move-combo="'+ci+'" data-dir="up"'+(pos<=0?' disabled':'')+'>▲</button>'+
+    '<button type="button" data-move-combo="'+ci+'" data-dir="down"'+(pos>=grp.length-1?' disabled':'')+'>▼</button>'+
+    (grp.length>1?'<select class="combo-move-sel" data-ci="'+ci+'">'+opts+'</select>':'')+
+  '</span>';
+}
+
 function refreshCombos(){ return withLegacyDBIfNeeded(function(){
   if(syncDamSlotsToGongjong(state.combos,state.bid.공종))save();
+  if(normalizeComboOrder(state.combos))save();
   var calc=calcBid();
   renderKepcoSolo(calc); // 2026-10-27: 한전 일반공고 자사 단독 판정표
   var root=$('#combos');if(!root)return;
@@ -9821,7 +9879,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     var forceRowsList=getForceAllocRows(combo,result);
     var forceActive=forceRowsList.length>0;
     var card=document.createElement('div');
-    card.className='combo'+(result.적격?' ok':(result.used>0&&!result.지분율OK?' warn':''))+(combo.전송?' sent':'');
+    card.className='combo'+(result.적격?' ok':(result.used>0&&!result.지분율OK?' warn':''))+(combo.전송?' sent':'')+(combo.비교?' compare':'');
     card.dataset.ci=ci;
     var status=comboCalc.isKEPCO
       ?'<span class="badge" data-stat="status" style="background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc">'+kepcoReasonHtml(result.적격사유)+'</span>'
@@ -9851,7 +9909,10 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     var scoreFootHtml=buildScoreFootHtml(calc,result);
     card.innerHTML=
       '<div class="combo-head">'+
-        '<span class="name">조합 #'+(ci+1)+' <span style="font-size:10px;color:#6b7280;font-weight:400;margin-left:5px">'+summary+'</span></span>'+status+
+        '<span class="name">조합 #'+(ci+1)+' <span style="font-size:10px;color:#6b7280;font-weight:400;margin-left:5px">'+summary+'</span></span>'+comboMoveHtml(ci)+
+        '<label class="combo-cmp-lbl" title="비교 조합 — 체크하면 맨 아래로 이동하고, 조합결과TXT에서 -비교- 아래에 따로 표시됩니다">'+
+          '<input type="checkbox" class="combo-cmp-chk" data-ci="'+ci+'"'+(combo.비교?' checked':'')+'>비교'+
+        '</label>'+status+
         '<span class="small">신인도환산: <b data-stat="신인도환산">'+FMT_REP(result.신인도환산)+'</b></span>'+
         '<span class="small">감점환산: <b data-stat="감점환산">'+FMT_REP(result.감점환산)+'</b></span>'+
         '<span class="small">순신인도: <b data-stat="순신인도">'+FMT_REP(result.순신인도)+'</b></span>'+
@@ -9863,6 +9924,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           ' value="'+_sjDisp+'" placeholder="'+_sjPlaceholder+'"'+
           ' style="width:56px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;'+_sjOverrideStyle+'">%'+
         '</span>'+
+        (combo.전송&&combo.전송시각?'<span class="combo-sent-time" title="전송 체크 시각">'+fmtBidNameSavedAt(combo.전송시각)+'</span>':'')+
         '<label class="combo-sent-lbl" title="전송한 조합 표시 — 체크하면 이 조합 카드가 어둡게 표시됩니다">'+
           '<input type="checkbox" class="combo-sent-chk" data-ci="'+ci+'"'+(combo.전송?' checked':'')+'>전송'+
         '</label>'+
@@ -9916,6 +9978,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
         (comboCalc.분담시평!=null?('<div class="item"><span class="k">분담시평 대비</span><span class="v">'+분담시평대비+'</span></div>'):'')+
         '<div class="item"><span class="k">순 신인도</span><span class="v" data-stat="순신인도2">'+FMT_REP(result.순신인도)+'</span></div>'+
       '</div>';
+    if(combo.비교&&(ci===0||!state.combos[ci-1].비교)){var _dv=document.createElement('div');_dv.className='combo-cmp-divider';_dv.textContent='-비교-';root.appendChild(_dv);}
     root.appendChild(card);
     card.querySelectorAll('input.money').forEach(attachMoneyHandlers);
   });
@@ -10785,8 +10848,44 @@ function bind(){
     if(t.classList.contains('combo-sent-chk')){
       var sci=Number(t.dataset.ci);
       state.combos[sci].전송=t.checked;
+      // 2026-11-20: 체크 시각 기록·표시(해제하면 삭제)
+      if(t.checked)state.combos[sci].전송시각=new Date().toISOString();else delete state.combos[sci].전송시각;
       var scard=t.closest('.combo');if(scard)scard.classList.toggle('sent',t.checked);
+      var slbl=t.closest('.combo-sent-lbl');
+      if(slbl){
+        var stm=slbl.previousElementSibling;
+        if(stm&&stm.classList.contains('combo-sent-time'))stm.remove();
+        if(t.checked){
+          var nt=document.createElement('span');nt.className='combo-sent-time';nt.title='전송 체크 시각';
+          nt.textContent=fmtBidNameSavedAt(state.combos[sci].전송시각);
+          slbl.parentNode.insertBefore(nt,slbl);
+        }
+      }
       save();return;
+    }
+    // 2026-11-20: 비교 조합 — 체크하면 맨 아래(가장 마지막)로, 해제하면 일반 조합의 맨 끝으로
+    if(t.classList.contains('combo-cmp-chk')){
+      var cci=Number(t.dataset.ci),cobj=state.combos[cci];
+      cobj.비교=t.checked;
+      state.combos.splice(cci,1);
+      if(t.checked)state.combos.push(cobj); // 새로 체크한 조합은 맨 아래
+      else{var _firstCmp=state.combos.findIndex(function(c){return !!c.비교;});state.combos.splice(_firstCmp<0?state.combos.length:_firstCmp,0,cobj);}
+      normalizeComboOrder(state.combos);
+      save();refreshCombos();
+      var ncard=$('#combos').querySelector('.combo[data-ci="'+state.combos.indexOf(cobj)+'"]');
+      if(ncard)ncard.scrollIntoView({behavior:'smooth',block:'nearest'});
+      return;
+    }
+    // 2026-11-20: 조합 위치 선택("#k 뒤로"/"맨 앞으로")
+    if(t.classList.contains('combo-move-sel')){
+      var mvi=Number(t.dataset.ci),mobj=state.combos[mvi],mv=t.value;
+      if(!mv)return;
+      if(moveCombo(mvi,mv==='front'?'front':Number(mv))){
+        save();refreshCombos();
+        var mcard=$('#combos').querySelector('.combo[data-ci="'+state.combos.indexOf(mobj)+'"]');
+        if(mcard)mcard.scrollIntoView({behavior:'smooth',block:'nearest'});
+      }else t.value='';
+      return;
     }
     // 조합별 안내(URL) 개별표시 체크박스 — 체크 시 이 조합의 확정메모를 현재 적격기준의 안내(URL)로 채움(전체표시와는 OR 조건).
     // 2026-09-16: 해제하면 확정메모를 비움 — 단, 전체표시(state.bid.표시안내URL)가 켜져 있으면 OR 조건상 여전히
@@ -10900,11 +10999,22 @@ function bind(){
     if((e.target.value||'').trim())e.target.dispatchEvent(new Event('input'));
   });
   $('#combos').addEventListener('click',function(e){
+    var mvBtn=e.target.closest('[data-move-combo]');
+    if(mvBtn){
+      if(mvBtn.disabled)return;
+      var _mvi=Number(mvBtn.dataset.moveCombo),_mobj=state.combos[_mvi];
+      if(moveCombo(_mvi,mvBtn.dataset.dir)){
+        save();refreshCombos();
+        var _mc=$('#combos').querySelector('.combo[data-ci="'+state.combos.indexOf(_mobj)+'"]');
+        if(_mc)_mc.scrollIntoView({behavior:'smooth',block:'nearest'});
+      }
+      return;
+    }
     var lhcalcBtn=e.target.closest('[data-lhcalc]');if(lhcalcBtn){showLHComboPop(Number(lhcalcBtn.dataset.lhcalc));return;}
     var faBtn=e.target.closest('[data-forcealloc]');if(faBtn){if(!faBtn.disabled)toggleForceAlloc(Number(faBtn.dataset.forcealloc));return;}
     var railBtn=e.target.closest('[data-railtech]');if(railBtn){applyRailTechToCombo(Number(railBtn.dataset.railtech));return;}
     var confirmBtn=e.target.closest('[data-confirm]');if(confirmBtn){showConfirmPop(Number(confirmBtn.dataset.confirm));return;}
-    var cl=e.target.closest('[data-clear]');if(cl){state.combos[Number(cl.dataset.clear)]=emptyCombo();save();refreshCombos();return;}
+    var cl=e.target.closest('[data-clear]');if(cl){var _clI=Number(cl.dataset.clear),_wasCmp=!!state.combos[_clI].비교;state.combos[_clI]=emptyCombo();if(_wasCmp)state.combos[_clI].비교=true;save();refreshCombos();return;}
     var rc=e.target.closest('[data-rec]');if(rc){recommendRegional(Number(rc.dataset.rec));return;}
 
     var add=e.target.closest('[data-add-slot]');
@@ -10933,8 +11043,9 @@ function bind(){
     state.combos=Array.from({length:DEFAULT_COMBOS},emptyCombo);save();refreshCombos();
   });
   $('#btn-add-combo').addEventListener('click',function(){
-    state.combos.push(emptyCombo());save();refreshCombos();
-    var last=$('#combos').lastElementChild;if(last)last.scrollIntoView({behavior:'smooth',block:'start'});
+    // 2026-11-20: 새 조합은 일반 조합의 맨 끝(비교 조합 위)에 추가
+    var _nc=emptyCombo();state.combos.push(_nc);normalizeComboOrder(state.combos);save();refreshCombos();
+    var last=$('#combos').querySelector('.combo[data-ci="'+state.combos.indexOf(_nc)+'"]')||$('#combos').lastElementChild;if(last)last.scrollIntoView({behavior:'smooth',block:'start'});
   });
   $('#btn-export-xlsx').addEventListener('click',exportCombosText);
   // ── 메세지/요약 통합 버튼 ──────────────────────────────────────
