@@ -8904,8 +8904,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     var active=r.ROW.filter(function(row){return(row.업체명||'').trim()!=='';});
     if(!active.length)return;
     var _seenInCombo={};
-    // 2026-11-20: 비교 조합은 같은 지역사를 일부러 겹쳐 넣는 용도라 중복 업체 카운트에서 제외
-    if(!combo.비교)active.forEach(function(row){var _k=(row.업체명||'').trim();if(_seenInCombo[_k])return;_seenInCombo[_k]=1;_dupCnt[_k]=(_dupCnt[_k]||0)+1;});
+    active.forEach(function(row){var _k=(row.업체명||'').trim();if(_seenInCombo[_k])return;_seenInCombo[_k]=1;_dupCnt[_k]=(_dupCnt[_k]||0)+1;});
     // 2026-08-06: LH 강제할당 — 사용자가 Func칸에 입력한 명목 지분율이 있는 업체의 표시를
     // "명목 지분율[실제 지분율/점수계산 결과]"로 치환. 실제 계산에 쓰인 지분율(r.ROW의 값)은 그대로 둠.
     var forceRows=getForceAllocRows(combo,r);
@@ -9817,6 +9816,12 @@ function buildNeedHtml(comboCalc,result){
 }
 
 // 2026-11-20: 조합 순서 — '비교' 체크된 조합은 항상 맨 아래로(각 그룹 안의 순서는 유지). 순서가 바뀌면 true.
+// 2026-11-20: 전송 체크 시각 — yymmddhh(예: 26112010)
+function fmtSentStamp(iso){
+  if(!iso)return'';var d=new Date(iso);if(isNaN(d.getTime()))return'';
+  var p=function(n){return String(n).padStart(2,'0');};
+  return p(d.getFullYear()%100)+p(d.getMonth()+1)+p(d.getDate())+p(d.getHours());
+}
 function normalizeComboOrder(arr){
   if(!Array.isArray(arr))return false;
   var a=arr.filter(function(c){return !(c&&c.비교);}),b=arr.filter(function(c){return !!(c&&c.비교);});
@@ -9924,7 +9929,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
           ' value="'+_sjDisp+'" placeholder="'+_sjPlaceholder+'"'+
           ' style="width:56px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;'+_sjOverrideStyle+'">%'+
         '</span>'+
-        (combo.전송&&combo.전송시각?'<span class="combo-sent-time" title="전송 체크 시각">'+fmtBidNameSavedAt(combo.전송시각)+'</span>':'')+
+        (combo.전송&&combo.전송시각?'<span class="combo-sent-time" title="전송 체크 시각(yymmddhh) '+fmtBidNameSavedAt(combo.전송시각)+'">'+fmtSentStamp(combo.전송시각)+'</span>':'')+
         '<label class="combo-sent-lbl" title="전송한 조합 표시 — 체크하면 이 조합 카드가 어둡게 표시됩니다">'+
           '<input type="checkbox" class="combo-sent-chk" data-ci="'+ci+'"'+(combo.전송?' checked':'')+'>전송'+
         '</label>'+
@@ -10856,8 +10861,8 @@ function bind(){
         var stm=slbl.previousElementSibling;
         if(stm&&stm.classList.contains('combo-sent-time'))stm.remove();
         if(t.checked){
-          var nt=document.createElement('span');nt.className='combo-sent-time';nt.title='전송 체크 시각';
-          nt.textContent=fmtBidNameSavedAt(state.combos[sci].전송시각);
+          var nt=document.createElement('span');nt.className='combo-sent-time';nt.title='전송 체크 시각(yymmddhh) '+fmtBidNameSavedAt(state.combos[sci].전송시각);
+          nt.textContent=fmtSentStamp(state.combos[sci].전송시각);
           slbl.parentNode.insertBefore(nt,slbl);
         }
       }
