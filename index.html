@@ -144,6 +144,8 @@ tr.hover:hover{background:#f8fafc}
 .combo.compare .combo-cmp-lbl{background:#ffedd5;border-color:#ea580c}
 .combo-cmp-divider{font-size:12px;font-weight:700;color:#c2410c;text-align:center;border-top:2px dashed #fb923c;padding-top:4px;margin-top:4px}
 .combo-head{background:#f1f5f9;padding:6px 10px;display:flex;align-items:center;gap:10px;font-weight:600;font-size:12px;flex-wrap:wrap}
+.combo-head .name{flex:0 0 auto}
+.combo-head .combo-move{margin-left:-4px}
 .combo-head .name{font-size:13px;color:#0f172a}
 .combo-actions-row{background:#f1f5f9;padding:4px 10px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .combo-actions-row .need-txt{font-size:10px;color:#92400e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0}
@@ -525,6 +527,7 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
 
     <div class="panel">
       <h2>2. 조합 (기본 2개 · 필요 시 추가, 슬롯은 최대 5)
+        <span id="combo-summary" style="font-size:11px;color:#6b7280;font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto"></span>
         <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:auto" title="체크 시 조합결과TXT의 모든 조합 우측에 시평 합산액을 표시">
           <input type="checkbox" id="chk-표시시평합">시평합
         </label>
@@ -9869,6 +9872,9 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
   var calc=calcBid();
   renderKepcoSolo(calc); // 2026-10-27: 한전 일반공고 자사 단독 판정표
   var root=$('#combos');if(!root)return;
+  // 2026-11-20: 한줄요약은 조합 카드마다가 아니라 조합 섹션 제목 우측에 한 번만 표시
+  var _sumEl=document.getElementById('combo-summary');
+  if(_sumEl){var _sumTxt=getOneLineSummary(state.bid,calc);_sumEl.innerHTML=_sumTxt;_sumEl.title=_sumEl.textContent;}
   root.innerHTML='';
   state.combos.forEach(function(combo,ci){
     var b=state.bid;var c=calc;
@@ -9909,12 +9915,11 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     var _sjPlaceholder=+((calc.D7-1)*100).toFixed(3);
     var _sjOverrideStyle=combo.사정률D7!=null?'border-color:#f59e0b;background:#fffbeb':'';
     
-    var summary=getOneLineSummary(b, c);
 
     var scoreFootHtml=buildScoreFootHtml(calc,result);
     card.innerHTML=
       '<div class="combo-head">'+
-        '<span class="name">조합 #'+(ci+1)+' <span style="font-size:10px;color:#6b7280;font-weight:400;margin-left:5px">'+summary+'</span></span>'+comboMoveHtml(ci)+
+        '<span class="name">조합 #'+(ci+1)+'</span>'+comboMoveHtml(ci)+
         '<label class="combo-cmp-lbl" title="비교 조합 — 체크하면 맨 아래로 이동하고, 조합결과TXT에서 -비교- 아래에 따로 표시됩니다">'+
           '<input type="checkbox" class="combo-cmp-chk" data-ci="'+ci+'"'+(combo.비교?' checked':'')+'>비교'+
         '</label>'+status+
