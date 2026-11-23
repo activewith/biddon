@@ -4546,7 +4546,7 @@ function bjwRows(data){
   return out;
 }
 // 2026-11-26: 만료일 자동계산 — 취득일 당시 만 나이(생년 기준)로 유효기간 결정, 만료일 = 취득일 + N년 - 1일
-//  만 60세 미만 5년 / 만 60~64세 3년 / 만 65세 이상 2년
+//  나이(취득연도−출생연도) 60 미만 5년 / 60~64 3년 / 65 이상 2년
 //  근거: 한전 송변전 기능자격 연령제한 폐지(2024-06 발표, 2024-08 운영기준 개정) 시 "일정 연령 이상은 갱신주기 2~3년으로 단축" 방침(전기저널 인터뷰),
 //        대한전기협회 자격증 실물(만 65세 이상 취득자 2년, 60세 미만 5년, 유효기간 끝 = 시작일+N년-1일). 60~64세 3년도 실물 확인(최광락 1964-12-25, 2025-07-22~2028-07-21). 공개 기준서 원문은 미확인.
 //  자격증에 적힌 만료일이 다르면(예: 2024-08 이전 발급분은 만 65세 전날 말소) 만료일 칸에 직접 입력 — 직접 입력값이 항상 우선.
@@ -4559,16 +4559,15 @@ function _bjwBirth(v){
   var t=new Date(y,m,dd);if(isNaN(t.getTime())||t.getMonth()!==m)return null;
   return{y:y,m:m,d:dd,yearOnly:false};
 }
+// 2026-11-23: 생년(연도)만 관리 — 나이는 월·일을 따지지 않고 "취득연도 − 출생연도"로만 판단(사용자 확인 기준).
+// 생년월일을 넣어도 연도만 남긴다.
 function bjwNormBirth(v){
   var b=_bjwBirth(v);if(!b)return String(v||'').trim();
-  if(b.yearOnly)return String(b.y);
-  return b.y+'-'+String(b.m+1).padStart(2,'0')+'-'+String(b.d).padStart(2,'0');
+  return String(b.y);
 }
 function bjwAgeAt(birth,at){
   var b=_bjwBirth(birth);if(!b||!at)return null;
-  var age=at.getFullYear()-b.y;
-  if(!b.yearOnly&&(at.getMonth()<b.m||(at.getMonth()===b.m&&at.getDate()<b.d)))age--;
-  return age;
+  return at.getFullYear()-b.y;
 }
 function bjwValidYears(birth,acq){
   var age=bjwAgeAt(birth,acq);
@@ -4585,9 +4584,9 @@ function bjwRowExpiry(r,isTrain){
   return bjwCalcExpiry(r);
 }
 function _bjwExpiryTitle(r){
-  var a=_bjwDate(r&&r.취득일);if(!a)return '취득일을 입력하면 만료일이 자동 입력됩니다(생년 기준 만 60세 미만 5년 / 60~64세 3년 / 65세 이상 2년)';
+  var a=_bjwDate(r&&r.취득일);if(!a)return '취득일을 입력하면 만료일이 자동 입력됩니다(취득연도−생년 60 미만 5년 / 60~64 3년 / 65 이상 2년)';
   var age=bjwAgeAt(r.생년,a);
-  return (age==null?'생년 미입력 → 5년 적용':'취득 당시 만 '+age+'세 → '+bjwValidYears(r.생년,a)+'년')+' · 자격증 만료일과 다르면 직접 수정 · 만료 30일 전부터 알람';
+  return (age==null?'생년 미입력 → 5년 적용':'취득연도−생년 '+age+'세 → '+bjwValidYears(r.생년,a)+'년')+' · 자격증 만료일과 다르면 직접 수정 · 만료 30일 전부터 알람';
 }
 function bjwRowValid(r,isTrain,at){
   if(!r||!BJW_HOLD_PT[String(r.급)])return false;
@@ -4634,7 +4633,7 @@ function bjwRowHTML(r,isTrain){
     '<td style="'+st+';width:44px">'+(isTrain?'<b style="color:#7c3aed" title="업체 비용부담 양성과정 5년 이내 수료 실적 — 1명만 반영(상한 2.5점)">양성</b>':'보유')+'</td>'+
     '<td style="'+st+'">'+bjwMoveCellHTML(isTrain)+'</td>'+
     '<td style="'+st+'"><input class="bjw-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:80px"></td>'+
-    '<td style="'+st+'"><input class="bjw-생년" value="'+esc(r.생년||'')+'" placeholder="생년월일" style="width:96px" title="생년월일(YYMMDD·YYYY-MM-DD) 또는 생년(YYYY) — 만료일 자동계산에 사용"></td>'+
+    '<td style="'+st+'"><input class="bjw-생년" value="'+esc(r.생년||'')+'" placeholder="YYYY" style="width:64px" title="출생연도(YYYY) — 만료일 자동계산에 사용(나이 = 취득연도 − 출생연도)"></td>'+
     '<td style="'+st+'"><select class="bjw-급" style="width:66px"><option value="">-</option><option value="1"'+(g==='1'?' selected':'')+'>1급</option><option value="2"'+(g==='2'?' selected':'')+'>2급</option></select></td>'+
     '<td style="'+st+'"><input class="bjw-취득일" value="'+esc(r.취득일||'')+'" placeholder="'+(isTrain?'수료일 YYMMDD':'YYMMDD')+'" style="width:108px" title="'+(isTrain?'양성과정 수료일':'자격 취득일')+' (YYMMDD 또는 YYYY-MM-DD)"></td>'+
     '<td style="'+st+'"><input class="bjw-만료일" value="'+esc(_exp)+'"'+(_auto?' data-auto="'+_auto+'"':'')+' placeholder="취득일 입력 시 자동" style="width:108px" title="'+esc(_bjwExpiryTitle(r))+'"></td>'+
@@ -4663,7 +4662,7 @@ function bjwPanelHTML(data,idx){
     '</table>'+
     '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'+
       '<button type="button" id="m-bjw-add" class="btn btn-sm" style="background:#7c3aed;white-space:nowrap;flex-shrink:0">+ 인원 추가</button>'+
-      '<span style="font-size:10px;color:#6b7280;line-height:1.4">양성(맨 위 1명): 수료일 기준 5년 · 보유: 국민연금 가입 근무자, 1급 3.0 / 2급 2.5 · 평점 5↑ 3.5 / 3↑ 2.4 / 2↑ 1.2 · 만료일 자동: 취득 당시 만 60세 미만 5년 / 60~64세 3년 / 65세↑ 2년(취득일+N년-1일), 자격증과 다르면 직접 수정 · 만료 30일 전부터 알람 · 보유는 자사 간 소속이동 가능</span>'+
+      '<span style="font-size:10px;color:#6b7280;line-height:1.4">양성(맨 위 1명): 수료일 기준 5년 · 보유: 국민연금 가입 근무자, 1급 3.0 / 2급 2.5 · 평점 5↑ 3.5 / 3↑ 2.4 / 2↑ 1.2 · 만료일 자동: 나이(취득연도−생년) 60 미만 5년 / 60~64 3년 / 65↑ 2년(취득일+N년-1일), 자격증과 다르면 직접 수정 · 만료 30일 전부터 알람 · 보유는 자사 간 소속이동 가능</span>'+
     '</div>'+
   '</div>';
 }
@@ -4760,7 +4759,7 @@ function bjcRowHTML(r){
   return '<tr data-bjc-row="1">'+
     '<td style="'+st+'">'+bjcMoveCellHTML()+'</td>'+
     '<td style="'+st+'"><input class="bjc-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:80px"></td>'+
-    '<td style="'+st+'"><input class="bjc-생년" value="'+esc(r.생년||'')+'" placeholder="생년월일" style="width:96px" title="생년월일(YYMMDD·YYYY-MM-DD) 또는 생년(YYYY)"></td>'+
+    '<td style="'+st+'"><input class="bjc-생년" value="'+esc(r.생년||'')+'" placeholder="YYYY" style="width:64px" title="출생연도(YYYY)"></td>'+
     '<td style="'+st+'"><input class="bjc-취득일" value="'+esc(r.취득일||'')+'" placeholder="YYMMDD" style="width:108px"></td>'+
     '<td style="'+st+'"><input class="bjc-만료일" value="'+esc(r.만료일||'')+'" placeholder="YYMMDD" style="width:108px" title="자격증의 만료일을 입력 — 만료 30일 전부터 만료임박(알람) 확인에 표시"></td>'+
     '<td style="'+st+'"><input class="bjc-참고" value="'+esc(r.참고||'')+'" placeholder="참고" style="width:100%;min-width:120px"></td>'+

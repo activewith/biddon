@@ -128,7 +128,7 @@ test('소속이동: 보유 인원만 다른 자사로 이동, 즉시 저장', ()
   assert.strictEqual(w.eval('state.db[' + src + '].변전전기원.양성.이름'), '양');
 });
 
-test('만료일 자동계산: 자격증 실물과 대조 (만 60세 미만 5년 / 65세 이상 2년, 취득일+N년-1일)', () => {
+test('만료일 자동계산: 자격증 실물과 대조 (취득연도−생년 60 미만 5년 / 60~64 3년 / 65 이상 2년, 취득일+N년-1일)', () => {
   const E = (생년, 취득일) => w._ymdLocal(w.bjwCalcExpiry({ 생년, 취득일 }));
   assert.strictEqual(E('1968-04-24', '2024-03-13'), '2029-03-12');  // 김성태
   assert.strictEqual(E('1976-01-25', '2023-03-08'), '2028-03-07');  // 김정훈
@@ -138,7 +138,9 @@ test('만료일 자동계산: 자격증 실물과 대조 (만 60세 미만 5년 
   assert.strictEqual(E('1959-12-12', '2025-01-15'), '2027-01-14');  // 염광천(만 65세 → 2년)
   assert.strictEqual(E('1964-12-25', '2025-07-22'), '2028-07-21');  // 최광락(만 60세 → 3년)
   assert.strictEqual(E('', '2025-01-15'), '2030-01-14');            // 생년 없으면 5년
-  assert.strictEqual(w.bjwNormBirth('620123'), '1962-01-23');
+  assert.strictEqual(w.bjwNormBirth('620123'), '1962');
+  assert.strictEqual(E('1965', '2025-01-15'), '2028-01-14');        // 월일 무시: 2025−1965=60 → 3년
+  assert.strictEqual(E('1965-12-31', '2025-01-02'), '2028-01-01');  // 생년월일을 넣어도 연도만 사용
   assert.strictEqual(w.bjwNormBirth('1962'), '1962');
 });
 
@@ -153,7 +155,7 @@ test('업체등록: 생년 칸, 취득일 입력 시 만료일 자동 입력(직
   const acq = tr.querySelector('.bjw-취득일'), bir = tr.querySelector('.bjw-생년');
   bir.value = '591212'; bir.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true }));
   acq.value = '250115'; acq.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true }));
-  assert.strictEqual(bir.value, '1959-12-12');
+  assert.strictEqual(bir.value, '1959');
   assert.strictEqual(ex.value, '2027-01-14');
   ex.value = '2027-01-22'; ex.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true }));
   acq.value = '250201'; acq.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true }));
@@ -177,7 +179,7 @@ test('변전 케이블접속: 이름·생년·취득일·만료일·참고 저�
   tr.querySelector('.bjc-참고').value = '28년 5~6월 갱신';
   d.getElementById('m-save').click();
   const v = plain(w.eval('state.db[' + idx + '].변전케이블접속'));
-  assert.deepStrictEqual(v, [{ 이름: '윤종환', 생년: '1980-01-01', 취득일: '2023-05-15', 만료일: '2028-05-14', 참고: '28년 5~6월 갱신' }]);
+  assert.deepStrictEqual(v, [{ 이름: '윤종환', 생년: '1980', 취득일: '2023-05-15', 만료일: '2028-05-14', 참고: '28년 5~6월 갱신' }]);
   const today = new w.Date(); today.setHours(0, 0, 0, 0);
   const soon = new w.Date(today); soon.setDate(soon.getDate() + 5);
   const a = plain(w.getExpiryAlerts({ is자사: true, 변전케이블접속: [{ 이름: '갑', 만료일: w._ymdLocal(soon) }, { 이름: '을', 만료일: '2099-01-01' }] }))
