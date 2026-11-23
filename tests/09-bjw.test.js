@@ -287,3 +287,23 @@ test('업체등록 한전(변전): 변전 전문 자격(변압기·개폐기 0~2
   assert.deepStrictEqual(plain(w.eval('state.db[' + idx + '].변전전문자격')), { 변압기: 1, 개폐기: 0 });
   assert.strictEqual(w.eval('state.db[' + idx + '].변전케이블접속[0].참고'), '1줄\n2줄');
 });
+
+test('변전전문자격: 공고문 감지 + 단독판정 요건(1급은 2급 요건도 충족)', () => {
+  const T = (s) => plain(w.extractBidFields('한국전력공사 공사 적격심사 ' + s)).한전전문자격;
+  assert.strictEqual(T('변전전문회사 변압기 1급 이상'), '변압기 1급');
+  assert.strictEqual(T('변압기 2급 또는 개패기 1급'), '변압기 2급, 개폐기 1급');
+  assert.strictEqual(T('일반공사'), undefined);
+  assert.deepStrictEqual(plain(w.parseKepcoSpecReq('변압기 1급')), { 변압기: 1 });
+  const req2 = w.parseKepcoSpecReq('변압기 2급');
+  assert.strictEqual(w.kepcoSpecOK({ 변전전문자격: { 변압기: 1, 개폐기: 0 } }, req2), true);
+  assert.strictEqual(w.kepcoSpecOK({ 변전전문자격: { 변압기: 2 } }, w.parseKepcoSpecReq('변압기 1급')), false);
+  assert.strictEqual(w.kepcoSpecOK({}, req2), false);
+  assert.strictEqual(w.kepcoSpecOK({ 변전전문자격: { 개폐기: 1 } }, w.parseKepcoSpecReq('변압기 1급, 개폐기 1급')), true);
+  w.eval("state.bid.업계평균부채비율=120;state.bid.업계평균유동비율=140;state.bid.한전기자재=false;state.bid.한전변전가점=false;state.bid.한전케이블=false;state.bid.지역선택=[];state.bid.한전전문자격={변압기:1};");
+  const calc = { E5: 5e8, 공종: '전기' };
+  const base = { 업체명: 'A', is자사: true, 실적5: 1e10, 부채비율: 50, 유동비율: 300, 공사업등록일: '1990-01-01', 일자리가점: 0 };
+  const no = plain(w.kepcoSoloScore(base, calc));
+  const yes = plain(w.kepcoSoloScore(Object.assign({}, base, { 변전전문자격: { 변압기: 1, 개폐기: 0 } }), calc));
+  w.eval('state.bid.한전전문자격=null');
+  assert.deepStrictEqual([no.specOK, no.ok, yes.specOK, yes.ok], [false, false, true, true]);
+});

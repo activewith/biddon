@@ -3665,6 +3665,8 @@ function kepcoSoloScore(c,calc){
   var scoreOK=합>=tier.cap-1e-9;
   // 2026-11-23: 전력케이블(Plug-in) 공고 — 업체등록(자사)의 변전 케이블접속 자격이 오늘 기준 유효한 인원이 1명 이상 있어야 통과
   var cableReq=!!state.bid.한전케이블,cableOK=!cableReq||hasValidCableQual(c,new Date());
+  // 2026-11-23: 변전전문자격(변압기/개폐기 n급) 요구 공고 — 업체등록(자사) 변전 전문 자격 등급이 요구 이상이어야 통과
+  var specReq=state.bid.한전전문자격||null,specOK=kepcoSpecOK(c,specReq);
   var need실적점=Math.max(0,Math.round((tier.cap-경영-신인도-변전-동종)*100)/100);
   var need시공=need실적점;
   var needPerf=null,perfImpossible=false;
@@ -3677,8 +3679,8 @@ function kepcoSoloScore(c,calc){
   }
   return{supported:true,tier:tier,S:S,실적:실적,배수:배수,시공:시공,실적점:실적점,perfMax:perfMax,useBjw:useBjw,경영:경영,경영방식:경영방식,fin:fin,credit:cr,
          일자리:일자리,안전:안전,특별:특별,변전:변전,동종:동종,isGJ:isGJ,bjw:bjw,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
-         cableReq:cableReq,cableOK:cableOK,
-         ok:scoreOK&&regionOK&&gjOK&&cableOK,need시공:need시공,needPerf:needPerf,perfImpossible:perfImpossible,gj:gj};
+         cableReq:cableReq,cableOK:cableOK,specReq:specReq,specOK:specOK,
+         ok:scoreOK&&regionOK&&gjOK&&cableOK&&specOK,need시공:need시공,needPerf:needPerf,perfImpossible:perfImpossible,gj:gj};
 }
 function renderKepcoSolo(calc){
   var root=document.getElementById('kepco-solo');if(!root)return;
@@ -3714,7 +3716,7 @@ function renderKepcoSolo(calc){
     root.innerHTML=head+'<div class="small" style="color:#b45309">추정가격 '+tier.label+' 구간은 기준서 표본이 없어 판정하지 않습니다'+(tier.key==='50+'?' (가격 45점 고정 예정)':'')+'.</div>';
     _bindKepcoSolo(root);return;
   }
-  var info='<div class="small" style="color:#4b5563;margin-bottom:6px">구간 '+tier.label+' · 사정액 '+FMT_NUM(sj.amt)+'원('+sj.src+') · 가격 '+tier.price+'점 고정 · 수행능력 만점 '+tier.cap+'점 필요('+(tier.form==='기자재'?'시공경험 18점 = 실적 14.5점(1배 만점) + 동종공사 실적 3.5점(업체별 입력) · 경영상태 12점':tier.noPerf?'시공경험 평가 없음 · 경영상태 10점 + 신인도(실적 1배 이상 특별 +1)':'시공경험 '+tier.perfMax+'점'+(b.한전변전가점&&tier.key!=='U3'?' = 실적 '+TRIMDEC(tier.perfMax-3.5)+'점('+tier.perfFull+'배 만점) + 변전전기원 3.5점':'은 실적 '+tier.perfFull+'배 만점'))+') · 평균부채/유동 '+(state.bid.업계평균부채비율||'-')+'%/'+(state.bid.업계평균유동비율||'-')+'%</div>';
+  var info='<div class="small" style="color:#4b5563;margin-bottom:6px">'+(b.한전전문자격?'<b style="color:#7c3aed">변전전문자격 요구: '+esc(kepcoSpecLabel(b.한전전문자격))+'</b> · ':'')+'구간 '+tier.label+' · 사정액 '+FMT_NUM(sj.amt)+'원('+sj.src+') · 가격 '+tier.price+'점 고정 · 수행능력 만점 '+tier.cap+'점 필요('+(tier.form==='기자재'?'시공경험 18점 = 실적 14.5점(1배 만점) + 동종공사 실적 3.5점(업체별 입력) · 경영상태 12점':tier.noPerf?'시공경험 평가 없음 · 경영상태 10점 + 신인도(실적 1배 이상 특별 +1)':'시공경험 '+tier.perfMax+'점'+(b.한전변전가점&&tier.key!=='U3'?' = 실적 '+TRIMDEC(tier.perfMax-3.5)+'점('+tier.perfFull+'배 만점) + 변전전기원 3.5점':'은 실적 '+tier.perfFull+'배 만점'))+') · 평균부채/유동 '+(state.bid.업계평균부채비율||'-')+'%/'+(state.bid.업계평균유동비율||'-')+'%</div>';
   var list=state.db.filter(function(c){return c.is자사;});
   if(!list.length){root.innerHTML=head+info+'<div class="small" style="color:#6b7280">업체DB에 자사로 지정된 업체가 없습니다.</div>';_bindKepcoSolo(root);return;}
   var th='padding:4px 6px;border-bottom:1px solid #c7d2fe;font-size:11px;color:#3730a3;text-align:right;white-space:nowrap';
@@ -3725,6 +3727,7 @@ function renderKepcoSolo(calc){
     if(!r.regionOK)reasons.push('지역 불일치');
     if(!r.gjOK)reasons.push(r.gj+' 미참여');
     if(r.cableReq&&!r.cableOK)reasons.push('케이블접속 자격 없음');
+    if(r.specReq&&!r.specOK){var _h=c.변전전문자격||{};reasons.push('변전전문자격 미달(요구 '+kepcoSpecLabel(r.specReq)+' / 보유 변압기 '+(Number(_h.변압기)||0)+'·개폐기 '+(Number(_h.개폐기)||0)+'급)');}
     if(r.isGJ&&r.동종<3.5)reasons.push('동종실적 '+TRIMDEC(r.동종)+'/3.5');
     if(r.useBjw&&r.변전<3.5)reasons.push('변전전기원 '+TRIMDEC(r.변전)+'/3.5'+(r.bjw&&r.bjw.평점===0?'(미등록)':''));
     if(!r.scoreOK){
@@ -4701,6 +4704,20 @@ function bjwBodyHTML(data){
   return h;
 }
 // 2026-11-23: 변전 전문 자격 — 변압기·개폐기 각각 0~2급(0 = 없음). 업체등록(자사) 한전(변전) 칸 맨 위.
+// 공고 요구 "변압기 1급, 개폐기 2급" → {변압기:1,개폐기:2}. 숫자가 작을수록 상위(1급이 2급 요건도 충족), 0/없음 = 자격 없음.
+function parseKepcoSpecReq(v){
+  var o={},m,re=/(변\s*압\s*기|개\s*[폐패]\s*기)\s*([12])\s*급/g,t=String(v||'');
+  while((m=re.exec(t))){var k=/변/.test(m[1])?'변압기':'개폐기';var n=+m[2];if(!o[k]||n<o[k])o[k]=n;}
+  return (o.변압기||o.개폐기)?o:null;
+}
+function kepcoSpecLabel(req){var p=[];if(req&&req.변압기)p.push('변압기 '+req.변압기+'급');if(req&&req.개폐기)p.push('개폐기 '+req.개폐기+'급');return p.join(', ');}
+// 업체 보유 등급이 요구 등급 이상인지(1급 ≥ 2급). 요구가 여러 개면 하나라도 충족하면 통과("변압기 #급(또는 개폐기 #급)").
+function kepcoSpecOK(c,req){
+  if(!req)return true;
+  var h=(c&&c.변전전문자격)||{},ok=false;
+  ['변압기','개폐기'].forEach(function(k){if(req[k]){var g=Number(h[k])||0;if(g>0&&g<=req[k])ok=true;}});
+  return ok;
+}
 function bjsHTML(v){
   v=v||{};
   function sel(k){var g=String(v[k]==null?0:v[k]);return '<select class="bjs-sel" data-bjs="'+k+'" style="width:44px">'+['0','1','2'].map(function(x){return '<option value="'+x+'"'+(g===x?' selected':'')+'>'+x+'</option>';}).join('')+'</select>';}
@@ -8509,6 +8526,11 @@ function extractBidFields(t){
     if(/전\s*력\s*케\s*이\s*블|\bJIG\b|plug\s*-?\s*in/i.test(t))r.한전케이블='해당';
     // 2026-11-23: 변전기자재 설치공사 기준서(시공경험 18·경영 12) 감지
     if(/변\s*전\s*기\s*자\s*재/.test(t)){r.한전기자재='해당';delete r.한전변전;}
+    // 2026-11-23: 변전전문자격 요구 — "변압기 1급", "개폐기 2급"(오타 '개패기' 포함)
+    (function(){var g={},m,re=/(변\s*압\s*기|개\s*[폐패]\s*기)\s*(?:분야\s*)?([12])\s*급/g;
+      while((m=re.exec(t))){var k=/변/.test(m[1])?'변압기':'개폐기';var n=+m[2];if(!g[k]||n<g[k])g[k]=n;}
+      var parts=[];if(g.변압기)parts.push('변압기 '+g.변압기+'급');if(g.개폐기)parts.push('개폐기 '+g.개폐기+'급');
+      if(parts.length)r.한전전문자격=parts.join(', ');})();
     // 2026-10-27: 사정가격(VAT포함) 추출 — 일반공고 단독 판정의 시공경험 분모. 공고문 "사정가격 : 3,162,335,000원",
     // "사정금액 : ￦ 249,755,000-", 적격심사기준서 "…산출기초조서상의 사정액 (VAT포함) : ￦ 2,452,022,100원" 형식.
     (function(){
@@ -8809,7 +8831,7 @@ function _pdfPlaceholder(k,found){
 }
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
-  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',한전변전:'변전전기원 점수(시공경험 3.5)',한전케이블:'전력케이블(Plug-in)',한전기자재:'변전기자재 양식(시공경험 18·경영 12)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)',한전사정가격:'사정가격(한전·VAT포함)'};
+  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',한전변전:'변전전기원 점수(시공경험 3.5)',한전케이블:'전력케이블(Plug-in)',한전기자재:'변전기자재 양식(시공경험 18·경영 12)',한전전문자격:'변전전문자격',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)',한전사정가격:'사정가격(한전·VAT포함)'};
   var root=MODAL_ROOT;
   if(keys.length===0){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:400px">'+
@@ -8869,8 +8891,11 @@ function showPdfResultModal(found,preview){
     if(k==='한전변전'||k==='한전케이블'||k==='한전기자재'){
       return '<select data-pdf-manual="'+k+'" style="'+st+'"><option value="">직접선택</option><option value="해당">해당</option><option value="미해당">미해당</option></select>';
     }
+    if(k==='한전전문자격'){
+      return '<input type="text" data-pdf-manual="'+k+'" placeholder="예: 변압기 1급 (또는 개폐기 2급)" style="'+st+'">';
+    }
     if(k==='주공정예정기간'){
-      return '<input type="text" data-pdf-manual="'+k+'" placeholder="예: 2026. 10. 19 ~ 2026. 12. 13" style="'+st+'">';
+      return '<input type="text" data-pdf-manual="'+k+'" placeholder=""예: 2026. 10. 19 ~ 2026. 12. 13" style="'+st+'">';
     }
     // 나머지 항목은 숫자 직접입력형
     var numAttrs={추정가격:'min="0" step="1"',분담시평:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"'};
@@ -8886,7 +8911,7 @@ function showPdfResultModal(found,preview){
       var k=el.dataset.pdfManual;
       var raw=(el.value||'').trim();
       if(!raw)return;
-      if(k==='공종'||k==='적격기준'||k==='주공정예정기간'||k==='한전변전'||k==='한전케이블'||k==='한전기자재'){found[k]=raw;}
+      if(k==='공종'||k==='적격기준'||k==='주공정예정기간'||k==='한전변전'||k==='한전케이블'||k==='한전기자재'||k==='한전전문자격'){found[k]=raw;}
       else{var num=Number(raw.replace(/,/g,''));if(!isNaN(num))found[k]=num;}
     });
     var _regSel=Array.prototype.map.call(document.querySelectorAll('[data-pdf-region-idx]'),function(e){return e.value.trim();}).filter(Boolean);
@@ -8924,6 +8949,9 @@ function showPdfResultModal(found,preview){
     if(k==='한전변전'||k==='한전케이블'||k==='한전기자재'){
       var _cb=found[k]||'';
       return '<select data-pdf-manual="'+k+'" style="'+st+'"><option value=""'+(_cb?'':' selected')+'>직접선택</option><option value="해당"'+(_cb==='해당'?' selected':'')+'>해당</option><option value="미해당"'+(_cb==='미해당'?' selected':'')+'>미해당</option></select>';
+    }
+    if(k==='한전전문자격'){
+      return '<input type="text" data-pdf-manual="'+k+'" value="'+esc(String(found[k]||''))+'" placeholder="예: 변압기 1급 (또는 개폐기 2급)" style="'+st+'">';
     }
     if(k==='주공정예정기간'){
       return '<input type="text" data-pdf-manual="'+k+'" value="'+esc(String(found[k]||''))+'" placeholder="예: 2026. 10. 19 ~ 2026. 12. 13" style="'+st+'">';
@@ -8963,7 +8991,8 @@ function showPdfResultModal(found,preview){
   if(found.적격기준==='한전'&&!individualKeys.includes('한전변전'))individualKeys.push('한전변전');
   if(found.적격기준==='한전'&&!individualKeys.includes('한전케이블'))individualKeys.push('한전케이블');
   if(found.적격기준==='한전'&&!individualKeys.includes('한전기자재'))individualKeys.push('한전기자재');
-  if(found.적격기준!=='한전')individualKeys=individualKeys.filter(function(k){return k!=='한전변전'&&k!=='한전케이블'&&k!=='한전기자재';});
+  if(found.적격기준==='한전'&&!individualKeys.includes('한전전문자격'))individualKeys.push('한전전문자격');
+  if(found.적격기준!=='한전')individualKeys=individualKeys.filter(function(k){return k!=='한전변전'&&k!=='한전케이블'&&k!=='한전기자재'&&k!=='한전전문자격';});
   function _buildIndividualRows(){
     return individualKeys.map(function(k){
       return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'"'+(_rowChecked(k)?' checked':'')+'></td>'+
@@ -9147,7 +9176,7 @@ function showPdfResultModal(found,preview){
     if(found.한전분담비율)state.bid.한전분담비율=found.한전분담비율; // 참고용 원본 보존
     if(found.적격기준==='한전'&&!found.한전사정가격)state.bid.한전사정가격=null; // 2026-10-27: 새 공고에 사정가격이 없으면 이전 값 해제(추정×1.1로 대체)
     if(found.적격기준==='한전'&&!found.주공정예정기간)state.bid.주공정예정기간=null; // 새 공고에 기간이 없으면 이전 공고의 값이 남지 않도록 해제
-    if(found.적격기준==='한전'){state.bid.한전변전가점=false;state.bid.한전케이블=false;state.bid.한전기자재=false;state.bid.한전동종점수={};} // 아래 '변전전기원 점수' 행이 체크+해당일 때만 켬(이전 공고 값 해제)
+    if(found.적격기준==='한전'){state.bid.한전변전가점=false;state.bid.한전케이블=false;state.bid.한전기자재=false;state.bid.한전동종점수={};state.bid.한전전문자격=null;} // 아래 '변전전기원 점수' 행이 체크+해당일 때만 켬(이전 공고 값 해제)
     if(found.적격기준==='한전'){
       // 실적제한 수기입력값은 모달 안의 입력칸(⚡ 실적제한 블록, _kepcoPerfInputBlockHtml)에서 그대로 읽어와 저장한다.
       // (해당 입력칸은 기존 state.bid.한전실적입력 값 또는 공고문 검출 분담비율로 이미 초기값이 채워져 있고,
@@ -9209,6 +9238,7 @@ function showPdfResultModal(found,preview){
       else if(k==='주공정예정기간'){state.bid.주공정예정기간=String(v);}
       else if(k==='한전변전'){state.bid.한전변전가점=(v==='해당');}
       else if(k==='한전케이블'){state.bid.한전케이블=(v==='해당');}
+      else if(k==='한전전문자격'){state.bid.한전전문자격=parseKepcoSpecReq(v);}
       else if(k==='한전기자재'){state.bid.한전기자재=(v==='해당');if(v==='해당')state.bid.한전변전가점=false;}
       else if(k==='한전사정가격'){state.bid.한전사정가격=Number(v)||null;}
       else if(k==='A값'){state.bid.A값=v;var _aEl=$('#in-A값');if(_aEl)_aEl.value=FMT_NUM(v);}
@@ -11221,7 +11251,7 @@ function bind(){
     }
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,기초배율:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,한전변전가점:false,한전케이블:false,한전기자재:false,한전동종점수:{},기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,한전변전가점:false,한전케이블:false,한전기자재:false,한전동종점수:{},한전전문자격:null,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
     (function(){var _rm=$('#in-기준월');if(_rm)_rm.value=state.bid._기준월;})(); // 2026-08-27: 공고 초기화 시 기준월도 이번 달로 리셋(재확인 필요)
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
