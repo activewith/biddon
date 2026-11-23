@@ -232,3 +232,21 @@ test('전력케이블(Plug-in): 공고문 감지 + 단독판정은 유효 자격
   assert.strictEqual(rN.ok, false);
   assert.strictEqual(rY.ok, rOff.ok);
 });
+
+test('한전 8천만 미만: 시공경험 없음, 경영상태 10점(부채5+유동5 / 신용 10)으로 판정', () => {
+  w.eval("state.bid.업계평균부채비율=120;state.bid.업계평균유동비율=140;state.bid.한전변전가점=false;state.bid.한전케이블=false;state.bid.지역선택=[];");
+  const calc = { E5: 67241000, 공종: '전기' };
+  const t = plain(w.kepcoSoloTier(67241000));
+  assert.deepStrictEqual([t.key, t.price, t.cap, t.noPerf, t.supported], ['U08', 85, 10, true, true]);
+  const good = { 업체명: 'A', is자사: true, 실적5: 0, 부채비율: 50, 유동비율: 300, 일자리가점: 0 };
+  const r1 = plain(w.kepcoSoloScore(good, calc));
+  assert.deepStrictEqual([r1.시공, r1.경영, r1.합, r1.ok], [0, 10, 10, true]);
+  const weak = { 업체명: 'B', is자사: true, 실적5: 0, 부채비율: 170, 유동비율: 300, 일자리가점: 0 };  // 부채 1.42배 → 4.0
+  const r2 = plain(w.kepcoSoloScore(weak, calc));
+  assert.deepStrictEqual([r2.경영, r2.ok], [9, false]);
+  const weakPerf = Object.assign({}, weak, { 실적5: 1e9 });  // 실적 1배 이상 → 특별신인도 +1
+  const r3 = plain(w.kepcoSoloScore(weakPerf, calc));
+  assert.deepStrictEqual([r3.특별, r3.합, r3.ok], [1, 10, true]);
+  const cr = plain(w.kepcoSoloScore({ 업체명: 'C', is자사: true, 실적5: 0, 신용평가: 'BB-(291231)', 일자리가점: 0 }, calc));
+  assert.strictEqual(cr.경영, 9.9);
+});

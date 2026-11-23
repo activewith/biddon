@@ -3539,6 +3539,9 @@ var KEPCO_ECON_B={부채:[{t:100,g:'A',s:7.0},{t:130,g:'B',s:6.2},{t:160,g:'C',s
                   유동:[{t:100,g:'A',s:7.0},{t:90,g:'B',s:6.2},{t:80,g:'C',s:5.4},{t:70,g:'D',s:4.6},{g:'E',s:3.8}]};
 var KEPCO_ECON_U3={부채:[{t:100,g:'A',s:3.0},{t:130,g:'B',s:2.7},{t:160,g:'C',s:2.4},{t:190,g:'D',s:2.1},{g:'E',s:1.8}],
                    유동:[{t:100,g:'A',s:2.0},{t:90,g:'B',s:1.8},{t:80,g:'C',s:1.6},{t:70,g:'D',s:1.4},{g:'E',s:1.2}]};
+// 2026-11-23: 8천만 미만(한전 변전기자재 설치공사 기준서 Ⅲ, 2026.7 개정) — 경영상태 10점(부채5+유동5 / 신용 10), 시공경험 평가 없음
+var KEPCO_ECON_U08={부채:[{t:100,g:'A',s:5.0},{t:130,g:'B',s:4.5},{t:160,g:'C',s:4.0},{t:190,g:'D',s:3.5},{g:'E',s:3.0}],
+                    유동:[{t:100,g:'A',s:5.0},{t:90,g:'B',s:4.5},{t:80,g:'C',s:4.0},{t:70,g:'D',s:3.5},{g:'E',s:3.0}]};
 var KEPCO_ECON_YEAR=[{t:3,g:'3년+',s:1.0},{t:1,g:'1~3년',s:0.9},{g:'1년미만',s:0.8}];
 function kepcoSoloTier(E5){
   if(!(E5>0))return null;
@@ -3546,7 +3549,8 @@ function kepcoSoloTier(E5){
   if(E5>=LIMIT_10)return{key:'A',label:'10억~50억',price:65,cap:30,perfMax:15,perfFull:1,econ:KEPCO_ECON_A,year:true,supported:true};
   if(E5>=KEPCO_LIMIT_3)return{key:'B',label:'3억~10억',price:65,cap:30,perfMax:15,perfFull:1,econ:KEPCO_ECON_B,year:true,supported:true};
   if(E5>=KEPCO_LIMIT_08)return{key:'U3',label:'8천만~3억',price:85,cap:10,perfMax:5,perfFull:0.5,econ:KEPCO_ECON_U3,year:false,supported:true};
-  return{key:'U08',label:'8천만 미만',price:85,cap:null,supported:false};
+  // 8천만 미만: 가격 85점 고정, 수행능력 10 = 경영상태 10 + 신인도(특별신인도: 실적 1배 이상 +1). 시공경험 항목 없음.
+  return{key:'U08',label:'8천만 미만',price:85,cap:10,perfMax:0,perfFull:1,noPerf:true,econ:KEPCO_ECON_U08,year:false,supported:true};
 }
 function kepcoSajeong(calc){
   var v=Number(state.bid.한전사정가격);
@@ -3567,8 +3571,12 @@ function kepcoCreditScore(c,tier){
   var cr=parseCreditRating(c.신용평가||'');
   if(!cr||!cr.isValid)return null;
   var g=cr.grade,top=creditGradeScore(g)>=35;
-  var isU3=tier.key==='U3';
+  var isU3=tier.key==='U3',isU08=tier.key==='U08';
   var s;
+  if(isU08){ // 기준서 Ⅲ 신용평가 10점표: BB0 이상 10 / BB- 9.9 / B+~B- 9.7 / CCC+ 이하 8.6
+    if(top)s=10;else if(g==='BB-')s=9.9;else if(['B+','B','B0','B-'].indexOf(g)>=0)s=9.7;else s=8.6;
+    return{score:s,grade:g};
+  }
   if(top)s=isU3?5:15;
   else if(g==='BB-')s=isU3?4.9:14.8;
   else if(['B+','B','B0','B-'].indexOf(g)>=0)s=isU3?4.9:14.6;
@@ -3581,7 +3589,7 @@ function kepcoFinScore(c,tier,gj){
   var fD=econForcedGrade(pd.부채만점),fU=econForcedGrade(pd.유동만점);
   var d=null,u=null,rD=null,rU=null;
   if(fD)d=_kepcoTierByGrade(tier.econ.부채,fD);
-  else if(pd.부채비율!=null&&pd.부채비율!==''&&avgD){rD=Number(pd.부채비율)/avgD*100;d=_kepcoTier(tier.econ.부채,rD,'lt',tier.key==='U3');}
+  else if(pd.부채비율!=null&&pd.부채비율!==''&&avgD){rD=Number(pd.부채비율)/avgD*100;d=_kepcoTier(tier.econ.부채,rD,'lt',tier.key==='U3'||tier.key==='U08');}
   if(fU)u=_kepcoTierByGrade(tier.econ.유동,fU);
   else if(pd.유동비율!=null&&pd.유동비율!==''&&avgU){rU=Number(pd.유동비율)/avgU*100;u=_kepcoTier(tier.econ.유동,rU,'gte');}
   if(!d||!u)return null;
@@ -3606,10 +3614,10 @@ function kepcoSoloScore(c,calc){
   var 배수=S>0?실적/S:0;
   // 2026-11-20: 변전공사 양식(3억~50억) — 시공경험 15 = 실적비율 11.5 + 변전전기원 양성·보유실적 3.5.
   // 공고 옵션을 켜면 실적 몫을 11.5로 줄이고, 업체등록(자사)의 변전전기원 등록값으로 오늘 기준 점수를 더한다(미등록이면 0).
-  var 변전=0,bjw=null,useBjw=!!state.bid.한전변전가점&&tier.key!=='U3';
+  var 변전=0,bjw=null,useBjw=!!state.bid.한전변전가점&&tier.key!=='U3'&&!tier.noPerf;
   var perfMax=useBjw?Math.round((tier.perfMax-3.5)*100)/100:tier.perfMax;
   if(useBjw){bjw=calcBjwScore(c.is자사?c.변전전기원:null,new Date());변전=bjw.score;}
-  var 실적점=S>0?Math.min(Math.round(배수/tier.perfFull*perfMax*100)/100,perfMax):0;
+  var 실적점=(S>0&&perfMax>0)?Math.min(Math.round(배수/tier.perfFull*perfMax*100)/100,perfMax):0;
   var 시공=Math.round((실적점+변전)*100)/100;
   var fin=kepcoFinScore(c,tier,gj),cr=kepcoCreditScore(c,tier);
   var 경영=0,경영방식='없음';
@@ -3617,8 +3625,9 @@ function kepcoSoloScore(c,calc){
   else if(cr){경영=cr.score;경영방식='신용 '+cr.grade;}
   var 일자리=Math.max(0,Math.min(3,Number(c.일자리가점)||0));
   var 안전=0;
-  if(state.bid.한전안전가점&&tier.key!=='U3'){var ps=parseSafetySystem(c.안전보건시스템||'');if(ps.valid&&ps.type)안전=0.1;}
-  var 신인도=Math.round((일자리+안전)*100)/100;
+  if(state.bid.한전안전가점&&tier.key!=='U3'&&tier.key!=='U08'){var ps=parseSafetySystem(c.안전보건시스템||'');if(ps.valid&&ps.type)안전=0.1;}
+  var 특별=(tier.noPerf&&배수+1e-12>=1)?1:0; // 8천만 미만: 사정액 대비 5년 실적 1배 이상이면 특별신인도 +1
+  var 신인도=Math.round((일자리+안전+특별)*100)/100;
   var 합=Math.round((시공+경영+신인도)*100)/100;
   var 수행=Math.min(합,tier.cap);
   var total=Math.round((수행+tier.price)*100)/100;
@@ -3632,11 +3641,14 @@ function kepcoSoloScore(c,calc){
   var need시공=need실적점;
   var needPerf=null,perfImpossible=false;
   if(!scoreOK){
-    if(need실적점>perfMax+1e-9)perfImpossible=true;
+    if(tier.noPerf){ // 시공경험 없음 — 실적 1배를 채우면 특별신인도 +1만 가능
+      if(!특별&&tier.cap-합<=1+1e-9)needPerf=Math.ceil(S);else perfImpossible=true;
+    }
+    else if(need실적점>perfMax+1e-9)perfImpossible=true;
     else needPerf=Math.ceil(need실적점/perfMax*tier.perfFull*S);
   }
   return{supported:true,tier:tier,S:S,실적:실적,배수:배수,시공:시공,실적점:실적점,perfMax:perfMax,useBjw:useBjw,경영:경영,경영방식:경영방식,fin:fin,credit:cr,
-         일자리:일자리,안전:안전,변전:변전,bjw:bjw,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
+         일자리:일자리,안전:안전,특별:특별,변전:변전,bjw:bjw,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
          cableReq:cableReq,cableOK:cableOK,
          ok:scoreOK&&regionOK&&gjOK&&cableOK,need시공:need시공,needPerf:needPerf,perfImpossible:perfImpossible,gj:gj};
 }
@@ -3672,7 +3684,7 @@ function renderKepcoSolo(calc){
     root.innerHTML=head+'<div class="small" style="color:#b45309">추정가격 '+tier.label+' 구간은 기준서 표본이 없어 판정하지 않습니다'+(tier.key==='50+'?' (가격 45점 고정 예정)':'')+'.</div>';
     _bindKepcoSolo(root);return;
   }
-  var info='<div class="small" style="color:#4b5563;margin-bottom:6px">구간 '+tier.label+' · 사정액 '+FMT_NUM(sj.amt)+'원('+sj.src+') · 가격 '+tier.price+'점 고정 · 수행능력 만점 '+tier.cap+'점 필요(시공경험 '+tier.perfMax+'점'+(b.한전변전가점&&tier.key!=='U3'?' = 실적 '+TRIMDEC(tier.perfMax-3.5)+'점('+tier.perfFull+'배 만점) + 변전전기원 3.5점':'은 실적 '+tier.perfFull+'배 만점')+') · 평균부채/유동 '+(state.bid.업계평균부채비율||'-')+'%/'+(state.bid.업계평균유동비율||'-')+'%</div>';
+  var info='<div class="small" style="color:#4b5563;margin-bottom:6px">구간 '+tier.label+' · 사정액 '+FMT_NUM(sj.amt)+'원('+sj.src+') · 가격 '+tier.price+'점 고정 · 수행능력 만점 '+tier.cap+'점 필요('+(tier.noPerf?'시공경험 평가 없음 · 경영상태 10점 + 신인도(실적 1배 이상 특별 +1)':'시공경험 '+tier.perfMax+'점'+(b.한전변전가점&&tier.key!=='U3'?' = 실적 '+TRIMDEC(tier.perfMax-3.5)+'점('+tier.perfFull+'배 만점) + 변전전기원 3.5점':'은 실적 '+tier.perfFull+'배 만점'))+') · 평균부채/유동 '+(state.bid.업계평균부채비율||'-')+'%/'+(state.bid.업계평균유동비율||'-')+'%</div>';
   var list=state.db.filter(function(c){return c.is자사;});
   if(!list.length){root.innerHTML=head+info+'<div class="small" style="color:#6b7280">업체DB에 자사로 지정된 업체가 없습니다.</div>';_bindKepcoSolo(root);return;}
   var th='padding:4px 6px;border-bottom:1px solid #c7d2fe;font-size:11px;color:#3730a3;text-align:right;white-space:nowrap';
@@ -3686,19 +3698,19 @@ function renderKepcoSolo(calc){
     if(r.useBjw&&r.변전<3.5)reasons.push('변전전기원 '+TRIMDEC(r.변전)+'/3.5'+(r.bjw&&r.bjw.평점===0?'(미등록)':''));
     if(!r.scoreOK){
       reasons.push(TRIMDEC(Math.round((r.tier.cap-r.합)*100)/100)+'점 부족');
-      if(r.perfImpossible)reasons.push('실적만으로 불가');
+      if(r.perfImpossible)reasons.push(r.tier.noPerf?'경영상태·신인도 부족':'실적만으로 불가');
       else if(r.needPerf!=null)reasons.push('필요실적 '+FMT_NUM(r.needPerf)+'(부족 '+FMT_NUM(Math.max(0,r.needPerf-r.실적))+')');
     }
     var 경영t=r.경영방식==='재무'&&r.fin?('부채'+r.fin.부채.g+' 유동'+r.fin.유동.g+(r.fin.영업?' '+r.fin.영업.g:'')):r.경영방식;
-    var perfColor=r.배수+1e-12<r.tier.perfFull?'#dc2626':'#111827';
+    var perfColor=(!r.tier.noPerf&&r.배수+1e-12<r.tier.perfFull)?'#dc2626':'#111827';
     var verdict=r.ok?'<span class="badge b-ok">통과</span>':'<span class="badge b-bad">미달</span>';
     return '<tr>'+
       '<td style="'+td+';text-align:left;font-weight:700">'+esc(c.업체명)+'</td>'+
       '<td style="'+td+'">'+FMT_NUM(r.실적)+'</td>'+
       '<td style="'+td+';color:'+perfColor+';font-weight:700">'+(Math.floor(r.배수*1000)/1000).toFixed(3)+'배</td>'+
-      '<td style="'+td+'">'+TRIMDEC(r.시공)+(r.useBjw?' <span style="font-size:10px;color:#6b7280">(실적 '+TRIMDEC(r.실적점)+' + </span><span style="font-size:10px;font-weight:700;color:'+(r.변전>=3.5?'#047857':'#dc2626')+'" title="변전전기원 평점 '+TRIMDEC(r.bjw.평점)+' (양성 '+TRIMDEC(r.bjw.양성)+' + 보유 '+TRIMDEC(r.bjw.보유)+') — 업체등록 화면 자사 변전전기원 등록값 기준">변전 '+TRIMDEC(r.변전)+'</span><span style="font-size:10px;color:#6b7280">)</span>':'')+'</td>'+
+      '<td style="'+td+'">'+(r.tier.noPerf?'<span style="color:#6b7280">평가없음</span>':TRIMDEC(r.시공))+(r.useBjw?' <span style="font-size:10px;color:#6b7280">(실적 '+TRIMDEC(r.실적점)+' + </span><span style="font-size:10px;font-weight:700;color:'+(r.변전>=3.5?'#047857':'#dc2626')+'" title="변전전기원 평점 '+TRIMDEC(r.bjw.평점)+' (양성 '+TRIMDEC(r.bjw.양성)+' + 보유 '+TRIMDEC(r.bjw.보유)+') — 업체등록 화면 자사 변전전기원 등록값 기준">변전 '+TRIMDEC(r.변전)+'</span><span style="font-size:10px;color:#6b7280">)</span>':'')+'</td>'+
       '<td style="'+td+'" title="'+esc(경영t)+'">'+TRIMDEC(r.경영)+' <span style="color:#6b7280;font-size:10px">('+esc(경영t)+')</span></td>'+
-      '<td style="'+td+'">'+TRIMDEC(r.신인도)+(r.안전?' <span style="color:#6b7280;font-size:10px">(안전+0.1)</span>':'')+'</td>'+
+      '<td style="'+td+'">'+TRIMDEC(r.신인도)+(r.안전?' <span style="color:#6b7280;font-size:10px">(안전+0.1)</span>':'')+(r.특별?' <span style="color:#6b7280;font-size:10px">(실적1배+1)</span>':'')+'</td>'+
       '<td style="'+td+';font-weight:700;color:'+(r.scoreOK?'#047857':'#dc2626')+'">'+TRIMDEC(r.합)+' / '+r.tier.cap+'</td>'+
       '<td style="'+td+'">'+TRIMDEC(r.total)+'</td>'+
       '<td style="'+td+';text-align:center">'+verdict+'</td>'+
