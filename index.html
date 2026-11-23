@@ -200,6 +200,13 @@ tr.hover:hover{background:#f8fafc}
 .modal.dragging{opacity:.97}
 .form-grid{display:grid;grid-template-columns:140px 1fr;gap:8px;align-items:center;margin-bottom:12px}
 .form-grid input,.form-grid select{padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:inherit}
+/* 2026-11-23 한전(변전) 패널 압축 */
+#m-bjw-panel input,#m-bjw-panel select,#m-bjw-panel textarea{padding:2px 4px;font-size:12px;border-radius:3px}
+#m-bjw-panel textarea{border:1px solid var(--border);font-family:inherit;resize:vertical;min-height:22px;line-height:1.35;box-sizing:border-box}
+#m-bjw-panel td{padding:1px 2px!important}
+#m-bjw-panel th{padding:2px 2px!important}
+#m-bjw-panel .bjp-hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:3px}
+#m-bjw-panel .bjp-add{padding:1px 8px;font-size:11px;white-space:nowrap;flex-shrink:0}
 .ok-text{color:var(--ok);font-weight:700}
 .bad-text{color:var(--bad);font-weight:700}
 .score-text{color:#7c3aed;font-weight:700}
@@ -4663,7 +4670,7 @@ function bjwMoveCellHTML(isTrain){
   if(isTrain)return '<span style="font-size:10px;color:#9ca3af" title="양성은 고정 — 이동 불가">고정</span>';
   var others=(_bjwCtxIdx==null)?[]:(state.db||[]).map(function(c,i){return{c:c,i:i};}).filter(function(o){return o.c&&o.c.is자사&&o.i!==_bjwCtxIdx;});
   if(!others.length)return '<span style="font-size:10px;color:#9ca3af" title="'+(_bjwCtxIdx==null?'저장된 업체에서만 이동 가능':'이동할 다른 자사 업체가 없음')+'">-</span>';
-  return '<span style="display:inline-flex;gap:2px;align-items:center"><select class="bjw-move" style="width:104px;padding:2px;font-size:11px"><option value="">이동할 업체…</option>'+
+  return '<span style="display:inline-flex;gap:2px;align-items:center"><select class="bjw-move" style="width:84px;font-size:11px"><option value="">이동할 업체…</option>'+
     others.map(function(o){return '<option value="'+o.i+'">'+esc(o.c.업체명||'(업체명 미입력)')+'</option>';}).join('')+
     '</select><button type="button" class="bjw-movebtn" title="선택한 자사 업체로 이 인원을 이동(즉시 저장)" style="padding:1px 6px;font-size:11px;border:1px solid #c4b5fd;background:#fff;border-radius:3px;cursor:pointer">이동</button></span>';
 }
@@ -4677,11 +4684,11 @@ function bjwRowHTML(r,isTrain){
     '<td class="bjw-no" style="'+st+';color:#6b7280;width:34px"></td>'+
     '<td style="'+st+';width:44px">'+(isTrain?'<b style="color:#7c3aed" title="업체 비용부담 양성과정 5년 이내 수료 실적 — 1명만 반영(상한 2.5점)">양성</b>':'보유')+'</td>'+
     '<td style="'+st+'">'+bjwMoveCellHTML(isTrain)+'</td>'+
-    '<td style="'+st+'"><input class="bjw-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:80px"></td>'+
-    '<td style="'+st+'"><input class="bjw-생년" value="'+esc(r.생년||'')+'" placeholder="YYYY" style="width:64px" title="출생연도(YYYY) — 만료일 자동계산에 사용(나이 = 취득연도 − 출생연도)"></td>'+
-    '<td style="'+st+'"><select class="bjw-급" style="width:66px"><option value="">-</option><option value="1"'+(g==='1'?' selected':'')+'>1급</option><option value="2"'+(g==='2'?' selected':'')+'>2급</option></select></td>'+
-    '<td style="'+st+'"><input class="bjw-취득일" value="'+esc(r.취득일||'')+'" placeholder="'+(isTrain?'수료일 YYMMDD':'YYMMDD')+'" style="width:108px" title="'+(isTrain?'양성과정 수료일':'자격 취득일')+' (YYMMDD 또는 YYYY-MM-DD)"></td>'+
-    '<td style="'+st+'"><input class="bjw-만료일" value="'+esc(_exp)+'"'+(_auto?' data-auto="'+_auto+'"':'')+' placeholder="취득일 입력 시 자동" style="width:108px" title="'+esc(_bjwExpiryTitle(r))+'"></td>'+
+    '<td style="'+st+'"><input class="bjw-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:62px"></td>'+
+    '<td style="'+st+'"><input class="bjw-생년" value="'+esc(r.생년||'')+'" placeholder="YYYY" style="width:46px" title="출생연도(YYYY) — 만료일 자동계산에 사용(나이 = 취득연도 − 출생연도)"></td>'+
+    '<td style="'+st+'"><select class="bjw-급" style="width:52px"><option value="">-</option><option value="1"'+(g==='1'?' selected':'')+'>1급</option><option value="2"'+(g==='2'?' selected':'')+'>2급</option></select></td>'+
+    '<td style="'+st+'"><input class="bjw-취득일" value="'+esc(r.취득일||'')+'" placeholder="'+(isTrain?'수료일 YYMMDD':'YYMMDD')+'" style="width:84px" title="'+(isTrain?'양성과정 수료일':'자격 취득일')+' (YYMMDD 또는 YYYY-MM-DD)"></td>'+
+    '<td style="'+st+'"><input class="bjw-만료일" value="'+esc(_exp)+'"'+(_auto?' data-auto="'+_auto+'"':'')+' placeholder="자동" style="width:84px" title="'+esc(_bjwExpiryTitle(r))+'"></td>'+
     '<td style="'+st+';width:30px">'+(isTrain?'':'<button type="button" class="bjw-del" title="이 인원 삭제" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px">×</button>')+'</td>'+
   '</tr>';
 }
@@ -4693,22 +4700,39 @@ function bjwBodyHTML(data){
   hold.forEach(function(r){h+=bjwRowHTML(r,false);});
   return h;
 }
+// 2026-11-23: 변전 전문 자격 — 변압기·개폐기 각각 0~2급(0 = 없음). 업체등록(자사) 한전(변전) 칸 맨 위.
+function bjsHTML(v){
+  v=v||{};
+  function sel(k){var g=String(v[k]==null?0:v[k]);return '<select class="bjs-sel" data-bjs="'+k+'" style="width:44px">'+['0','1','2'].map(function(x){return '<option value="'+x+'"'+(g===x?' selected':'')+'>'+x+'</option>';}).join('')+'</select>';}
+  return '<div id="m-bjs" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;border:1px solid #e5e7eb;background:#f9fafb;border-radius:5px;padding:3px 6px;font-size:12px">'+
+    '<b style="color:#374151" title="0급 = 해당 자격 없음">변전 전문 자격</b><span style="color:#d1d5db">|</span>'+
+    '<span>변압기 '+sel('변압기')+'급</span><span style="color:#d1d5db">|</span>'+
+    '<span>개폐기 '+sel('개폐기')+'급</span>'+
+  '</div>';
+}
+function readBjs(){
+  var box=document.getElementById('m-bjs');if(!box)return null;
+  var o={};box.querySelectorAll('[data-bjs]').forEach(function(el){o[el.getAttribute('data-bjs')]=Number(el.value)||0;});
+  return o;
+}
+function fillBjs(v){
+  var box=document.getElementById('m-bjs');if(!box)return;
+  v=v||{};box.querySelectorAll('[data-bjs]').forEach(function(el){el.value=String(Number(v[el.getAttribute('data-bjs')])||0);});
+}
 function bjwPanelHTML(data,idx){
   if(arguments.length>1)_bjwCtxIdx=(idx==null||idx<0||!state.db[idx])?null:idx;
   var th='padding:3px 4px;border-bottom:1px solid #c4b5fd;font-size:11px;color:#5b21b6;text-align:center;font-weight:700';
-  return '<div style="border:1px solid #ddd6fe;background:#faf5ff;border-radius:6px;padding:8px">'+
-    '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px">'+
-      '<span style="font-size:12px;color:#5b21b6;font-weight:700">⚡ 한전 변전전기원 양성·보유실적</span>'+
-      '<span id="m-bjw-score" style="margin-left:auto;font-size:12px;font-weight:700;color:#111827"></span>'+
+  var _hint='양성(맨 위 1명): 수료일 기준 5년 · 보유: 국민연금 가입 근무자, 1급 3.0 / 2급 2.5 · 평점 5↑ 3.5 / 3↑ 2.4 / 2↑ 1.2 · 만료일 자동: 나이(취득연도−생년) 60 미만 5년 / 60~64 3년 / 65↑ 2년(취득일+N년-1일), 자격증과 다르면 직접 수정 · 만료 30일 전부터 알람 · 보유는 자사 간 소속이동 가능';
+  return '<div style="border:1px solid #ddd6fe;background:#faf5ff;border-radius:5px;padding:4px 5px;margin-top:4px">'+
+    '<div class="bjp-hd">'+
+      '<span style="font-size:12px;color:#5b21b6;font-weight:700" title="'+esc(_hint)+'">⚡ 변전전기원 양성·보유실적 <span style="color:#9ca3af;font-weight:400;cursor:help">ⓘ</span></span>'+
+      '<button type="button" id="m-bjw-add" class="btn btn-sm bjp-add" style="background:#7c3aed">+ 인원</button>'+
+      '<span id="m-bjw-score" style="margin-left:auto;font-size:11px;font-weight:700;color:#111827"></span>'+
     '</div>'+
     '<table style="border-collapse:collapse;width:100%;background:#fff">'+
       '<thead><tr><th style="'+th+'">번호</th><th style="'+th+'">구분</th><th style="'+th+'">소속이동</th><th style="'+th+'">이름</th><th style="'+th+'">생년</th><th style="'+th+'">급수</th><th style="'+th+'">취득일</th><th style="'+th+'">만료일</th><th style="'+th+'"></th></tr></thead>'+
       '<tbody id="m-bjw-body">'+bjwBodyHTML(data)+'</tbody>'+
     '</table>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'+
-      '<button type="button" id="m-bjw-add" class="btn btn-sm" style="background:#7c3aed;white-space:nowrap;flex-shrink:0">+ 인원 추가</button>'+
-      '<span style="font-size:10px;color:#6b7280;line-height:1.4">양성(맨 위 1명): 수료일 기준 5년 · 보유: 국민연금 가입 근무자, 1급 3.0 / 2급 2.5 · 평점 5↑ 3.5 / 3↑ 2.4 / 2↑ 1.2 · 만료일 자동: 나이(취득연도−생년) 60 미만 5년 / 60~64 3년 / 65↑ 2년(취득일+N년-1일), 자격증과 다르면 직접 수정 · 만료 30일 전부터 알람 · 보유는 자사 간 소속이동 가능</span>'+
-    '</div>'+
   '</div>';
 }
 function _bjwReadRow(tr){
@@ -4766,7 +4790,7 @@ function hasValidCableQual(c,at){
 function bjcMoveCellHTML(){
   var others=(_bjwCtxIdx==null)?[]:(state.db||[]).map(function(c,i){return{c:c,i:i};}).filter(function(o){return o.c&&o.c.is자사&&o.i!==_bjwCtxIdx;});
   if(!others.length)return '<span style="font-size:10px;color:#9ca3af" title="'+(_bjwCtxIdx==null?'저장된 업체에서만 이동 가능':'이동할 다른 자사 업체가 없음')+'">-</span>';
-  return '<span style="display:inline-flex;gap:2px;align-items:center"><select class="bjc-move" style="width:104px;padding:2px;font-size:11px"><option value="">이동할 업체…</option>'+
+  return '<span style="display:inline-flex;gap:2px;align-items:center"><select class="bjc-move" style="width:84px;font-size:11px"><option value="">이동할 업체…</option>'+
     others.map(function(o){return '<option value="'+o.i+'">'+esc(o.c.업체명||'(업체명 미입력)')+'</option>';}).join('')+
     '</select><button type="button" class="bjc-movebtn" title="선택한 자사 업체로 이 인원을 이동(즉시 저장)" style="padding:1px 6px;font-size:11px;border:1px solid #7dd3fc;background:#fff;border-radius:3px;cursor:pointer">이동</button></span>';
 }
@@ -4803,11 +4827,11 @@ function bjcRowHTML(r){
   var st='padding:3px 4px;border-bottom:1px solid #e0f2fe;text-align:center';
   return '<tr data-bjc-row="1">'+
     '<td style="'+st+'">'+bjcMoveCellHTML()+'</td>'+
-    '<td style="'+st+'"><input class="bjc-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:80px"></td>'+
-    '<td style="'+st+'"><input class="bjc-생년" value="'+esc(r.생년||'')+'" placeholder="YYYY" style="width:64px" title="출생연도(YYYY)"></td>'+
-    '<td style="'+st+'"><input class="bjc-취득일" value="'+esc(r.취득일||'')+'" placeholder="YYMMDD" style="width:108px"></td>'+
-    '<td style="'+st+'"><input class="bjc-만료일" value="'+esc(r.만료일||'')+'" placeholder="YYMMDD" style="width:108px" title="자격증의 만료일을 입력 — 만료 30일 전부터 만료임박(알람) 확인에 표시"></td>'+
-    '<td style="'+st+'"><input class="bjc-참고" value="'+esc(r.참고||'')+'" placeholder="참고" style="width:100%;min-width:120px"></td>'+
+    '<td style="'+st+'"><input class="bjc-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:62px"></td>'+
+    '<td style="'+st+'"><input class="bjc-생년" value="'+esc(r.생년||'')+'" placeholder="YYYY" style="width:46px" title="출생연도(YYYY)"></td>'+
+    '<td style="'+st+'"><input class="bjc-취득일" value="'+esc(r.취득일||'')+'" placeholder="YYMMDD" style="width:84px"></td>'+
+    '<td style="'+st+'"><input class="bjc-만료일" value="'+esc(r.만료일||'')+'" placeholder="YYMMDD" style="width:84px" title="자격증의 만료일을 입력 — 만료 30일 전부터 만료임박(알람) 확인에 표시"></td>'+
+    '<td style="'+st+';width:100%"><textarea class="bjc-참고" rows="1" placeholder="참고" style="width:100%;min-width:110px">'+esc(r.참고||'')+'</textarea></td>'+
     '<td style="'+st+';width:30px"><button type="button" class="bjc-del" title="이 인원 삭제" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px">×</button></td>'+
   '</tr>';
 }
@@ -4816,16 +4840,17 @@ function bjcPanelHTML(list,memo){
   if(_fromMemo.length)list=_fromMemo;
   var th='padding:3px 4px;border-bottom:1px solid #7dd3fc;font-size:11px;color:#0369a1;text-align:center;font-weight:700';
   var rows=(Array.isArray(list)&&list.length?list:[{}]).map(bjcRowHTML).join('');
-  return '<div style="border:1px solid #bae6fd;background:#f0f9ff;border-radius:6px;padding:8px;margin-top:8px">'+
-    '<div style="font-size:12px;color:#0369a1;font-weight:700;margin-bottom:6px">🔌 변전 케이블접속(36kV GIS 삽입형 접속재)'+(_fromMemo.length?' <span style="color:#b45309;font-weight:600;font-size:11px">— 메모의 "접속케이블 인증만료" 문구를 옮겨 왔습니다. 만료일 확인 후 저장하세요</span>':'')+'</div>'+
+  var _hint='만료일은 자격증 기재일 직접 입력 · 만료 3개월 전부터 알람 · 자사 간 소속이동 가능 · 한전 전력케이블(Plug-in) 공고는 유효 자격자가 있어야 단독 통과';
+  return '<div style="border:1px solid #bae6fd;background:#f0f9ff;border-radius:5px;padding:4px 5px;margin-top:4px">'+
+    '<div class="bjp-hd">'+
+      '<span style="font-size:12px;color:#0369a1;font-weight:700" title="'+esc(_hint)+'">🔌 변전 케이블접속(36kV GIS 삽입형 접속재) <span style="color:#9ca3af;font-weight:400;cursor:help">ⓘ</span></span>'+
+      '<button type="button" id="m-bjc-add" class="btn btn-sm bjp-add" style="background:#0284c7">+ 인원</button>'+
+      (_fromMemo.length?'<span style="color:#b45309;font-weight:600;font-size:11px">메모의 "접속케이블 인증만료"를 옮겨 왔습니다 — 만료일 확인 후 저장</span>':'')+
+    '</div>'+
     '<table style="border-collapse:collapse;width:100%;background:#fff">'+
       '<thead><tr><th style="'+th+'">소속이동</th><th style="'+th+'">이름</th><th style="'+th+'">생년</th><th style="'+th+'">취득일</th><th style="'+th+'">만료일</th><th style="'+th+'">참고</th><th style="'+th+'"></th></tr></thead>'+
       '<tbody id="m-bjc-body">'+rows+'</tbody>'+
     '</table>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'+
-      '<button type="button" id="m-bjc-add" class="btn btn-sm" style="background:#0284c7;white-space:nowrap;flex-shrink:0">+ 인원 추가</button>'+
-      '<span style="font-size:10px;color:#6b7280">만료일은 자격증 기재일 직접 입력 · 만료 3개월 전부터 알람 · 자사 간 소속이동 가능 · 한전 \'전력케이블(Plug-in)\' 공고는 유효 자격자가 있어야 단독 통과</span>'+
-    '</div>'+
   '</div>';
 }
 function readBjcPanel(){
@@ -7475,8 +7500,8 @@ function openCompanyModal(idx){
           '<input type="checkbox" id="m-is자사" '+(c.is자사?'checked':'')+'>'+
           '<span class="badge type-자사">자사</span></label>'+
       '</div>'+
-      '<label id="m-bjw-label" style="color:#6d28d9;font-weight:700;align-self:start;padding-top:8px'+(c.is자사?'':';display:none')+'">변전전기원</label>'+
-      '<div id="m-bjw-panel"'+(c.is자사?'':' style="display:none"')+'>'+bjwPanelHTML(c.변전전기원,idx)+bjcPanelHTML(c.변전케이블접속,c.참고)+'</div>'+
+      '<label id="m-bjw-label" style="color:#6d28d9;font-weight:700;align-self:start;padding-top:8px'+(c.is자사?'':';display:none')+'">한전(변전)</label>'+
+      '<div id="m-bjw-panel"'+(c.is자사?'':' style="display:none"')+'>'+bjsHTML(c.변전전문자격)+bjwPanelHTML(c.변전전기원,idx)+bjcPanelHTML(c.변전케이블접속,c.참고)+'</div>'+
       '<label style="color:#0369a1;font-weight:700">그룹</label>'+
       '<div id="m-group-area" style="padding:4px 0;position:relative">'+
         renderGroupPickerHTML('m',c.groups)
@@ -7610,6 +7635,7 @@ function openCompanyModal(idx){
     if($('#m-is임시'))$('#m-is임시').checked=!!c.is임시;
     bjwFillPanel(c.변전전기원);
     bjcFillPanel(c.변전케이블접속);
+    fillBjs(c.변전전문자격);
     var ja=Number(c.일자리가점||0);
     if($('#m-일자리A'))$('#m-일자리A').checked=ja>=2.5;
     if($('#m-일자리B'))$('#m-일자리B').checked=(ja===0.5||ja===3.0);
@@ -7719,7 +7745,7 @@ function openCompanyModal(idx){
     // 1회성(임시): 새로 체크된 시점을 임시지정일로 기록(조합 이력이 없을 때 90일 기준일). 해제하면 지정일 삭제.
     if(obj.is임시){if(!(_oldC&&_oldC.is임시))obj.임시지정일=_ymdLocal(new Date());}else{obj.임시지정일='';}
     // 2026-11-20 변전전기원: 자사일 때만 패널 값을 저장. 자사 해제 시 기존 등록값은 그대로 두되 알람·점수에서는 제외(is자사 조건).
-    if(obj.is자사){var _bjwV=readBjwPanel();if(_bjwV)obj.변전전기원=_bjwV;var _bjcV=readBjcPanel();if(_bjcV)obj.변전케이블접속=_bjcV;}
+    if(obj.is자사){var _bjwV=readBjwPanel();if(_bjwV)obj.변전전기원=_bjwV;var _bjcV=readBjcPanel();if(_bjcV)obj.변전케이블접속=_bjcV;var _bjsV=readBjs();if(_bjsV)obj.변전전문자격=_bjsV;}
     if(!obj.업체명){toast('업체명을 입력하세요','bad');return;}
     if(isNew)state.db.push(stampNewCompanyDefaults(obj));
     else state.db[idx]=Object.assign({},state.db[idx],obj);

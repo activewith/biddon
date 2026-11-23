@@ -267,3 +267,23 @@ test('한전 변전기자재 양식(3억~50억): 시공경험 18 = 실적 14.5 +
   assert.deepStrictEqual([r3.isGJ, r3.시공, r3.경영], [false, 15, 15]);
   assert.strictEqual(plain(w.extractBidFields('한국전력공사 공사 적격심사 추정가격 8천만원 미만 변전기자재 설치공사')).한전기자재, '해당');
 });
+
+test('업체등록 한전(변전): 변전 전문 자격(변압기·개폐기 0~2급) 저장, 참고는 줄바꿈 가능', () => {
+  const d = w.document;
+  w.eval('canManageCompanyDB=function(){return true;};');
+  w.eval("state.db.push({업체명:'전문자격테스트',is자사:true});");
+  const idx = w.eval('state.db.length-1');
+  w.openCompanyModal(idx);
+  assert.strictEqual(d.getElementById('m-bjw-label').textContent, '한전(변전)');
+  const sels = d.querySelectorAll('#m-bjs [data-bjs]');
+  assert.strictEqual(sels.length, 2);
+  assert.deepStrictEqual([...sels[0].options].map((o) => o.value), ['0', '1', '2']);
+  d.querySelector('#m-bjs [data-bjs="변압기"]').value = '1';
+  const memo = d.querySelector('#m-bjc-body .bjc-참고');
+  assert.strictEqual(memo.tagName, 'TEXTAREA');
+  memo.value = '1줄\n2줄';
+  d.querySelector('#m-bjc-body .bjc-이름').value = '갑';
+  d.getElementById('m-save').click();
+  assert.deepStrictEqual(plain(w.eval('state.db[' + idx + '].변전전문자격')), { 변압기: 1, 개폐기: 0 });
+  assert.strictEqual(w.eval('state.db[' + idx + '].변전케이블접속[0].참고'), '1줄\n2줄');
+});
