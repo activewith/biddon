@@ -8,7 +8,7 @@ const at = new w.Date(2026, 10, 20);
 test('평점 → 배점 구간 (5↑3.5 / 3↑2.4 / 2↑1.2 / 미만 0)', () => {
   const S = (d) => plain(w.calcBjwScore(d, at));
   assert.strictEqual(S({}).score, 0);
-  assert.strictEqual(S({ 보유: [{ 급: '2', 취득일: '2020-01-01' }] }).score, 1.2);   // 2.5
+  assert.strictEqual(S({ 보유: [{ 급: '2', 취득일: '2022-01-01' }] }).score, 1.2);   // 2.5
   assert.strictEqual(S({ 보유: [{ 급: '1' }] }).score, 2.4);                          // 3.0
   assert.strictEqual(S({ 보유: [{ 급: '2' }, { 급: '2' }] }).score, 3.5);              // 5.0
   const r = S({ 양성: { 급: '2', 취득일: '250125' }, 보유: [{ 급: '2' }] });           // 2.5+2.5
@@ -41,8 +41,8 @@ test('만료 알람: 자사만, 30일 이내·만료됨 표시', () => {
   ] } };
   const a = plain(w.getExpiryAlerts(c)).filter((x) => x.kind === '변전전기원');
   assert.strictEqual(a.length, 2);
-  assert.match(a[0].custom, /^갑 D-10/);
-  assert.match(a[1].custom, /^병 만료됨/);
+  assert.match(a[0].custom, /^갑 갱신 D-10/);
+  assert.match(a[1].custom, /^병 갱신 만료됨/);
   c.is자사 = false;
   assert.strictEqual(plain(w.getExpiryAlerts(c)).filter((x) => x.kind === '변전전기원').length, 0);
 });
@@ -98,4 +98,32 @@ test('한전 단독판정: [변전전기원 3.5] 체크 시 시공경험 = 실�
 test('공고문분석: 변전전기원 문구 감지', () => {
   assert.strictEqual(plain(w.extractBidFields('한국전력공사 공사 적격심사 시공경험 ○ 변전전기원 양성 또는 보유실적 3.5')).한전변전, '해당');
   assert.strictEqual(plain(w.extractBidFields('일반 전기공사 적격심사')).한전변전, undefined);
+});
+
+test('보유도 5년 갱신: 만료일 비우면 취득일+5년(점수·알람)', () => {
+  assert.strictEqual(plain(w.calcBjwScore({ 보유: [{ 급: '1', 취득일: '2021-11-19' }] }, at)).보유, 0);
+  assert.strictEqual(plain(w.calcBjwScore({ 보유: [{ 급: '1', 취득일: '2021-11-20' }] }, at)).보유, 3);
+  const today = new w.Date(); today.setHours(0, 0, 0, 0);
+  const acq = new w.Date(today.getFullYear() - 5, today.getMonth(), today.getDate() + 10);
+  const a = plain(w.getExpiryAlerts({ is자사: true, 변전전기원: { 양성: { 이름: '양', 급: '2', 취득일: w._ymdLocal(acq) }, 보유: [] } }))
+    .filter((x) => x.kind === '변전전기원');
+  assert.strictEqual(a.length, 1);
+  assert.match(a[0].custom, /^양성 양 갱신 D-10/);
+});
+
+test('소속이동: 보유 인원만 다른 자사로 이동, 즉시 저장', () => {
+  const d = w.document;
+  w.eval('canManageCompanyDB=function(){return true;};confirm=function(){return true;};');
+  w.eval("state.db=state.db.filter(c=>!c.is자사);state.db.push({업체명:'자사가',is자사:true,변전전기원:{양성:{이름:'양',급:'1',취득일:'2025-01-01'},보유:[{이름:'갑',급:'2'},{이름:'을',급:'1'}]}});state.db.push({업체명:'자사나',is자사:true});");
+  const src = w.eval("state.db.findIndex(c=>c.업체명==='자사가')"), dst = w.eval("state.db.findIndex(c=>c.업체명==='자사나')");
+  w.openCompanyModal(src);
+  const rows = () => [...d.querySelectorAll('#m-bjw-body tr')];
+  assert.strictEqual(rows()[0].querySelector('.bjw-move'), null);           // 양성은 고정
+  const tr = rows()[1];
+  tr.querySelector('.bjw-move').value = String(dst);
+  tr.querySelector('.bjw-movebtn').click();
+  assert.strictEqual(rows().length, 2);
+  assert.deepStrictEqual(plain(w.eval('state.db[' + dst + '].변전전기원.보유')).map((r) => r.이름), ['갑']);
+  assert.deepStrictEqual(plain(w.eval('state.db[' + src + '].변전전기원.보유')).map((r) => r.이름), ['을']);
+  assert.strictEqual(w.eval('state.db[' + src + '].변전전기원.양성.이름'), '양');
 });
