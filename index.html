@@ -3539,6 +3539,11 @@ var KEPCO_ECON_B={부채:[{t:100,g:'A',s:7.0},{t:130,g:'B',s:6.2},{t:160,g:'C',s
                   유동:[{t:100,g:'A',s:7.0},{t:90,g:'B',s:6.2},{t:80,g:'C',s:5.4},{t:70,g:'D',s:4.6},{g:'E',s:3.8}]};
 var KEPCO_ECON_U3={부채:[{t:100,g:'A',s:3.0},{t:130,g:'B',s:2.7},{t:160,g:'C',s:2.4},{t:190,g:'D',s:2.1},{g:'E',s:1.8}],
                    유동:[{t:100,g:'A',s:2.0},{t:90,g:'B',s:1.8},{t:80,g:'C',s:1.6},{t:70,g:'D',s:1.4},{g:'E',s:1.2}]};
+// 2026-11-23: 3억~50억 변전기자재 설치공사 양식(기준서 Ⅰ) — 시공경험 18 = 실적 14.5 + 동종공사 실적 3.5, 경영상태 12(부채5.5+유동5.5+영업1 / 신용 12)
+var KEPCO_ECON_GA={부채:[{t:50,g:'A',s:5.5},{t:75,g:'B',s:4.9},{t:100,g:'C',s:4.2},{t:125,g:'D',s:3.6},{g:'E',s:3.0}],
+                   유동:[{t:150,g:'A',s:5.5},{t:120,g:'B',s:4.9},{t:100,g:'C',s:4.2},{t:70,g:'D',s:3.6},{g:'E',s:3.0}]};
+var KEPCO_ECON_GB={부채:[{t:100,g:'A',s:5.5},{t:130,g:'B',s:4.9},{t:160,g:'C',s:4.2},{t:190,g:'D',s:3.6},{g:'E',s:3.0}],
+                   유동:[{t:100,g:'A',s:5.5},{t:90,g:'B',s:4.9},{t:80,g:'C',s:4.2},{t:70,g:'D',s:3.6},{g:'E',s:3.0}]};
 // 2026-11-23: 8천만 미만(한전 변전기자재 설치공사 기준서 Ⅲ, 2026.7 개정) — 경영상태 10점(부채5+유동5 / 신용 10), 시공경험 평가 없음
 var KEPCO_ECON_U08={부채:[{t:100,g:'A',s:5.0},{t:130,g:'B',s:4.5},{t:160,g:'C',s:4.0},{t:190,g:'D',s:3.5},{g:'E',s:3.0}],
                     유동:[{t:100,g:'A',s:5.0},{t:90,g:'B',s:4.5},{t:80,g:'C',s:4.0},{t:70,g:'D',s:3.5},{g:'E',s:3.0}]};
@@ -3573,6 +3578,10 @@ function kepcoCreditScore(c,tier){
   var g=cr.grade,top=creditGradeScore(g)>=35;
   var isU3=tier.key==='U3',isU08=tier.key==='U08';
   var s;
+  if(tier.credit12){ // 변전기자재 Ⅰ 신용평가 12점표: BB0 이상 12 / BB- 11.8 / B+~B- 11.7 / CCC+ 이하 10.3
+    if(top)s=12;else if(g==='BB-')s=11.8;else if(['B+','B','B0','B-'].indexOf(g)>=0)s=11.7;else s=10.3;
+    return{score:s,grade:g};
+  }
   if(isU08){ // 기준서 Ⅲ 신용평가 10점표: BB0 이상 10 / BB- 9.9 / B+~B- 9.7 / CCC+ 이하 8.6
     if(top)s=10;else if(g==='BB-')s=9.9;else if(['B+','B','B0','B-'].indexOf(g)>=0)s=9.7;else s=8.6;
     return{score:s,grade:g};
@@ -3605,8 +3614,18 @@ function kepcoGongjongOK(c,gj){
   if(!jt)return true; // 참여종목 미입력 업체는 판정에서 막지 않음
   return jt.indexOf(gj)>=0;
 }
+function kepcoApplyForm(tier){
+  // 3억~50억 + 변전기자재 양식 체크 시 배점표 교체
+  if(tier&&tier.supported&&state.bid.한전기자재&&(tier.key==='A'||tier.key==='B'))
+    return Object.assign({},tier,{form:'기자재',perfMax:18,perfReal:14.5,econ:tier.key==='A'?KEPCO_ECON_GA:KEPCO_ECON_GB,credit12:true,label:tier.label+' · 변전기자재 양식'});
+  return tier;
+}
+function kepcoDongjongScore(c){
+  var m=state.bid.한전동종점수||{};var v=Number(m[c.업체명]);
+  return isFinite(v)?Math.max(0,Math.min(3.5,v)):0;
+}
 function kepcoSoloScore(c,calc){
-  var tier=kepcoSoloTier(calc.E5);
+  var tier=kepcoApplyForm(kepcoSoloTier(calc.E5));
   if(!tier||!tier.supported)return{supported:false,tier:tier};
   var gj=isComplexGongjong(calc.공종)?'전기':(calc.공종||'전기');
   var S=kepcoSajeong(calc).amt;
@@ -3614,11 +3633,13 @@ function kepcoSoloScore(c,calc){
   var 배수=S>0?실적/S:0;
   // 2026-11-20: 변전공사 양식(3억~50억) — 시공경험 15 = 실적비율 11.5 + 변전전기원 양성·보유실적 3.5.
   // 공고 옵션을 켜면 실적 몫을 11.5로 줄이고, 업체등록(자사)의 변전전기원 등록값으로 오늘 기준 점수를 더한다(미등록이면 0).
-  var 변전=0,bjw=null,useBjw=!!state.bid.한전변전가점&&tier.key!=='U3'&&!tier.noPerf;
-  var perfMax=useBjw?Math.round((tier.perfMax-3.5)*100)/100:tier.perfMax;
+  var isGJ=tier.form==='기자재';
+  var 변전=0,bjw=null,useBjw=!isGJ&&!!state.bid.한전변전가점&&tier.key!=='U3'&&!tier.noPerf;
+  var perfMax=isGJ?tier.perfReal:(useBjw?Math.round((tier.perfMax-3.5)*100)/100:tier.perfMax);
+  var 동종=isGJ?kepcoDongjongScore(c):0;
   if(useBjw){bjw=calcBjwScore(c.is자사?c.변전전기원:null,new Date());변전=bjw.score;}
   var 실적점=(S>0&&perfMax>0)?Math.min(Math.round(배수/tier.perfFull*perfMax*100)/100,perfMax):0;
-  var 시공=Math.round((실적점+변전)*100)/100;
+  var 시공=Math.round((실적점+변전+동종)*100)/100;
   var fin=kepcoFinScore(c,tier,gj),cr=kepcoCreditScore(c,tier);
   var 경영=0,경영방식='없음';
   if(fin&&(!cr||fin.score>=cr.score)){경영=fin.score;경영방식='재무';}
@@ -3637,7 +3658,7 @@ function kepcoSoloScore(c,calc){
   var scoreOK=합>=tier.cap-1e-9;
   // 2026-11-23: 전력케이블(Plug-in) 공고 — 업체등록(자사)의 변전 케이블접속 자격이 오늘 기준 유효한 인원이 1명 이상 있어야 통과
   var cableReq=!!state.bid.한전케이블,cableOK=!cableReq||hasValidCableQual(c,new Date());
-  var need실적점=Math.max(0,Math.round((tier.cap-경영-신인도-변전)*100)/100);
+  var need실적점=Math.max(0,Math.round((tier.cap-경영-신인도-변전-동종)*100)/100);
   var need시공=need실적점;
   var needPerf=null,perfImpossible=false;
   if(!scoreOK){
@@ -3648,7 +3669,7 @@ function kepcoSoloScore(c,calc){
     else needPerf=Math.ceil(need실적점/perfMax*tier.perfFull*S);
   }
   return{supported:true,tier:tier,S:S,실적:실적,배수:배수,시공:시공,실적점:실적점,perfMax:perfMax,useBjw:useBjw,경영:경영,경영방식:경영방식,fin:fin,credit:cr,
-         일자리:일자리,안전:안전,특별:특별,변전:변전,bjw:bjw,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
+         일자리:일자리,안전:안전,특별:특별,변전:변전,동종:동종,isGJ:isGJ,bjw:bjw,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
          cableReq:cableReq,cableOK:cableOK,
          ok:scoreOK&&regionOK&&gjOK&&cableOK,need시공:need시공,needPerf:needPerf,perfImpossible:perfImpossible,gj:gj};
 }
@@ -3658,7 +3679,7 @@ function renderKepcoSolo(calc){
   root.style.display='';
   var b=state.bid;
   var isPerf=!!b.한전실적공고;
-  var tier=kepcoSoloTier(calc.E5);
+  var tier=kepcoApplyForm(kepcoSoloTier(calc.E5));
   var sj=kepcoSajeong(calc);
   var head='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px">'+
     '<b style="color:#3730a3">⚡ 한전 자사 단독 판정</b>'+
@@ -3670,7 +3691,9 @@ function renderKepcoSolo(calc){
       '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="변전소 토건공사 양식 기준서에만 있는 안전보건경영시스템(ISO45001/KOSHA-MS) +0.1 가점. 전기공사 양식에는 이 항목이 없습니다">'+
       '<input type="checkbox" data-kepco-solo="안전가점"'+(b.한전안전가점?' checked':'')+'>안전보건 +0.1(변전 양식)</label>'+
       '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="기준서 시공경험(15)에 \'변전전기원 양성 또는 보유실적(3.5점)\' 항목이 있는 변전공사(3억~50억) 공고만 체크. 시공경험이 실적 11.5 + 변전전기원 3.5로 바뀌고, 업체등록 화면(자사)의 변전전기원 등록값으로 오늘 기준 점수를 계산합니다(미등록 0점). 공고문분석에서 자동 체크됩니다">'+
-      '<input type="checkbox" data-kepco-solo="변전가점"'+(b.한전변전가점?' checked':'')+'>변전전기원 3.5(시공경험)</label>'+
+      '<input type="checkbox" data-kepco-solo="변전가점"'+(b.한전변전가점?' checked':'')+'>변전공사 양식(실적11.5+변전전기원3.5·경영15)</label>'+
+      '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="변전기자재(M.TR·Sh.R·GIS) 설치공사 기준서 — 3억~50억: 시공경험 18 = 실적 14.5 + 동종공사 실적 3.5(업체별 입력), 경영상태 12(부채5.5+유동5.5+영업1 / 신용 12). 공고문분석에서 \'변전기자재\' 문구가 있으면 자동 체크">'+
+      '<input type="checkbox" data-kepco-solo="기자재"'+(b.한전기자재?' checked':'')+'>변전기자재 양식(실적14.5+동종3.5·경영12)</label>'+
       '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="전력케이블(Plug-in) 공고 — 업체등록(자사)의 변전 케이블접속 자격이 유효한 인원이 있어야 통과. 공고문분석에서 전력케이블·JIG·Plug-In 문구가 있으면 자동 체크">'+
       '<input type="checkbox" data-kepco-solo="케이블"'+(b.한전케이블?' checked':'')+'>전력케이블(Plug-in)</label>';
   }
@@ -3684,7 +3707,7 @@ function renderKepcoSolo(calc){
     root.innerHTML=head+'<div class="small" style="color:#b45309">추정가격 '+tier.label+' 구간은 기준서 표본이 없어 판정하지 않습니다'+(tier.key==='50+'?' (가격 45점 고정 예정)':'')+'.</div>';
     _bindKepcoSolo(root);return;
   }
-  var info='<div class="small" style="color:#4b5563;margin-bottom:6px">구간 '+tier.label+' · 사정액 '+FMT_NUM(sj.amt)+'원('+sj.src+') · 가격 '+tier.price+'점 고정 · 수행능력 만점 '+tier.cap+'점 필요('+(tier.noPerf?'시공경험 평가 없음 · 경영상태 10점 + 신인도(실적 1배 이상 특별 +1)':'시공경험 '+tier.perfMax+'점'+(b.한전변전가점&&tier.key!=='U3'?' = 실적 '+TRIMDEC(tier.perfMax-3.5)+'점('+tier.perfFull+'배 만점) + 변전전기원 3.5점':'은 실적 '+tier.perfFull+'배 만점'))+') · 평균부채/유동 '+(state.bid.업계평균부채비율||'-')+'%/'+(state.bid.업계평균유동비율||'-')+'%</div>';
+  var info='<div class="small" style="color:#4b5563;margin-bottom:6px">구간 '+tier.label+' · 사정액 '+FMT_NUM(sj.amt)+'원('+sj.src+') · 가격 '+tier.price+'점 고정 · 수행능력 만점 '+tier.cap+'점 필요('+(tier.form==='기자재'?'시공경험 18점 = 실적 14.5점(1배 만점) + 동종공사 실적 3.5점(업체별 입력) · 경영상태 12점':tier.noPerf?'시공경험 평가 없음 · 경영상태 10점 + 신인도(실적 1배 이상 특별 +1)':'시공경험 '+tier.perfMax+'점'+(b.한전변전가점&&tier.key!=='U3'?' = 실적 '+TRIMDEC(tier.perfMax-3.5)+'점('+tier.perfFull+'배 만점) + 변전전기원 3.5점':'은 실적 '+tier.perfFull+'배 만점'))+') · 평균부채/유동 '+(state.bid.업계평균부채비율||'-')+'%/'+(state.bid.업계평균유동비율||'-')+'%</div>';
   var list=state.db.filter(function(c){return c.is자사;});
   if(!list.length){root.innerHTML=head+info+'<div class="small" style="color:#6b7280">업체DB에 자사로 지정된 업체가 없습니다.</div>';_bindKepcoSolo(root);return;}
   var th='padding:4px 6px;border-bottom:1px solid #c7d2fe;font-size:11px;color:#3730a3;text-align:right;white-space:nowrap';
@@ -3695,10 +3718,11 @@ function renderKepcoSolo(calc){
     if(!r.regionOK)reasons.push('지역 불일치');
     if(!r.gjOK)reasons.push(r.gj+' 미참여');
     if(r.cableReq&&!r.cableOK)reasons.push('케이블접속 자격 없음');
+    if(r.isGJ&&r.동종<3.5)reasons.push('동종실적 '+TRIMDEC(r.동종)+'/3.5');
     if(r.useBjw&&r.변전<3.5)reasons.push('변전전기원 '+TRIMDEC(r.변전)+'/3.5'+(r.bjw&&r.bjw.평점===0?'(미등록)':''));
     if(!r.scoreOK){
       reasons.push(TRIMDEC(Math.round((r.tier.cap-r.합)*100)/100)+'점 부족');
-      if(r.perfImpossible)reasons.push(r.tier.noPerf?'경영상태·신인도 부족':'실적만으로 불가');
+      if(r.perfImpossible)reasons.push(r.tier.noPerf?'경영상태·신인도 부족':(r.isGJ?'실적 만점으로도 부족 — 동종실적·신인도로 보완':'실적만으로 불가'));
       else if(r.needPerf!=null)reasons.push('필요실적 '+FMT_NUM(r.needPerf)+'(부족 '+FMT_NUM(Math.max(0,r.needPerf-r.실적))+')');
     }
     var 경영t=r.경영방식==='재무'&&r.fin?('부채'+r.fin.부채.g+' 유동'+r.fin.유동.g+(r.fin.영업?' '+r.fin.영업.g:'')):r.경영방식;
@@ -3708,7 +3732,7 @@ function renderKepcoSolo(calc){
       '<td style="'+td+';text-align:left;font-weight:700">'+esc(c.업체명)+'</td>'+
       '<td style="'+td+'">'+FMT_NUM(r.실적)+'</td>'+
       '<td style="'+td+';color:'+perfColor+';font-weight:700">'+(Math.floor(r.배수*1000)/1000).toFixed(3)+'배</td>'+
-      '<td style="'+td+'">'+(r.tier.noPerf?'<span style="color:#6b7280">평가없음</span>':TRIMDEC(r.시공))+(r.useBjw?' <span style="font-size:10px;color:#6b7280">(실적 '+TRIMDEC(r.실적점)+' + </span><span style="font-size:10px;font-weight:700;color:'+(r.변전>=3.5?'#047857':'#dc2626')+'" title="변전전기원 평점 '+TRIMDEC(r.bjw.평점)+' (양성 '+TRIMDEC(r.bjw.양성)+' + 보유 '+TRIMDEC(r.bjw.보유)+') — 업체등록 화면 자사 변전전기원 등록값 기준">변전 '+TRIMDEC(r.변전)+'</span><span style="font-size:10px;color:#6b7280">)</span>':'')+'</td>'+
+      '<td style="'+td+'">'+(r.tier.noPerf?'<span style="color:#6b7280">평가없음</span>':TRIMDEC(r.시공))+(r.isGJ?' <span style="font-size:10px;color:#6b7280">(실적 '+TRIMDEC(r.실적점)+' + 동종 </span><input type="number" step="0.1" min="0" max="3.5" data-kepco-dongjong="'+esc(c.업체명)+'" value="'+(r.동종||0)+'" title="최근 5년간 동종공사(변압기류·GIS류 설치) 실적누계점수 ÷ 기준점수 × 3.5 — 업체별로 직접 입력(최대 3.5)" style="width:48px;padding:1px 2px;font-size:11px;text-align:right"><span style="font-size:10px;color:#6b7280">)</span>':'')+(r.useBjw?' <span style="font-size:10px;color:#6b7280">(실적 '+TRIMDEC(r.실적점)+' + </span><span style="font-size:10px;font-weight:700;color:'+(r.변전>=3.5?'#047857':'#dc2626')+'" title="변전전기원 평점 '+TRIMDEC(r.bjw.평점)+' (양성 '+TRIMDEC(r.bjw.양성)+' + 보유 '+TRIMDEC(r.bjw.보유)+') — 업체등록 화면 자사 변전전기원 등록값 기준">변전 '+TRIMDEC(r.변전)+'</span><span style="font-size:10px;color:#6b7280">)</span>':'')+'</td>'+
       '<td style="'+td+'" title="'+esc(경영t)+'">'+TRIMDEC(r.경영)+' <span style="color:#6b7280;font-size:10px">('+esc(경영t)+')</span></td>'+
       '<td style="'+td+'">'+TRIMDEC(r.신인도)+(r.안전?' <span style="color:#6b7280;font-size:10px">(안전+0.1)</span>':'')+(r.특별?' <span style="color:#6b7280;font-size:10px">(실적1배+1)</span>':'')+'</td>'+
       '<td style="'+td+';font-weight:700;color:'+(r.scoreOK?'#047857':'#dc2626')+'">'+TRIMDEC(r.합)+' / '+r.tier.cap+'</td>'+
@@ -3729,9 +3753,18 @@ function _bindKepcoSolo(root){
     el.addEventListener('change',function(){
       if(k==='실적공고')state.bid.한전실적공고=!!el.checked;
       else if(k==='안전가점')state.bid.한전안전가점=!!el.checked;
-      else if(k==='변전가점')state.bid.한전변전가점=!!el.checked;
+      else if(k==='변전가점'){state.bid.한전변전가점=!!el.checked;if(el.checked)state.bid.한전기자재=false;}
+      else if(k==='기자재'){state.bid.한전기자재=!!el.checked;if(el.checked)state.bid.한전변전가점=false;}
       else if(k==='케이블')state.bid.한전케이블=!!el.checked;
       else if(k==='사정가격'){var v=parseMoney(el.value);state.bid.한전사정가격=(v!=null&&v>0)?v:null;}
+      save();refreshCombos();
+    });
+  });
+  root.querySelectorAll('[data-kepco-dongjong]').forEach(function(el){
+    el.addEventListener('change',function(){
+      var nm=el.getAttribute('data-kepco-dongjong'),v=parseFloat(el.value);
+      if(!state.bid.한전동종점수||typeof state.bid.한전동종점수!=='object')state.bid.한전동종점수={};
+      state.bid.한전동종점수[nm]=isFinite(v)?Math.max(0,Math.min(3.5,v)):0;
       save();refreshCombos();
     });
   });
@@ -8448,6 +8481,8 @@ function extractBidFields(t){
     if(/변\s*전\s*전\s*기\s*원/.test(t))r.한전변전='해당';
     // 2026-11-23: 전력케이블(Plug-in) — 공고문에 "전력케이블", "JIG", "Plug-In"이 있으면 해당
     if(/전\s*력\s*케\s*이\s*블|\bJIG\b|plug\s*-?\s*in/i.test(t))r.한전케이블='해당';
+    // 2026-11-23: 변전기자재 설치공사 기준서(시공경험 18·경영 12) 감지
+    if(/변\s*전\s*기\s*자\s*재/.test(t)){r.한전기자재='해당';delete r.한전변전;}
     // 2026-10-27: 사정가격(VAT포함) 추출 — 일반공고 단독 판정의 시공경험 분모. 공고문 "사정가격 : 3,162,335,000원",
     // "사정금액 : ￦ 249,755,000-", 적격심사기준서 "…산출기초조서상의 사정액 (VAT포함) : ￦ 2,452,022,100원" 형식.
     (function(){
@@ -8748,7 +8783,7 @@ function _pdfPlaceholder(k,found){
 }
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
-  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',한전변전:'변전전기원 점수(시공경험 3.5)',한전케이블:'전력케이블(Plug-in)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)',한전사정가격:'사정가격(한전·VAT포함)'};
+  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',한전변전:'변전전기원 점수(시공경험 3.5)',한전케이블:'전력케이블(Plug-in)',한전기자재:'변전기자재 양식(시공경험 18·경영 12)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)',한전사정가격:'사정가격(한전·VAT포함)'};
   var root=MODAL_ROOT;
   if(keys.length===0){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:400px">'+
@@ -8805,7 +8840,7 @@ function showPdfResultModal(found,preview){
         '<button type="button" data-pdf-region-add style="font-size:11px;padding:2px 6px;line-height:1;border:1px solid #f59e0b;border-radius:3px;background:#fffbeb;color:#b45309;cursor:pointer">＋</button>'+
       '</div>';
     }
-    if(k==='한전변전'||k==='한전케이블'){
+    if(k==='한전변전'||k==='한전케이블'||k==='한전기자재'){
       return '<select data-pdf-manual="'+k+'" style="'+st+'"><option value="">직접선택</option><option value="해당">해당</option><option value="미해당">미해당</option></select>';
     }
     if(k==='주공정예정기간'){
@@ -8825,7 +8860,7 @@ function showPdfResultModal(found,preview){
       var k=el.dataset.pdfManual;
       var raw=(el.value||'').trim();
       if(!raw)return;
-      if(k==='공종'||k==='적격기준'||k==='주공정예정기간'||k==='한전변전'||k==='한전케이블'){found[k]=raw;}
+      if(k==='공종'||k==='적격기준'||k==='주공정예정기간'||k==='한전변전'||k==='한전케이블'||k==='한전기자재'){found[k]=raw;}
       else{var num=Number(raw.replace(/,/g,''));if(!isNaN(num))found[k]=num;}
     });
     var _regSel=Array.prototype.map.call(document.querySelectorAll('[data-pdf-region-idx]'),function(e){return e.value.trim();}).filter(Boolean);
@@ -8860,7 +8895,7 @@ function showPdfResultModal(found,preview){
         '<button type="button" data-pdf-region-add style="font-size:11px;padding:2px 6px;line-height:1;border:1px solid #93c5fd;border-radius:3px;background:#eff6ff;color:#1d4ed8;cursor:pointer">＋</button>'+
       '</div>';
     }
-    if(k==='한전변전'||k==='한전케이블'){
+    if(k==='한전변전'||k==='한전케이블'||k==='한전기자재'){
       var _cb=found[k]||'';
       return '<select data-pdf-manual="'+k+'" style="'+st+'"><option value=""'+(_cb?'':' selected')+'>직접선택</option><option value="해당"'+(_cb==='해당'?' selected':'')+'>해당</option><option value="미해당"'+(_cb==='미해당'?' selected':'')+'>미해당</option></select>';
     }
@@ -8901,7 +8936,8 @@ function showPdfResultModal(found,preview){
   // 2026-11-20: 한전은 변전전기원 점수 행도 항상 표시(미검출이면 해당/미해당 직접선택)
   if(found.적격기준==='한전'&&!individualKeys.includes('한전변전'))individualKeys.push('한전변전');
   if(found.적격기준==='한전'&&!individualKeys.includes('한전케이블'))individualKeys.push('한전케이블');
-  if(found.적격기준!=='한전')individualKeys=individualKeys.filter(function(k){return k!=='한전변전'&&k!=='한전케이블';});
+  if(found.적격기준==='한전'&&!individualKeys.includes('한전기자재'))individualKeys.push('한전기자재');
+  if(found.적격기준!=='한전')individualKeys=individualKeys.filter(function(k){return k!=='한전변전'&&k!=='한전케이블'&&k!=='한전기자재';});
   function _buildIndividualRows(){
     return individualKeys.map(function(k){
       return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'"'+(_rowChecked(k)?' checked':'')+'></td>'+
@@ -9085,7 +9121,7 @@ function showPdfResultModal(found,preview){
     if(found.한전분담비율)state.bid.한전분담비율=found.한전분담비율; // 참고용 원본 보존
     if(found.적격기준==='한전'&&!found.한전사정가격)state.bid.한전사정가격=null; // 2026-10-27: 새 공고에 사정가격이 없으면 이전 값 해제(추정×1.1로 대체)
     if(found.적격기준==='한전'&&!found.주공정예정기간)state.bid.주공정예정기간=null; // 새 공고에 기간이 없으면 이전 공고의 값이 남지 않도록 해제
-    if(found.적격기준==='한전'){state.bid.한전변전가점=false;state.bid.한전케이블=false;} // 아래 '변전전기원 점수' 행이 체크+해당일 때만 켬(이전 공고 값 해제)
+    if(found.적격기준==='한전'){state.bid.한전변전가점=false;state.bid.한전케이블=false;state.bid.한전기자재=false;state.bid.한전동종점수={};} // 아래 '변전전기원 점수' 행이 체크+해당일 때만 켬(이전 공고 값 해제)
     if(found.적격기준==='한전'){
       // 실적제한 수기입력값은 모달 안의 입력칸(⚡ 실적제한 블록, _kepcoPerfInputBlockHtml)에서 그대로 읽어와 저장한다.
       // (해당 입력칸은 기존 state.bid.한전실적입력 값 또는 공고문 검출 분담비율로 이미 초기값이 채워져 있고,
@@ -9147,6 +9183,7 @@ function showPdfResultModal(found,preview){
       else if(k==='주공정예정기간'){state.bid.주공정예정기간=String(v);}
       else if(k==='한전변전'){state.bid.한전변전가점=(v==='해당');}
       else if(k==='한전케이블'){state.bid.한전케이블=(v==='해당');}
+      else if(k==='한전기자재'){state.bid.한전기자재=(v==='해당');if(v==='해당')state.bid.한전변전가점=false;}
       else if(k==='한전사정가격'){state.bid.한전사정가격=Number(v)||null;}
       else if(k==='A값'){state.bid.A값=v;var _aEl=$('#in-A값');if(_aEl)_aEl.value=FMT_NUM(v);}
     });
@@ -11158,7 +11195,7 @@ function bind(){
     }
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,기초배율:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,한전변전가점:false,한전케이블:false,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,한전변전가점:false,한전케이블:false,한전기자재:false,한전동종점수:{},기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
     (function(){var _rm=$('#in-기준월');if(_rm)_rm.value=state.bid._기준월;})(); // 2026-08-27: 공고 초기화 시 기준월도 이번 달로 리셋(재확인 필요)
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();

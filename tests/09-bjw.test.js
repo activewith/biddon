@@ -250,3 +250,20 @@ test('한전 8천만 미만: 시공경험 없음, 경영상태 10점(부채5+유
   const cr = plain(w.kepcoSoloScore({ 업체명: 'C', is자사: true, 실적5: 0, 신용평가: 'BB-(291231)', 일자리가점: 0 }, calc));
   assert.strictEqual(cr.경영, 9.9);
 });
+
+test('한전 변전기자재 양식(3억~50억): 시공경험 18 = 실적 14.5 + 동종 3.5, 경영 12', () => {
+  w.eval("state.bid.업계평균부채비율=120;state.bid.업계평균유동비율=140;state.bid.한전변전가점=false;state.bid.한전케이블=false;state.bid.지역선택=[];state.bid.한전기자재=true;state.bid.한전동종점수={'갑사':3.5};");
+  const calc = { E5: 5e8, 공종: '전기' };
+  const c = { 업체명: '갑사', is자사: true, 실적5: 1e10, 부채비율: 50, 유동비율: 300, 공사업등록일: '1990-01-01', 일자리가점: 0 };
+  const r = plain(w.kepcoSoloScore(c, calc));
+  assert.deepStrictEqual([r.isGJ, r.실적점, r.동종, r.시공, r.경영, r.합, r.ok], [true, 14.5, 3.5, 18, 12, 30, true]);
+  const c2 = Object.assign({}, c, { 업체명: '을사' });          // 동종 미입력 → 0
+  const r2 = plain(w.kepcoSoloScore(c2, calc));
+  assert.deepStrictEqual([r2.시공, r2.ok], [14.5, false]);
+  const cr = plain(w.kepcoSoloScore({ 업체명: '갑사', is자사: true, 실적5: 1e10, 신용평가: 'B+(291231)', 일자리가점: 0 }, calc));
+  assert.strictEqual(cr.경영, 11.7);
+  w.eval('state.bid.한전기자재=false');
+  const r3 = plain(w.kepcoSoloScore(c, calc));
+  assert.deepStrictEqual([r3.isGJ, r3.시공, r3.경영], [false, 15, 15]);
+  assert.strictEqual(plain(w.extractBidFields('한국전력공사 공사 적격심사 추정가격 8천만원 미만 변전기자재 설치공사')).한전기자재, '해당');
+});
