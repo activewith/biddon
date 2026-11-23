@@ -15,9 +15,12 @@ test('평점 → 배점 구간 (5↑3.5 / 3↑2.4 / 2↑1.2 / 미만 0)', () => 
   assert.deepStrictEqual([r.양성, r.보유, r.평점, r.score], [2.5, 2.5, 5, 3.5]);
 });
 
-test('양성: 수료일 없으면 0, 5년 경과 0, 만료일 지정 시 그 날까지', () => {
+test('양성: 수료일·만료일 모두 없으면 0, 만료일만 있으면 그 날까지, 5년 경과 0', () => {
   const S = (d) => plain(w.calcBjwScore(d, at)).양성;
   assert.strictEqual(S({ 양성: { 급: '1' } }), 0);
+  assert.strictEqual(S({ 양성: { 급: '2', 만료일: '2027-12-23' } }), 2.5);
+  assert.strictEqual(S({ 양성: { 급: '2', 만료일: '2026-11-19' } }), 0);
+  assert.strictEqual(plain(w.calcBjwScore({ 양성: { 급: '2', 만료일: '2027-12-23' }, 보유: [{ 급: '2', 만료일: '2028-03-02' }] }, at)).score, 3.5);
   assert.strictEqual(S({ 양성: { 급: '1', 취득일: '2021-11-20' } }), 2.5);  // 정확히 5년째 당일
   assert.strictEqual(S({ 양성: { 급: '1', 취득일: '2021-11-19' } }), 0);
   assert.strictEqual(S({ 양성: { 급: '1', 취득일: '2025-01-01', 만료일: '2026-11-19' } }), 0);

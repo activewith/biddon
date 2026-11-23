@@ -4546,7 +4546,7 @@ function bjwRowExpiry(r,isTrain){
 function bjwRowValid(r,isTrain,at){
   if(!r||!BJW_HOLD_PT[String(r.급)])return false;
   var a=_bjwDate(r.취득일);
-  if(isTrain&&!a)return false;
+  if(isTrain&&!a&&!_bjwDate(r.만료일))return false; // 2026-11-23: 양성은 수료일 또는 만료일 중 하나만 있어도 인정(만료일만 있으면 만료일까지 유효)
   if(a&&a>at)return false;
   var e=bjwRowExpiry(r,isTrain);
   if(e&&e<at)return false;
