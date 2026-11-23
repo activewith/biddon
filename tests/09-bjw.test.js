@@ -185,3 +185,48 @@ test('변전 케이블접속: 이름·생년·취득일·만료일·참고 저�
   assert.strictEqual(a.length, 1);
   assert.match(a[0].custom, /^갑 갱신 D-5/);
 });
+
+test('케이블접속 알람: 만료일 3개월 전부터', () => {
+  const today = new w.Date(); today.setHours(0, 0, 0, 0);
+  const ymd = (mo, dd) => w._ymdLocal(new w.Date(today.getFullYear(), today.getMonth() + mo, today.getDate() + dd));
+  const a = plain(w.getExpiryAlerts({ is자사: true, 변전케이블접속: [
+    { 이름: '갑', 만료일: ymd(3, 0) }, { 이름: '을', 만료일: ymd(3, 2) }, { 이름: '병', 만료일: ymd(0, -1) },
+  ] })).filter((x) => x.kind === '케이블접속').map((x) => x.custom);
+  assert.strictEqual(a.length, 2);
+  assert.match(a[0], /^갑 갱신 D-/);
+  assert.match(a[1], /^병 갱신 만료됨/);
+});
+
+test('케이블접속: 메모 문구에서 초안 생성, 소속이동', () => {
+  const r = plain(w.bjcFromMemo('윤종환 접속케이블 인증만료 28년 5~6월.--> 알람설정 할 것\n<한전배치기술자>'));
+  assert.deepStrictEqual([r.length, r[0].이름, r[0].만료일], [1, '윤종환', '2028-05-01']);
+  const d = w.document;
+  w.eval('canManageCompanyDB=function(){return true;};confirm=function(){return true;};');
+  w.eval("state.db=state.db.filter(c=>!c.is자사);state.db.push({업체명:'A사',is자사:true,변전케이블접속:[{이름:'갑',만료일:'2028-01-01'},{이름:'을',만료일:'2029-01-01'}]});state.db.push({업체명:'B사',is자사:true});");
+  const src = w.eval("state.db.findIndex(c=>c.업체명==='A사')"), dst = w.eval("state.db.findIndex(c=>c.업체명==='B사')");
+  w.openCompanyModal(src);
+  const tr = d.querySelectorAll('#m-bjc-body tr')[0];
+  tr.querySelector('.bjc-move').value = String(dst);
+  tr.querySelector('.bjc-movebtn').click();
+  assert.deepStrictEqual(plain(w.eval('state.db[' + dst + '].변전케이블접속')).map((x) => x.이름), ['갑']);
+  assert.deepStrictEqual(plain(w.eval('state.db[' + src + '].변전케이블접속')).map((x) => x.이름), ['을']);
+});
+
+test('전력케이블(Plug-in): 공고문 감지 + 단독판정은 유효 자격자 있어야 통과', () => {
+  const T = (s) => plain(w.extractBidFields('한국전력공사 공사 적격심사 ' + s)).한전케이블;
+  assert.strictEqual(T('154kV 4M.Tr 교체공사(전력케이블)'), '해당');
+  assert.strictEqual(T('GIS JIG 시험'), '해당');
+  assert.strictEqual(T('Plug-In 접속재'), '해당');
+  assert.strictEqual(T('일반 배전공사'), undefined);
+  const calc = { E5: 5e8, 공종: '전기' };
+  const base = { 업체명: '자사A', is자사: true, 실적5: 1e10, 일자리가점: 3, 부채비율: 1, 유동비율: 9999, 공사업등록일: '1990-01-01' };
+  const yes = Object.assign({}, base, { 변전케이블접속: [{ 이름: '갑', 만료일: '2099-01-01' }] });
+  const expired = Object.assign({}, base, { 변전케이블접속: [{ 이름: '갑', 만료일: '2020-01-01' }] });
+  w.eval('state.bid.한전케이블=true');
+  const rY = plain(w.kepcoSoloScore(yes, calc)), rN = plain(w.kepcoSoloScore(base, calc)), rE = plain(w.kepcoSoloScore(expired, calc));
+  w.eval('state.bid.한전케이블=false');
+  const rOff = plain(w.kepcoSoloScore(base, calc));
+  assert.deepStrictEqual([rY.cableOK, rN.cableOK, rE.cableOK, rOff.cableOK], [true, false, false, true]);
+  assert.strictEqual(rN.ok, false);
+  assert.strictEqual(rY.ok, rOff.ok);
+});

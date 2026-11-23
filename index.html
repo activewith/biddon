@@ -3626,6 +3626,8 @@ function kepcoSoloScore(c,calc){
   var regionOK=!regs.length||regionMatchCo(regs,c);
   var gjOK=kepcoGongjongOK(c,gj);
   var scoreOK=합>=tier.cap-1e-9;
+  // 2026-11-23: 전력케이블(Plug-in) 공고 — 업체등록(자사)의 변전 케이블접속 자격이 오늘 기준 유효한 인원이 1명 이상 있어야 통과
+  var cableReq=!!state.bid.한전케이블,cableOK=!cableReq||hasValidCableQual(c,new Date());
   var need실적점=Math.max(0,Math.round((tier.cap-경영-신인도-변전)*100)/100);
   var need시공=need실적점;
   var needPerf=null,perfImpossible=false;
@@ -3635,7 +3637,8 @@ function kepcoSoloScore(c,calc){
   }
   return{supported:true,tier:tier,S:S,실적:실적,배수:배수,시공:시공,실적점:실적점,perfMax:perfMax,useBjw:useBjw,경영:경영,경영방식:경영방식,fin:fin,credit:cr,
          일자리:일자리,안전:안전,변전:변전,bjw:bjw,신인도:신인도,합:합,수행:수행,total:total,regionOK:regionOK,gjOK:gjOK,scoreOK:scoreOK,
-         ok:scoreOK&&regionOK&&gjOK,need시공:need시공,needPerf:needPerf,perfImpossible:perfImpossible,gj:gj};
+         cableReq:cableReq,cableOK:cableOK,
+         ok:scoreOK&&regionOK&&gjOK&&cableOK,need시공:need시공,needPerf:needPerf,perfImpossible:perfImpossible,gj:gj};
 }
 function renderKepcoSolo(calc){
   var root=document.getElementById('kepco-solo');if(!root)return;
@@ -3655,7 +3658,9 @@ function renderKepcoSolo(calc){
       '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="변전소 토건공사 양식 기준서에만 있는 안전보건경영시스템(ISO45001/KOSHA-MS) +0.1 가점. 전기공사 양식에는 이 항목이 없습니다">'+
       '<input type="checkbox" data-kepco-solo="안전가점"'+(b.한전안전가점?' checked':'')+'>안전보건 +0.1(변전 양식)</label>'+
       '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="기준서 시공경험(15)에 \'변전전기원 양성 또는 보유실적(3.5점)\' 항목이 있는 변전공사(3억~50억) 공고만 체크. 시공경험이 실적 11.5 + 변전전기원 3.5로 바뀌고, 업체등록 화면(자사)의 변전전기원 등록값으로 오늘 기준 점수를 계산합니다(미등록 0점). 공고문분석에서 자동 체크됩니다">'+
-      '<input type="checkbox" data-kepco-solo="변전가점"'+(b.한전변전가점?' checked':'')+'>변전전기원 3.5(시공경험)</label>';
+      '<input type="checkbox" data-kepco-solo="변전가점"'+(b.한전변전가점?' checked':'')+'>변전전기원 3.5(시공경험)</label>'+
+      '<label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="전력케이블(Plug-in) 공고 — 업체등록(자사)의 변전 케이블접속 자격이 유효한 인원이 있어야 통과. 공고문분석에서 전력케이블·JIG·Plug-In 문구가 있으면 자동 체크">'+
+      '<input type="checkbox" data-kepco-solo="케이블"'+(b.한전케이블?' checked':'')+'>전력케이블(Plug-in)</label>';
   }
   head+='</div>';
   if(isPerf){
@@ -3677,6 +3682,7 @@ function renderKepcoSolo(calc){
     var reasons=[];
     if(!r.regionOK)reasons.push('지역 불일치');
     if(!r.gjOK)reasons.push(r.gj+' 미참여');
+    if(r.cableReq&&!r.cableOK)reasons.push('케이블접속 자격 없음');
     if(r.useBjw&&r.변전<3.5)reasons.push('변전전기원 '+TRIMDEC(r.변전)+'/3.5'+(r.bjw&&r.bjw.평점===0?'(미등록)':''));
     if(!r.scoreOK){
       reasons.push(TRIMDEC(Math.round((r.tier.cap-r.합)*100)/100)+'점 부족');
@@ -3712,6 +3718,7 @@ function _bindKepcoSolo(root){
       if(k==='실적공고')state.bid.한전실적공고=!!el.checked;
       else if(k==='안전가점')state.bid.한전안전가점=!!el.checked;
       else if(k==='변전가점')state.bid.한전변전가점=!!el.checked;
+      else if(k==='케이블')state.bid.한전케이블=!!el.checked;
       else if(k==='사정가격'){var v=parseMoney(el.value);state.bid.한전사정가격=(v!=null&&v>0)?v:null;}
       save();refreshCombos();
     });
@@ -4703,10 +4710,55 @@ function bjwFillPanel(data){
 }
 // ████ 변전 케이블접속(36kV GIS 삽입형 접속재) 자격 등록 (2026-11-23) ████
 // 업체등록(자사) 변전전기원 칸 아래. 이름·생년·취득일·만료일·참고만 관리(점수 계산 없음). 만료일은 직접 입력(유효기간 규칙 미확인), 30일 전부터 알람.
+function hasValidCableQual(c,at){
+  if(!c||!c.is자사||!Array.isArray(c.변전케이블접속))return false;
+  at=at||new Date();at=new Date(at.getFullYear(),at.getMonth(),at.getDate());
+  return c.변전케이블접속.some(function(r){
+    if(!r||!r.이름)return false;
+    var e=_bjwDate(r.만료일);
+    return !e||e>=at;
+  });
+}
+function bjcMoveCellHTML(){
+  var others=(_bjwCtxIdx==null)?[]:(state.db||[]).map(function(c,i){return{c:c,i:i};}).filter(function(o){return o.c&&o.c.is자사&&o.i!==_bjwCtxIdx;});
+  if(!others.length)return '<span style="font-size:10px;color:#9ca3af" title="'+(_bjwCtxIdx==null?'저장된 업체에서만 이동 가능':'이동할 다른 자사 업체가 없음')+'">-</span>';
+  return '<span style="display:inline-flex;gap:2px;align-items:center"><select class="bjc-move" style="width:104px;padding:2px;font-size:11px"><option value="">이동할 업체…</option>'+
+    others.map(function(o){return '<option value="'+o.i+'">'+esc(o.c.업체명||'(업체명 미입력)')+'</option>';}).join('')+
+    '</select><button type="button" class="bjc-movebtn" title="선택한 자사 업체로 이 인원을 이동(즉시 저장)" style="padding:1px 6px;font-size:11px;border:1px solid #7dd3fc;background:#fff;border-radius:3px;cursor:pointer">이동</button></span>';
+}
+function _bjcReadRow(tr){
+  return{이름:tr.querySelector('.bjc-이름').value.trim(),생년:bjwNormBirth(tr.querySelector('.bjc-생년').value),
+         취득일:bjwNormDate(tr.querySelector('.bjc-취득일').value),만료일:bjwNormDate(tr.querySelector('.bjc-만료일').value),
+         참고:tr.querySelector('.bjc-참고').value.trim()};
+}
+function bjcMoveRow(tr,toIdx){
+  var src=state.db[_bjwCtxIdx],dst=state.db[toIdx];
+  if(!src||!dst)return false;
+  var r=_bjcReadRow(tr);
+  if(!r.이름&&!r.만료일){toast('빈 행은 이동할 수 없습니다','bad');return false;}
+  var pname=r.이름||'(이름 미입력)';
+  if(!confirm(pname+' 님(변전 케이블접속)을 ['+(src.업체명||'')+'] → ['+(dst.업체명||'')+'](으)로 이동할까요?\n이동은 바로 저장됩니다.'))return false;
+  state.db[toIdx]=Object.assign({},dst,{변전케이블접속:(Array.isArray(dst.변전케이블접속)?dst.변전케이블접속:[]).concat([r])});
+  tr.remove();
+  state.db[_bjwCtxIdx]=Object.assign({},state.db[_bjwCtxIdx],{변전케이블접속:readBjcPanel()});
+  save();
+  toast(pname+' → '+(dst.업체명||'')+' 이동 완료','ok');
+  return true;
+}
+// 메모(참고)에 적어 둔 "OOO 접속케이블 인증만료 28년 5~6월" 문구를 케이블접속 칸 초안으로 옮김(저장 전까지는 화면에만, 만료일은 해당 월 1일로 보수적 설정)
+function bjcFromMemo(memo){
+  var out=[],re=/([가-힣]{2,4})\s*접속\s*케이블\s*인증\s*만료\s*(\d{2,4})\s*년\s*(\d{1,2})\s*(?:~\s*\d{1,2}\s*)?월/g,m;
+  while((m=re.exec(String(memo||'')))){
+    var y=+m[2];if(y<100)y+=2000;var mo=+m[3];if(mo<1||mo>12)continue;
+    out.push({이름:m[1],생년:'',취득일:'',만료일:y+'-'+String(mo).padStart(2,'0')+'-01',참고:'메모에서 옮김: '+m[0].replace(/\s+/g,' ')});
+  }
+  return out;
+}
 function bjcRowHTML(r){
   r=r||{};
   var st='padding:3px 4px;border-bottom:1px solid #e0f2fe;text-align:center';
   return '<tr data-bjc-row="1">'+
+    '<td style="'+st+'">'+bjcMoveCellHTML()+'</td>'+
     '<td style="'+st+'"><input class="bjc-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:80px"></td>'+
     '<td style="'+st+'"><input class="bjc-생년" value="'+esc(r.생년||'')+'" placeholder="생년월일" style="width:96px" title="생년월일(YYMMDD·YYYY-MM-DD) 또는 생년(YYYY)"></td>'+
     '<td style="'+st+'"><input class="bjc-취득일" value="'+esc(r.취득일||'')+'" placeholder="YYMMDD" style="width:108px"></td>'+
@@ -4715,18 +4767,20 @@ function bjcRowHTML(r){
     '<td style="'+st+';width:30px"><button type="button" class="bjc-del" title="이 인원 삭제" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px">×</button></td>'+
   '</tr>';
 }
-function bjcPanelHTML(list){
+function bjcPanelHTML(list,memo){
+  var _fromMemo=(!Array.isArray(list)||!list.length)?bjcFromMemo(memo):[];
+  if(_fromMemo.length)list=_fromMemo;
   var th='padding:3px 4px;border-bottom:1px solid #7dd3fc;font-size:11px;color:#0369a1;text-align:center;font-weight:700';
   var rows=(Array.isArray(list)&&list.length?list:[{}]).map(bjcRowHTML).join('');
   return '<div style="border:1px solid #bae6fd;background:#f0f9ff;border-radius:6px;padding:8px;margin-top:8px">'+
-    '<div style="font-size:12px;color:#0369a1;font-weight:700;margin-bottom:6px">🔌 변전 케이블접속(36kV GIS 삽입형 접속재)</div>'+
+    '<div style="font-size:12px;color:#0369a1;font-weight:700;margin-bottom:6px">🔌 변전 케이블접속(36kV GIS 삽입형 접속재)'+(_fromMemo.length?' <span style="color:#b45309;font-weight:600;font-size:11px">— 메모의 "접속케이블 인증만료" 문구를 옮겨 왔습니다. 만료일 확인 후 저장하세요</span>':'')+'</div>'+
     '<table style="border-collapse:collapse;width:100%;background:#fff">'+
-      '<thead><tr><th style="'+th+'">이름</th><th style="'+th+'">생년</th><th style="'+th+'">취득일</th><th style="'+th+'">만료일</th><th style="'+th+'">참고</th><th style="'+th+'"></th></tr></thead>'+
+      '<thead><tr><th style="'+th+'">소속이동</th><th style="'+th+'">이름</th><th style="'+th+'">생년</th><th style="'+th+'">취득일</th><th style="'+th+'">만료일</th><th style="'+th+'">참고</th><th style="'+th+'"></th></tr></thead>'+
       '<tbody id="m-bjc-body">'+rows+'</tbody>'+
     '</table>'+
     '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'+
       '<button type="button" id="m-bjc-add" class="btn btn-sm" style="background:#0284c7;white-space:nowrap;flex-shrink:0">+ 인원 추가</button>'+
-      '<span style="font-size:10px;color:#6b7280">점수 계산 없음 · 만료일은 자격증 기재일 직접 입력 · 만료 30일 전부터 알람</span>'+
+      '<span style="font-size:10px;color:#6b7280">만료일은 자격증 기재일 직접 입력 · 만료 3개월 전부터 알람 · 자사 간 소속이동 가능 · 한전 \'전력케이블(Plug-in)\' 공고는 유효 자격자가 있어야 단독 통과</span>'+
     '</div>'+
   '</div>';
 }
@@ -4734,9 +4788,7 @@ function readBjcPanel(){
   var body=document.getElementById('m-bjc-body');if(!body)return null;
   var out=[];
   body.querySelectorAll('tr[data-bjc-row]').forEach(function(tr){
-    var r={이름:tr.querySelector('.bjc-이름').value.trim(),생년:bjwNormBirth(tr.querySelector('.bjc-생년').value),
-           취득일:bjwNormDate(tr.querySelector('.bjc-취득일').value),만료일:bjwNormDate(tr.querySelector('.bjc-만료일').value),
-           참고:tr.querySelector('.bjc-참고').value.trim()};
+    var r=_bjcReadRow(tr);
     if(r.이름||r.생년||r.취득일||r.만료일||r.참고)out.push(r);
   });
   return out;
@@ -4753,6 +4805,13 @@ function bindBjcPanel(){
     if(t.classList.contains('bjc-생년'))t.value=bjwNormBirth(t.value);
   });
   body.addEventListener('click',function(e){
+    var mb=e.target.closest&&e.target.closest('.bjc-movebtn');
+    if(mb){
+      if(typeof canManageCompanyDB==='function'&&!canManageCompanyDB()){toast('등록/수정 권한이 없습니다','bad');return;}
+      var mtr=mb.closest('tr'),msel=mtr&&mtr.querySelector('.bjc-move');
+      if(!msel||msel.value===''){toast('이동할 업체를 선택하세요','bad');return;}
+      bjcMoveRow(mtr,Number(msel.value));return;
+    }
     var b=e.target.closest&&e.target.closest('.bjc-del');if(!b)return;
     var tr=b.closest('tr');if(tr)tr.remove();
   });
@@ -4832,12 +4891,13 @@ function getExpiryAlerts(c){
       if(dB<=30)alerts.push({kind:'변전전기원',custom:(o.train?'양성 ':'')+(o.r.이름||'(이름없음)')+' 갱신 '+(dB<0?'만료됨':'D-'+dB)+'('+_ymdLocal(e)+')'});
     });
   }
-  // 2026-11-23: 변전 케이블접속(36kV GIS 삽입형 접속재) 자격 — 만료일(직접 입력) 30일 전부터 알림
+  // 2026-11-23: 변전 케이블접속(36kV GIS 삽입형 접속재) 자격 — 만료일(직접 입력) 3개월 전부터 알림
   if(c.is자사&&Array.isArray(c.변전케이블접속)){
     c.변전케이블접속.forEach(function(r){
       var e=_bjwDate(r&&r.만료일);if(!e)return;
       var dC=Math.round((e-today)/86400000);
-      if(dC<=30)alerts.push({kind:'케이블접속',custom:(r.이름||'(이름없음)')+' 갱신 '+(dC<0?'만료됨':'D-'+dC)+'('+_ymdLocal(e)+')'});
+      var from=new Date(e.getFullYear(),e.getMonth()-3,e.getDate());
+      if(today>=from)alerts.push({kind:'케이블접속',custom:(r.이름||'(이름없음)')+' 갱신 '+(dC<0?'만료됨':'D-'+dC)+'('+_ymdLocal(e)+')'});
     });
   }
   // 2026-08-20: 메모 알람 — 업체등록에서 사용자가 켜고 지정한 날짜(시각은 항상 오전 10시 고정)가 지나면(끄기 전까지 계속) 알림에 포함
@@ -7372,7 +7432,7 @@ function openCompanyModal(idx){
           '<span class="badge type-자사">자사</span></label>'+
       '</div>'+
       '<label id="m-bjw-label" style="color:#6d28d9;font-weight:700;align-self:start;padding-top:8px'+(c.is자사?'':';display:none')+'">변전전기원</label>'+
-      '<div id="m-bjw-panel"'+(c.is자사?'':' style="display:none"')+'>'+bjwPanelHTML(c.변전전기원,idx)+bjcPanelHTML(c.변전케이블접속)+'</div>'+
+      '<div id="m-bjw-panel"'+(c.is자사?'':' style="display:none"')+'>'+bjwPanelHTML(c.변전전기원,idx)+bjcPanelHTML(c.변전케이블접속,c.참고)+'</div>'+
       '<label style="color:#0369a1;font-weight:700">그룹</label>'+
       '<div id="m-group-area" style="padding:4px 0;position:relative">'+
         renderGroupPickerHTML('m',c.groups)
@@ -8375,6 +8435,8 @@ function extractBidFields(t){
     })();
     // 2026-11-20: 한전 변전공사 기준서의 "변전전기원 양성 또는 보유실적" 항목(시공경험 3.5점) 감지
     if(/변\s*전\s*전\s*기\s*원/.test(t))r.한전변전='해당';
+    // 2026-11-23: 전력케이블(Plug-in) — 공고문에 "전력케이블", "JIG", "Plug-In"이 있으면 해당
+    if(/전\s*력\s*케\s*이\s*블|\bJIG\b|plug\s*-?\s*in/i.test(t))r.한전케이블='해당';
     // 2026-10-27: 사정가격(VAT포함) 추출 — 일반공고 단독 판정의 시공경험 분모. 공고문 "사정가격 : 3,162,335,000원",
     // "사정금액 : ￦ 249,755,000-", 적격심사기준서 "…산출기초조서상의 사정액 (VAT포함) : ￦ 2,452,022,100원" 형식.
     (function(){
@@ -8675,7 +8737,7 @@ function _pdfPlaceholder(k,found){
 }
 function showPdfResultModal(found,preview){
   var keys=Object.keys(found);
-  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',한전변전:'변전전기원 점수(시공경험 3.5)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)',한전사정가격:'사정가격(한전·VAT포함)'};
+  var labels={기초금액:'기초금액',추정가격:'추정가격',시평제한:'시평제한',분담시평:'분담 시평제한 (복합공종)',A값:'A값',lh순공사원가:'순공사원가(LH)',lh지분율기준:'지분율기준(추정금액)',한전변전:'변전전기원 점수(시공경험 3.5)',한전케이블:'전력케이블(Plug-in)',지역선택:'지역 선택',적격기준:'적격기준',공종:'공종',지역의무지분:'지역의무지분(%)',최소지분율:'최소지분율(%)',구성업체수:'구성업체수',배수:'배수',투찰률:'투찰률(%)',한전사정가격:'사정가격(한전·VAT포함)'};
   var root=MODAL_ROOT;
   if(keys.length===0){
     root.innerHTML='<div class="modal-back"><div class="modal" style="min-width:400px">'+
@@ -8732,7 +8794,7 @@ function showPdfResultModal(found,preview){
         '<button type="button" data-pdf-region-add style="font-size:11px;padding:2px 6px;line-height:1;border:1px solid #f59e0b;border-radius:3px;background:#fffbeb;color:#b45309;cursor:pointer">＋</button>'+
       '</div>';
     }
-    if(k==='한전변전'){
+    if(k==='한전변전'||k==='한전케이블'){
       return '<select data-pdf-manual="'+k+'" style="'+st+'"><option value="">직접선택</option><option value="해당">해당</option><option value="미해당">미해당</option></select>';
     }
     if(k==='주공정예정기간'){
@@ -8752,7 +8814,7 @@ function showPdfResultModal(found,preview){
       var k=el.dataset.pdfManual;
       var raw=(el.value||'').trim();
       if(!raw)return;
-      if(k==='공종'||k==='적격기준'||k==='주공정예정기간'||k==='한전변전'){found[k]=raw;}
+      if(k==='공종'||k==='적격기준'||k==='주공정예정기간'||k==='한전변전'||k==='한전케이블'){found[k]=raw;}
       else{var num=Number(raw.replace(/,/g,''));if(!isNaN(num))found[k]=num;}
     });
     var _regSel=Array.prototype.map.call(document.querySelectorAll('[data-pdf-region-idx]'),function(e){return e.value.trim();}).filter(Boolean);
@@ -8787,12 +8849,12 @@ function showPdfResultModal(found,preview){
         '<button type="button" data-pdf-region-add style="font-size:11px;padding:2px 6px;line-height:1;border:1px solid #93c5fd;border-radius:3px;background:#eff6ff;color:#1d4ed8;cursor:pointer">＋</button>'+
       '</div>';
     }
-    if(k==='한전변전'){
-      var _cb=found.한전변전||'';
+    if(k==='한전변전'||k==='한전케이블'){
+      var _cb=found[k]||'';
       return '<select data-pdf-manual="'+k+'" style="'+st+'"><option value=""'+(_cb?'':' selected')+'>직접선택</option><option value="해당"'+(_cb==='해당'?' selected':'')+'>해당</option><option value="미해당"'+(_cb==='미해당'?' selected':'')+'>미해당</option></select>';
     }
     if(k==='주공정예정기간'){
-      return '<input type="text" data-pdf-manual="'+k+'" value=""'+esc(String(found[k]||''))+'" placeholder="예: 2026. 10. 19 ~ 2026. 12. 13" style="'+st+'">';
+      return '<input type="text" data-pdf-manual="'+k+'" value="'+esc(String(found[k]||''))+'" placeholder="예: 2026. 10. 19 ~ 2026. 12. 13" style="'+st+'">';
     }
     var numAttrs={추정가격:'min="0" step="1"',기초금액:'min="0" step="1"',시평제한:'min="0" step="1"',분담시평:'min="0" step="1"',A값:'min="0" step="1"',lh지분율기준:'min="0" step="1"',lh순공사원가:'min="0" step="1"',지역의무지분:'min="0" max="100" step="1"',최소지분율:'min="0" max="100" step="0.1"',구성업체수:'min="1" max="5" step="1"',투찰률:'min="0" max="100" step="0.001"',배수:'min="0" step="0.1"'};
     var ph=_pdfPlaceholder(k,found);
@@ -8827,7 +8889,8 @@ function showPdfResultModal(found,preview){
   if(found.적격기준==='한전'&&!individualKeys.includes('주공정예정기간'))individualKeys.push('주공정예정기간');
   // 2026-11-20: 한전은 변전전기원 점수 행도 항상 표시(미검출이면 해당/미해당 직접선택)
   if(found.적격기준==='한전'&&!individualKeys.includes('한전변전'))individualKeys.push('한전변전');
-  if(found.적격기준!=='한전')individualKeys=individualKeys.filter(function(k){return k!=='한전변전';});
+  if(found.적격기준==='한전'&&!individualKeys.includes('한전케이블'))individualKeys.push('한전케이블');
+  if(found.적격기준!=='한전')individualKeys=individualKeys.filter(function(k){return k!=='한전변전'&&k!=='한전케이블';});
   function _buildIndividualRows(){
     return individualKeys.map(function(k){
       return '<tr><td style="padding:4px 8px"><input type="checkbox" data-pdf-key="'+k+'"'+(_rowChecked(k)?' checked':'')+'></td>'+
@@ -9011,7 +9074,7 @@ function showPdfResultModal(found,preview){
     if(found.한전분담비율)state.bid.한전분담비율=found.한전분담비율; // 참고용 원본 보존
     if(found.적격기준==='한전'&&!found.한전사정가격)state.bid.한전사정가격=null; // 2026-10-27: 새 공고에 사정가격이 없으면 이전 값 해제(추정×1.1로 대체)
     if(found.적격기준==='한전'&&!found.주공정예정기간)state.bid.주공정예정기간=null; // 새 공고에 기간이 없으면 이전 공고의 값이 남지 않도록 해제
-    if(found.적격기준==='한전')state.bid.한전변전가점=false; // 아래 '변전전기원 점수' 행이 체크+해당일 때만 켬(이전 공고 값 해제)
+    if(found.적격기준==='한전'){state.bid.한전변전가점=false;state.bid.한전케이블=false;} // 아래 '변전전기원 점수' 행이 체크+해당일 때만 켬(이전 공고 값 해제)
     if(found.적격기준==='한전'){
       // 실적제한 수기입력값은 모달 안의 입력칸(⚡ 실적제한 블록, _kepcoPerfInputBlockHtml)에서 그대로 읽어와 저장한다.
       // (해당 입력칸은 기존 state.bid.한전실적입력 값 또는 공고문 검출 분담비율로 이미 초기값이 채워져 있고,
@@ -9072,6 +9135,7 @@ function showPdfResultModal(found,preview){
       }
       else if(k==='주공정예정기간'){state.bid.주공정예정기간=String(v);}
       else if(k==='한전변전'){state.bid.한전변전가점=(v==='해당');}
+      else if(k==='한전케이블'){state.bid.한전케이블=(v==='해당');}
       else if(k==='한전사정가격'){state.bid.한전사정가격=Number(v)||null;}
       else if(k==='A값'){state.bid.A값=v;var _aEl=$('#in-A값');if(_aEl)_aEl.value=FMT_NUM(v);}
     });
@@ -11083,7 +11147,7 @@ function bind(){
     }
     // ※ 업계평균부채비율/유동비율은 초기화 제외 (공고와 무관한 상시 설정값)
     Object.assign(state.bid,{시평제한:null,분담시평:null,기초금액:null,기초배율:null,추정가격:null,배수:null,투찰률:null,투찰배수:1.02,A값:null,사정률기준:'0',
-      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,한전변전가점:false,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
+      지역의무지분:null,최소지분율:null,구성업체수:2,지역선택:[],적격기준:'',주공정예정기간:null,한전실적공고:false,한전사정가격:null,한전안전가점:false,한전변전가점:false,한전케이블:false,기본지분율:65,lh지분율기준:null,lh순공사원가:null,소방통신추정가:null,품질평가점수:2,공종:'전기',공고명:'',공고명저장일시:null,공고번호:'',마감일:'',협정마감일_YMD:'',dbFixed:'갱신후',_기준월:currentYM(new Date())});
     (function(){var _rm=$('#in-기준월');if(_rm)_rm.value=state.bid._기준월;})(); // 2026-08-27: 공고 초기화 시 기준월도 이번 달로 리셋(재확인 필요)
     refreshDbFixedSelect(); // DB기준 드롭다운도 기본값(갱신후)으로 리셋(사용자 확정)
     (function(){var _gR=$('#in-공종');if(_gR)_gR.value='전기';var _lR=$('#o-공종-label');if(_lR)_lR.textContent='전기';syncAvgRatios('전기');})();
