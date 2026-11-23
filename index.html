@@ -4538,11 +4538,49 @@ function bjwRows(data){
   (data.보유||[]).forEach(function(r){if(r)out.push({r:r,train:false});});
   return out;
 }
-// 2026-11-23: 양성·보유 모두 5년마다 갱신 — 만료일을 비우면 취득일(양성은 수료일)+5년을 만료일로 본다(점수·알람 공통).
+// 2026-11-26: 만료일 자동계산 — 취득일 당시 만 나이(생년 기준)로 유효기간 결정, 만료일 = 취득일 + N년 - 1일
+//  만 60세 미만 5년 / 만 60~64세 3년 / 만 65세 이상 2년
+//  근거: 한전 송변전 기능자격 연령제한 폐지(2024-06 발표, 2024-08 운영기준 개정) 시 "일정 연령 이상은 갱신주기 2~3년으로 단축" 방침(전기저널 인터뷰),
+//        대한전기협회 자격증 실물(만 65세 이상 취득자 2년, 60세 미만 5년, 유효기간 끝 = 시작일+N년-1일). 60~64세 3년은 사용자 확인 사항(공개 원문 미확인).
+//  자격증에 적힌 만료일이 다르면(예: 2024-08 이전 발급분은 만 65세 전날 말소) 만료일 칸에 직접 입력 — 직접 입력값이 항상 우선.
+function _bjwBirth(v){
+  var d=String(v||'').replace(/[^0-9]/g,'');
+  if(d.length===4)return{y:+d,m:0,d:1,yearOnly:true};
+  if(d.length===6){var yy=+d.slice(0,2);d=(yy>(new Date().getFullYear()%100)?'19':'20')+d;}
+  if(d.length!==8)return null;
+  var y=+d.slice(0,4),m=+d.slice(4,6)-1,dd=+d.slice(6,8);
+  var t=new Date(y,m,dd);if(isNaN(t.getTime())||t.getMonth()!==m)return null;
+  return{y:y,m:m,d:dd,yearOnly:false};
+}
+function bjwNormBirth(v){
+  var b=_bjwBirth(v);if(!b)return String(v||'').trim();
+  if(b.yearOnly)return String(b.y);
+  return b.y+'-'+String(b.m+1).padStart(2,'0')+'-'+String(b.d).padStart(2,'0');
+}
+function bjwAgeAt(birth,at){
+  var b=_bjwBirth(birth);if(!b||!at)return null;
+  var age=at.getFullYear()-b.y;
+  if(!b.yearOnly&&(at.getMonth()<b.m||(at.getMonth()===b.m&&at.getDate()<b.d)))age--;
+  return age;
+}
+function bjwValidYears(birth,acq){
+  var age=bjwAgeAt(birth,acq);
+  if(age==null)return 5;
+  return age>=65?2:(age>=60?3:5);
+}
+function bjwCalcExpiry(r){
+  var a=_bjwDate(r&&r.취득일);if(!a)return null;
+  var n=bjwValidYears(r&&r.생년,a);
+  return new Date(a.getFullYear()+n,a.getMonth(),a.getDate()-1);
+}
 function bjwRowExpiry(r,isTrain){
   var e=_bjwDate(r&&r.만료일);if(e)return e;
-  var a=_bjwDate(r&&r.취득일);if(a)return new Date(a.getFullYear()+5,a.getMonth(),a.getDate());
-  return null;
+  return bjwCalcExpiry(r);
+}
+function _bjwExpiryTitle(r){
+  var a=_bjwDate(r&&r.취득일);if(!a)return '취득일을 입력하면 만료일이 자동 입력됩니다(생년 기준 만 60세 미만 5년 / 60~64세 3년 / 65세 이상 2년)';
+  var age=bjwAgeAt(r.생년,a);
+  return (age==null?'생년 미입력 → 5년 적용':'취득 당시 만 '+age+'세 → '+bjwValidYears(r.생년,a)+'년')+' · 자격증 만료일과 다르면 직접 수정 · 만료 30일 전부터 알람';
 }
 function bjwRowValid(r,isTrain,at){
   if(!r||!BJW_HOLD_PT[String(r.급)])return false;
@@ -4580,16 +4618,19 @@ function bjwMoveCellHTML(isTrain){
 }
 function bjwRowHTML(r,isTrain){
   r=r||{};
+  var _ce=bjwCalcExpiry(r),_auto=_ce?_ymdLocal(_ce):'';
+  var _exp=r.만료일||_auto; if(_exp!==_auto)_auto='';
   var g=String(r.급||'');
   var st='padding:3px 4px;border-bottom:1px solid #ede9fe;text-align:center';
   return '<tr data-bjw-row="'+(isTrain?'train':'hold')+'"'+(isTrain?' style="background:#f5f3ff"':'')+'>'+
     '<td class="bjw-no" style="'+st+';color:#6b7280;width:34px"></td>'+
     '<td style="'+st+';width:44px">'+(isTrain?'<b style="color:#7c3aed" title="업체 비용부담 양성과정 5년 이내 수료 실적 — 1명만 반영(상한 2.5점)">양성</b>':'보유')+'</td>'+
     '<td style="'+st+'">'+bjwMoveCellHTML(isTrain)+'</td>'+
-    '<td style="'+st+'"><input class="bjw-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:90px"></td>'+
+    '<td style="'+st+'"><input class="bjw-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:80px"></td>'+
+    '<td style="'+st+'"><input class="bjw-생년" value="'+esc(r.생년||'')+'" placeholder="생년월일" style="width:96px" title="생년월일(YYMMDD·YYYY-MM-DD) 또는 생년(YYYY) — 만료일 자동계산에 사용"></td>'+
     '<td style="'+st+'"><select class="bjw-급" style="width:66px"><option value="">-</option><option value="1"'+(g==='1'?' selected':'')+'>1급</option><option value="2"'+(g==='2'?' selected':'')+'>2급</option></select></td>'+
     '<td style="'+st+'"><input class="bjw-취득일" value="'+esc(r.취득일||'')+'" placeholder="'+(isTrain?'수료일 YYMMDD':'YYMMDD')+'" style="width:108px" title="'+(isTrain?'양성과정 수료일':'자격 취득일')+' (YYMMDD 또는 YYYY-MM-DD)"></td>'+
-    '<td style="'+st+'"><input class="bjw-만료일" value="'+esc(r.만료일||'')+'" placeholder="'+(isTrain?'비우면 수료+5년':'비우면 취득+5년')+'" style="width:108px" title="만료 30일 전부터 만료임박(알람) 확인에 표시됩니다"></td>'+
+    '<td style="'+st+'"><input class="bjw-만료일" value="'+esc(_exp)+'"'+(_auto?' data-auto="'+_auto+'"':'')+' placeholder="취득일 입력 시 자동" style="width:108px" title="'+esc(_bjwExpiryTitle(r))+'"></td>'+
     '<td style="'+st+';width:30px">'+(isTrain?'':'<button type="button" class="bjw-del" title="이 인원 삭제" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px">×</button>')+'</td>'+
   '</tr>';
 }
@@ -4610,17 +4651,17 @@ function bjwPanelHTML(data,idx){
       '<span id="m-bjw-score" style="margin-left:auto;font-size:12px;font-weight:700;color:#111827"></span>'+
     '</div>'+
     '<table style="border-collapse:collapse;width:100%;background:#fff">'+
-      '<thead><tr><th style="'+th+'">번호</th><th style="'+th+'">구분</th><th style="'+th+'">소속이동</th><th style="'+th+'">이름</th><th style="'+th+'">급수</th><th style="'+th+'">취득일</th><th style="'+th+'">만료일</th><th style="'+th+'"></th></tr></thead>'+
+      '<thead><tr><th style="'+th+'">번호</th><th style="'+th+'">구분</th><th style="'+th+'">소속이동</th><th style="'+th+'">이름</th><th style="'+th+'">생년</th><th style="'+th+'">급수</th><th style="'+th+'">취득일</th><th style="'+th+'">만료일</th><th style="'+th+'"></th></tr></thead>'+
       '<tbody id="m-bjw-body">'+bjwBodyHTML(data)+'</tbody>'+
     '</table>'+
     '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'+
       '<button type="button" id="m-bjw-add" class="btn btn-sm" style="background:#7c3aed;white-space:nowrap;flex-shrink:0">+ 인원 추가</button>'+
-      '<span style="font-size:10px;color:#6b7280;line-height:1.4">양성(맨 위 1명): 수료일 기준 5년 · 보유: 국민연금 가입 근무자, 1급 3.0 / 2급 2.5 · 평점 5↑ 3.5 / 3↑ 2.4 / 2↑ 1.2 · 양성·보유 5년마다 갱신(만료일 비우면 취득일+5년) · 만료 30일 전부터 알람 · 보유는 자사 간 소속이동 가능</span>'+
+      '<span style="font-size:10px;color:#6b7280;line-height:1.4">양성(맨 위 1명): 수료일 기준 5년 · 보유: 국민연금 가입 근무자, 1급 3.0 / 2급 2.5 · 평점 5↑ 3.5 / 3↑ 2.4 / 2↑ 1.2 · 만료일 자동: 취득 당시 만 60세 미만 5년 / 60~64세 3년 / 65세↑ 2년(취득일+N년-1일), 자격증과 다르면 직접 수정 · 만료 30일 전부터 알람 · 보유는 자사 간 소속이동 가능</span>'+
     '</div>'+
   '</div>';
 }
 function _bjwReadRow(tr){
-  return{이름:tr.querySelector('.bjw-이름').value.trim(),급:tr.querySelector('.bjw-급').value,
+  return{이름:tr.querySelector('.bjw-이름').value.trim(),생년:bjwNormBirth(tr.querySelector('.bjw-생년').value),급:tr.querySelector('.bjw-급').value,
          취득일:bjwNormDate(tr.querySelector('.bjw-취득일').value),만료일:bjwNormDate(tr.querySelector('.bjw-만료일').value)};
 }
 // 2026-11-23 소속이동: 보유 인원을 다른 자사 업체로 옮긴다. 대상 업체와 현재 업체의 변전전기원 목록을 즉시 저장(모달을 취소해도 이동은 유지).
@@ -4668,9 +4709,21 @@ function bindBjwPanel(){
   }
   body.addEventListener('input',_bjwRefresh);
   body.addEventListener('change',_bjwRefresh);
+  // 취득일·생년이 바뀌면 만료일 자동 입력(만료일이 비어 있거나 직전 자동값 그대로일 때만 덮어씀 — 직접 입력한 만료일은 유지)
+  function _bjwAutoExpiry(tr){
+    var ex=tr.querySelector('.bjw-만료일');if(!ex)return;
+    var r=_bjwReadRow(tr),ce=bjwCalcExpiry(r),nv=ce?_ymdLocal(ce):'';
+    var cur=ex.value.trim();
+    if(cur===''||cur===(ex.dataset.auto||'')){ex.value=nv;if(nv)ex.dataset.auto=nv;else delete ex.dataset.auto;}
+    ex.title=_bjwExpiryTitle(r);
+  }
   body.addEventListener('focusout',function(e){
-    var t=e.target;
-    if(t&&t.classList&&(t.classList.contains('bjw-취득일')||t.classList.contains('bjw-만료일'))){t.value=bjwNormDate(t.value);_bjwRefresh();}
+    var t=e.target;if(!t||!t.classList)return;
+    if(t.classList.contains('bjw-취득일')||t.classList.contains('bjw-만료일'))t.value=bjwNormDate(t.value);
+    if(t.classList.contains('bjw-생년'))t.value=bjwNormBirth(t.value);
+    if(t.classList.contains('bjw-취득일')||t.classList.contains('bjw-생년'))_bjwAutoExpiry(t.closest('tr'));
+    if(t.classList.contains('bjw-만료일')&&t.value.trim()==='')_bjwAutoExpiry(t.closest('tr'));
+    _bjwRefresh();
   });
   body.addEventListener('click',function(e){
     var mb=e.target.closest&&e.target.closest('.bjw-movebtn');
