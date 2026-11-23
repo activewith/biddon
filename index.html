@@ -4701,6 +4701,64 @@ function bjwFillPanel(data){
   var chk=document.getElementById('m-is자사');if(chk)chk.dispatchEvent(new Event('change'));
   _bjwRefresh();
 }
+// ████ 변전 케이블접속(36kV GIS 삽입형 접속재) 자격 등록 (2026-11-23) ████
+// 업체등록(자사) 변전전기원 칸 아래. 이름·생년·취득일·만료일·참고만 관리(점수 계산 없음). 만료일은 직접 입력(유효기간 규칙 미확인), 30일 전부터 알람.
+function bjcRowHTML(r){
+  r=r||{};
+  var st='padding:3px 4px;border-bottom:1px solid #e0f2fe;text-align:center';
+  return '<tr data-bjc-row="1">'+
+    '<td style="'+st+'"><input class="bjc-이름" value="'+esc(r.이름||'')+'" placeholder="이름" style="width:80px"></td>'+
+    '<td style="'+st+'"><input class="bjc-생년" value="'+esc(r.생년||'')+'" placeholder="생년월일" style="width:96px" title="생년월일(YYMMDD·YYYY-MM-DD) 또는 생년(YYYY)"></td>'+
+    '<td style="'+st+'"><input class="bjc-취득일" value="'+esc(r.취득일||'')+'" placeholder="YYMMDD" style="width:108px"></td>'+
+    '<td style="'+st+'"><input class="bjc-만료일" value="'+esc(r.만료일||'')+'" placeholder="YYMMDD" style="width:108px" title="자격증의 만료일을 입력 — 만료 30일 전부터 만료임박(알람) 확인에 표시"></td>'+
+    '<td style="'+st+'"><input class="bjc-참고" value="'+esc(r.참고||'')+'" placeholder="참고" style="width:100%;min-width:120px"></td>'+
+    '<td style="'+st+';width:30px"><button type="button" class="bjc-del" title="이 인원 삭제" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px">×</button></td>'+
+  '</tr>';
+}
+function bjcPanelHTML(list){
+  var th='padding:3px 4px;border-bottom:1px solid #7dd3fc;font-size:11px;color:#0369a1;text-align:center;font-weight:700';
+  var rows=(Array.isArray(list)&&list.length?list:[{}]).map(bjcRowHTML).join('');
+  return '<div style="border:1px solid #bae6fd;background:#f0f9ff;border-radius:6px;padding:8px;margin-top:8px">'+
+    '<div style="font-size:12px;color:#0369a1;font-weight:700;margin-bottom:6px">🔌 변전 케이블접속(36kV GIS 삽입형 접속재)</div>'+
+    '<table style="border-collapse:collapse;width:100%;background:#fff">'+
+      '<thead><tr><th style="'+th+'">이름</th><th style="'+th+'">생년</th><th style="'+th+'">취득일</th><th style="'+th+'">만료일</th><th style="'+th+'">참고</th><th style="'+th+'"></th></tr></thead>'+
+      '<tbody id="m-bjc-body">'+rows+'</tbody>'+
+    '</table>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'+
+      '<button type="button" id="m-bjc-add" class="btn btn-sm" style="background:#0284c7;white-space:nowrap;flex-shrink:0">+ 인원 추가</button>'+
+      '<span style="font-size:10px;color:#6b7280">점수 계산 없음 · 만료일은 자격증 기재일 직접 입력 · 만료 30일 전부터 알람</span>'+
+    '</div>'+
+  '</div>';
+}
+function readBjcPanel(){
+  var body=document.getElementById('m-bjc-body');if(!body)return null;
+  var out=[];
+  body.querySelectorAll('tr[data-bjc-row]').forEach(function(tr){
+    var r={이름:tr.querySelector('.bjc-이름').value.trim(),생년:bjwNormBirth(tr.querySelector('.bjc-생년').value),
+           취득일:bjwNormDate(tr.querySelector('.bjc-취득일').value),만료일:bjwNormDate(tr.querySelector('.bjc-만료일').value),
+           참고:tr.querySelector('.bjc-참고').value.trim()};
+    if(r.이름||r.생년||r.취득일||r.만료일||r.참고)out.push(r);
+  });
+  return out;
+}
+function bjcFillPanel(list){
+  var body=document.getElementById('m-bjc-body');if(!body)return;
+  body.innerHTML=(Array.isArray(list)&&list.length?list:[{}]).map(bjcRowHTML).join('');
+}
+function bindBjcPanel(){
+  var body=document.getElementById('m-bjc-body');if(!body)return;
+  body.addEventListener('focusout',function(e){
+    var t=e.target;if(!t||!t.classList)return;
+    if(t.classList.contains('bjc-취득일')||t.classList.contains('bjc-만료일'))t.value=bjwNormDate(t.value);
+    if(t.classList.contains('bjc-생년'))t.value=bjwNormBirth(t.value);
+  });
+  body.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('.bjc-del');if(!b)return;
+    var tr=b.closest('tr');if(tr)tr.remove();
+  });
+  var add=document.getElementById('m-bjc-add');
+  if(add)add.addEventListener('click',function(){body.insertAdjacentHTML('beforeend',bjcRowHTML({}));});
+}
 function bindBjwPanel(){
   var body=document.getElementById('m-bjw-body');if(!body)return;
   var chk=document.getElementById('m-is자사'),lab=document.getElementById('m-bjw-label'),pan=document.getElementById('m-bjw-panel');
@@ -4772,6 +4830,14 @@ function getExpiryAlerts(c){
       var e=bjwRowExpiry(o.r,o.train);if(!e)return;
       var dB=Math.round((e-today)/86400000);
       if(dB<=30)alerts.push({kind:'변전전기원',custom:(o.train?'양성 ':'')+(o.r.이름||'(이름없음)')+' 갱신 '+(dB<0?'만료됨':'D-'+dB)+'('+_ymdLocal(e)+')'});
+    });
+  }
+  // 2026-11-23: 변전 케이블접속(36kV GIS 삽입형 접속재) 자격 — 만료일(직접 입력) 30일 전부터 알림
+  if(c.is자사&&Array.isArray(c.변전케이블접속)){
+    c.변전케이블접속.forEach(function(r){
+      var e=_bjwDate(r&&r.만료일);if(!e)return;
+      var dC=Math.round((e-today)/86400000);
+      if(dC<=30)alerts.push({kind:'케이블접속',custom:(r.이름||'(이름없음)')+' 갱신 '+(dC<0?'만료됨':'D-'+dC)+'('+_ymdLocal(e)+')'});
     });
   }
   // 2026-08-20: 메모 알람 — 업체등록에서 사용자가 켜고 지정한 날짜(시각은 항상 오전 10시 고정)가 지나면(끄기 전까지 계속) 알림에 포함
@@ -7306,7 +7372,7 @@ function openCompanyModal(idx){
           '<span class="badge type-자사">자사</span></label>'+
       '</div>'+
       '<label id="m-bjw-label" style="color:#6d28d9;font-weight:700;align-self:start;padding-top:8px'+(c.is자사?'':';display:none')+'">변전전기원</label>'+
-      '<div id="m-bjw-panel"'+(c.is자사?'':' style="display:none"')+'>'+bjwPanelHTML(c.변전전기원,idx)+'</div>'+
+      '<div id="m-bjw-panel"'+(c.is자사?'':' style="display:none"')+'>'+bjwPanelHTML(c.변전전기원,idx)+bjcPanelHTML(c.변전케이블접속)+'</div>'+
       '<label style="color:#0369a1;font-weight:700">그룹</label>'+
       '<div id="m-group-area" style="padding:4px 0;position:relative">'+
         renderGroupPickerHTML('m',c.groups)
@@ -7424,6 +7490,7 @@ function openCompanyModal(idx){
     updAll();
   })();
   bindBjwPanel();
+  bindBjcPanel();
   $('#m-cancel').onclick=function(){root.innerHTML=''};
   attachCompanyAutocomplete('m-업체명',function(c){
     fv('m-사업자번호',c.사업자번호||'');
@@ -7438,6 +7505,7 @@ function openCompanyModal(idx){
     if($('#m-is자사'))$('#m-is자사').checked=!!c.is자사;
     if($('#m-is임시'))$('#m-is임시').checked=!!c.is임시;
     bjwFillPanel(c.변전전기원);
+    bjcFillPanel(c.변전케이블접속);
     var ja=Number(c.일자리가점||0);
     if($('#m-일자리A'))$('#m-일자리A').checked=ja>=2.5;
     if($('#m-일자리B'))$('#m-일자리B').checked=(ja===0.5||ja===3.0);
@@ -7547,7 +7615,7 @@ function openCompanyModal(idx){
     // 1회성(임시): 새로 체크된 시점을 임시지정일로 기록(조합 이력이 없을 때 90일 기준일). 해제하면 지정일 삭제.
     if(obj.is임시){if(!(_oldC&&_oldC.is임시))obj.임시지정일=_ymdLocal(new Date());}else{obj.임시지정일='';}
     // 2026-11-20 변전전기원: 자사일 때만 패널 값을 저장. 자사 해제 시 기존 등록값은 그대로 두되 알람·점수에서는 제외(is자사 조건).
-    if(obj.is자사){var _bjwV=readBjwPanel();if(_bjwV)obj.변전전기원=_bjwV;}
+    if(obj.is자사){var _bjwV=readBjwPanel();if(_bjwV)obj.변전전기원=_bjwV;var _bjcV=readBjcPanel();if(_bjcV)obj.변전케이블접속=_bjcV;}
     if(!obj.업체명){toast('업체명을 입력하세요','bad');return;}
     if(isNew)state.db.push(stampNewCompanyDefaults(obj));
     else state.db[idx]=Object.assign({},state.db[idx],obj);

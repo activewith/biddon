@@ -159,3 +159,29 @@ test('업체등록: 생년 칸, 취득일 입력 시 만료일 자동 입력(직
   acq.value = '250201'; acq.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true }));
   assert.strictEqual(ex.value, '2027-01-22');                       // 직접 입력값 유지
 });
+
+test('변전 케이블접속: 이름·생년·취득일·만료일·참고 저장, 만료 알람', () => {
+  const d = w.document;
+  w.eval('canManageCompanyDB=function(){return true;};');
+  w.eval("state.db.push({업체명:'케이블테스트',is자사:true});");
+  const idx = w.eval('state.db.length-1');
+  w.openCompanyModal(idx);
+  d.getElementById('m-bjc-add').click();
+  const rows = d.querySelectorAll('#m-bjc-body tr');
+  assert.strictEqual(rows.length, 2);
+  const tr = rows[0];
+  tr.querySelector('.bjc-이름').value = '윤종환';
+  tr.querySelector('.bjc-생년').value = '800101';
+  tr.querySelector('.bjc-취득일').value = '230515';
+  tr.querySelector('.bjc-만료일').value = '280514';
+  tr.querySelector('.bjc-참고').value = '28년 5~6월 갱신';
+  d.getElementById('m-save').click();
+  const v = plain(w.eval('state.db[' + idx + '].변전케이블접속'));
+  assert.deepStrictEqual(v, [{ 이름: '윤종환', 생년: '1980-01-01', 취득일: '2023-05-15', 만료일: '2028-05-14', 참고: '28년 5~6월 갱신' }]);
+  const today = new w.Date(); today.setHours(0, 0, 0, 0);
+  const soon = new w.Date(today); soon.setDate(soon.getDate() + 5);
+  const a = plain(w.getExpiryAlerts({ is자사: true, 변전케이블접속: [{ 이름: '갑', 만료일: w._ymdLocal(soon) }, { 이름: '을', 만료일: '2099-01-01' }] }))
+    .filter((x) => x.kind === '케이블접속');
+  assert.strictEqual(a.length, 1);
+  assert.match(a[0].custom, /^갑 갱신 D-5/);
+});
