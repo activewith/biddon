@@ -12995,7 +12995,7 @@ function getConfirmBlockReasons(ci){ return withLegacyDBIfNeeded(function(){
   if(g.isLH&&combo.강제할당&&!r.적격)reasons.push('LH 강제할당이 적용된 조합입니다.');
   return reasons.length?reasons:null;
 }); }
-// 2026-11-24: 확정메세지 '최대지분' 근거 줄 — 예) "     [한우리29.7억÷투찰예상57.2억=52%]"
+// 2026-11-24: 확정메세지 '최대지분' 근거 줄 — 예) "[한우리29.7억÷투찰예상57.2억=52%]" (앞 공백 없음)
 // 억 표기는 대략의 근거일 뿐(시평 내림·기준금액 올림, 소수1자리), '=N%'는 조합슬롯 최대지분율(r.최대지분율_pct)의 정수 부분.
 // 대상: 유형이 '지역'인 슬롯 중 업체 입력·최대지분율 100% 미만인 업체만(2026-11-24 사용자 확정, 100% 이상은 제한 의미 없어 생략).
 // 시평 기반 최대지분율 제한이 없는 기준(지자체 30억 미만·도로공사·철도공단·한전)은 표기하지 않음.
@@ -13013,7 +13013,7 @@ function getMaxShareBasisNote(result,calc){
   }).map(function(r){
     var _db=state.db.find(function(x){return x.업체명===r.업체명;});
     var _nm=(_db&&_db.약어)?_db.약어:String(r.업체명).replace(/\(주\)|㈜|주식회사/g,'').trim();
-    return '     ['+_nm+_EOK_FLOOR(r.시평액)+'억÷'+_lbl+_ceilEok(_den)+'억='+Math.floor((Number(r.최대지분율_pct)||0)+1e-9)+'%]';
+    return '['+_nm+_EOK_FLOOR(r.시평액)+'억÷'+_lbl+_ceilEok(_den)+'억='+Math.floor((Number(r.최대지분율_pct)||0)+1e-9)+'%]';
   });
   return lines.join('\n');
 }
