@@ -6587,7 +6587,46 @@ function buildTypeCompanyOptions(grp,selected,calc,currentCi,currentSi){
   var _mainList=list.filter(function(c){return !_dedSet.has(c.업체명);});
   // 그룹별 optgroup 렌더링 (감점 업체 제외)
   var groups=state.groups&&state.groups.length>0?state.groups:[];
-  if(groups.length>0){
+  // 2026-11-24: '지역' 유형 + 지역의무지분 입력 시, 감점 없는 목록을 a/b 영역으로 나눈다(사용자 정의).
+  //  a = 한 업체로 지역의무지분 충족(라벨 지분율 = 시평액/지분율기준 ≥ 지역의무지분)
+  //  b = 2개 이상 업체가 있어야 충족(라벨 지분율 < 지역의무지분)
+  //  c = 감점 업체(아래 감점 섹터), d = ==== 아래 단독가능/지분미달/미검출 등(기존 그대로)
+  //  각 영역 안에서는 그룹 → 개별 순서 유지. 약정지분율(개별최대지분율)은 고려하지 않음.
+  var _의무R=Number(state.bid.지역의무지분)||0;
+  if(grp==='지역'&&_의무R>0&&showPct){
+    var _기R=calc.isLH&&calc.lh지분율기준?calc.lh지분율기준:calc.E7;
+    var _maxPctR=function(c){
+      var _pd=getCompPerfData(c,effPerfGongjong(grp,calc));
+      return calc.isLH&&calc.lh지분율기준?Math.floor((Number(_pd.시평액)/_기R)*1000)/10:FLOOR1((Number(_pd.시평액)/_기R)*100);
+    };
+    var _aList=_mainList.filter(function(c){return _maxPctR(c)>=_의무R-1e-9;});
+    var _aSet=new Set(_aList.map(function(c){return c.업체명;}));
+    var _bList=_mainList.filter(function(c){return !_aSet.has(c.업체명);});
+    var _SEP='─────────────';
+    var _renderArea=function(arr,sepBefore){
+      if(!arr.length)return '';
+      var out='',asg=new Set(),gh='';
+      groups.forEach(function(g){
+        var gl=arr.filter(function(c){return c.groups&&c.groups.indexOf(g)>=0;});
+        if(!gl.length)return;
+        gh+='<optgroup label="'+esc(g)+'">';
+        gl.forEach(function(c){gh+=makeOpt(c);asg.add(c.업체명);});
+        gh+='</optgroup>';
+      });
+      var ug=arr.filter(function(c){return !asg.has(c.업체명);});
+      if(asg.size===0){
+        if(sepBefore)out+='<optgroup label="'+_SEP+'">'+ug.map(function(c){return makeOpt(c);}).join('')+'</optgroup>';
+        else out+=ug.map(function(c){return makeOpt(c);}).join('');
+        return out;
+      }
+      if(sepBefore)out+='<optgroup label="'+_SEP+'"></optgroup>';
+      out+=gh;
+      if(ug.length)out+='<optgroup label="개별">'+ug.map(function(c){return makeOpt(c);}).join('')+'</optgroup>';
+      return out;
+    };
+    html+=_renderArea(_aList,pinnedNames.size>0);
+    html+=_renderArea(_bList,_aList.length>0||pinnedNames.size>0);
+  } else if(groups.length>0){
     var assigned=new Set();
     groups.forEach(function(g){
       var gList=_mainList.filter(function(c){return c.groups&&c.groups.indexOf(g)>=0;});
