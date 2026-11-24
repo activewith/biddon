@@ -535,7 +535,10 @@ html.view-only #db-table th:nth-child(17),html.view-only #db-table td:nth-child(
     <div class="panel">
       <h2>2. 조합 (기본 2개 · 필요 시 추가, 슬롯은 최대 5)
         <span id="combo-summary" style="font-size:11px;color:#6b7280;font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto"></span>
-        <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:auto" title="체크 시 조합결과TXT의 모든 조합 우측에 시평 합산액을 표시">
+        <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer;margin-left:auto" title="체크 시 모든 조합의 확정메세지 맨 아래에 최대지분율 계산 근거(시평÷투찰예상=최대지분%)를 표기">
+          <input type="checkbox" id="chk-표시최대지분">최대지분
+        </label>
+        <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="체크 시 조합결과TXT의 모든 조합 우측에 시평 합산액을 표시">
           <input type="checkbox" id="chk-표시시평합">시평합
         </label>
         <label class="small" style="display:flex;align-items:center;gap:3px;cursor:pointer" title="체크 시 조합결과TXT의 모든 조합 우측에 실적 합산액을 표시">
@@ -10486,6 +10489,9 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
             '">강제할당'+(combo.강제할당?' ON':'')+'</button>':'')+
           (calc.isLH?'<button class="btn btn-sm" style="background:'+lhBtnColor+';color:#fff;font-weight:600" data-lhcalc="'+ci+'">점수계산</button>':'')+
           (calc.isRail&&!railIsFire(calc.공종)?'<button class="btn btn-sm" style="background:#0369a1;color:#fff;font-weight:600" data-railtech="'+ci+'" title="철도기술점수 DB에서 업체명이 일치하는 업체의 총합산점수를 각 슬롯 Func 칸에 자동 입력">🚄기술</button>':'')+
+          (comboCalc.isKEPCO?'':'<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 확정메세지 맨 아래에 최대지분율 계산 근거를 표기(전체표시와 무관하게 적용)">'+
+            '<input type="checkbox" class="combo-maxshare-chk" data-ci="'+ci+'"'+(combo.표시최대지분?' checked':'')+'>최대지분'+
+          '</label>')+
           (comboCalc.isKEPCO?'':'<label class="small" style="display:flex;align-items:center;gap:2px;cursor:pointer" title="체크 시 이 조합만 조합결과TXT에 시평 합산액을 표시(전체표시와 무관하게 적용)">'+
             '<input type="checkbox" class="combo-sipyung-chk" data-ci="'+ci+'"'+(combo.표시시평합?' checked':'')+'>시평합'+
           '</label>')+
@@ -11125,6 +11131,7 @@ function bind(){
     var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합'),_cu=$('#chk-표시안내URL');
     if(_cj)_cj.addEventListener('change',function(){state.bid.표시실적합=this.checked;save();});
     if(_cs)_cs.addEventListener('change',function(){state.bid.표시시평합=this.checked;save();});
+    var _cm=$('#chk-표시최대지분');if(_cm)_cm.addEventListener('change',function(){state.bid.표시최대지분=this.checked;save();});
     if(_cu)_cu.addEventListener('change',function(){state.bid.표시안내URL=this.checked;if(this.checked)syncGuideUrlToAllCombos();else clearGuideUrlFromAllCombos();save();});
     // 2026-11-05: 투찰확인 체크 — 다시 체크하면 이전 확인완료 기록은 초기화(알림 재대상)
     var _tc=$('#chk-투찰확인');
@@ -11133,7 +11140,7 @@ function bind(){
 
   // 저장된 값을 inputs에 복원
   var b=state.bid;
-  (function(){var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합'),_cu=$('#chk-표시안내URL');if(_cj)_cj.checked=!!b.표시실적합;if(_cs)_cs.checked=!!b.표시시평합;if(_cu)_cu.checked=!!b.표시안내URL;})();
+  (function(){var _cj=$('#chk-표시실적합'),_cs=$('#chk-표시시평합'),_cu=$('#chk-표시안내URL');if(_cj)_cj.checked=!!b.표시실적합;if(_cs)_cs.checked=!!b.표시시평합;if(_cu)_cu.checked=!!b.표시안내URL;var _cm=$('#chk-표시최대지분');if(_cm)_cm.checked=!!b.표시최대지분;})();
   (function(){b.공종=normGongjong(b.공종)||'전기';var _ge=$('#in-공종');if(_ge)_ge.value=b.공종;syncAvgRatios(b.공종);var _lge=$('#o-공종-label');if(_lge)_lge.textContent=b.공종;})();
   refreshDbFixedSelect();
   if(b.시평제한!=null)$('#in-시평제한').value=FMT_NUM(b.시평제한);
@@ -11391,6 +11398,9 @@ function bind(){
     }
     if(t.classList.contains('combo-sipyung-chk')){
       state.combos[Number(t.dataset.ci)].표시시평합=t.checked;save();return;
+    }
+    if(t.classList.contains('combo-maxshare-chk')){
+      state.combos[Number(t.dataset.ci)].표시최대지분=t.checked;save();return;
     }
     // 2026-10-20: 조합 '전송' 체크 — 전송 완료 조합 구분용(표시 전용, 계산·출력에는 영향 없음)
     if(t.classList.contains('combo-sent-chk')){
@@ -12985,6 +12995,28 @@ function getConfirmBlockReasons(ci){ return withLegacyDBIfNeeded(function(){
   if(g.isLH&&combo.강제할당&&!r.적격)reasons.push('LH 강제할당이 적용된 조합입니다.');
   return reasons.length?reasons:null;
 }); }
+// 2026-11-24: 확정메세지 '최대지분' 근거 줄 — 예) "     [한우리29.7억÷투찰예상57.2억=52%]"
+// 억 표기는 대략의 근거일 뿐(시평 내림·기준금액 올림, 소수1자리), '=N%'는 조합슬롯 최대지분율(r.최대지분율_pct)의 정수 부분.
+// 대상: 유형이 '지역'인 슬롯 중 업체 입력·최대지분율 100% 미만인 업체만(2026-11-24 사용자 확정, 100% 이상은 제한 의미 없어 생략).
+// 시평 기반 최대지분율 제한이 없는 기준(지자체 30억 미만·도로공사·철도공단·한전)은 표기하지 않음.
+// LH는 투찰금액 대신 지분율기준(추정금액)으로 계산되므로 분모 라벨을 '지분기준'으로 표기.
+function getMaxShareBasisNote(result,calc){
+  if(!result||!calc)return '';
+  if(calc.jijaTier===1||calc.isDoRo||calc.isRail||calc.isKEPCO)return '';
+  var _isLHm=!!(calc.isLH&&calc.lh지분율기준&&calc.lh지분율기준>0);
+  var _den=_isLHm?calc.lh지분율기준:calc.E7;
+  if(!(_den>0))return '';
+  var _ceilEok=function(krw){var v=Math.ceil((Number(krw)||0)/10000000)/10;var t=v.toFixed(1);return t.slice(-2)==='.0'?t.slice(0,-2):t;};
+  var _lbl=_isLHm?'지분기준':'투찰예상';
+  var lines=result.ROW.filter(function(r){
+    return (r.업체명||'').trim()!==''&&r.grp==='지역'&&(Number(r.시평액)||0)>0&&(Number(r.최대지분율_pct)||0)<100;
+  }).map(function(r){
+    var _db=state.db.find(function(x){return x.업체명===r.업체명;});
+    var _nm=(_db&&_db.약어)?_db.약어:String(r.업체명).replace(/\(주\)|㈜|주식회사/g,'').trim();
+    return '     ['+_nm+_EOK_FLOOR(r.시평액)+'억÷'+_lbl+_ceilEok(_den)+'억='+Math.floor((Number(r.최대지분율_pct)||0)+1e-9)+'%]';
+  });
+  return lines.join('\n');
+}
 function showConfirmPop(ci){
   var reasons=getConfirmBlockReasons(ci);
   if(!reasons){_showConfirmPopCore(ci);return;}
@@ -13149,6 +13181,8 @@ function _showConfirmPopCore(ci){ return withLegacyDBIfNeeded(function(){
   var _lhGapInfo=(_globalCalc.isLH&&_result.LH점수모드)?{부족목록:_result.LH부족목록,합산실적:_result.합산실적,합산시평:_result.합산시평,순신인도:_result.순신인도,총점:_result.lh총점,적격:_result.적격}:null;
   var _elig=getEligibilityChecklist(state.bid,_globalCalc,null,_forceRows.length?_result.lh원점수:null,_lhGapInfo);
   if(_elig)result+='\n\n'+_elig;
+  // 2026-11-24: '최대지분' 체크(전체 b.표시최대지분 또는 조합별 combo.표시최대지분) 시 메세지 맨 아래에 최대지분율 계산 근거 표기
+  if(state.bid.표시최대지분||combo.표시최대지분){var _msNote=getMaxShareBasisNote(_result,_comboCalc);if(_msNote)result+='\n'+_msNote;}
   var mr=MODAL_ROOT;
   mr.innerHTML='<div class="modal-back"><div class="modal" style="min-width:420px;max-width:96vw;padding:0;overflow:hidden">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:2px solid var(--border)">'+
@@ -13547,6 +13581,7 @@ function restoreBidInputsFromState(){
   var _n=$('#in-구성업체수');if(_n)_n.value=Math.max(1,Math.min(MAX_SLOTS,Number(b.구성업체수)||2));
   var _cj=$('#chk-표시실적합');if(_cj)_cj.checked=!!b.표시실적합;
   var _cs=$('#chk-표시시평합');if(_cs)_cs.checked=!!b.표시시평합;
+  var _cmR=$('#chk-표시최대지분');if(_cmR)_cmR.checked=!!b.표시최대지분;
   var _cu=$('#chk-표시안내URL');if(_cu)_cu.checked=!!b.표시안내URL;
   var _tcR=$('#chk-투찰확인');if(_tcR)_tcR.checked=isBidCheckOn(b);
   refreshCompanyAvgDisplay();
