@@ -10652,6 +10652,27 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
       if(val>spMax+1e-9)val=floor5Below(spMax);
     }
     지역s.지분율=val;지역s.isRec=true;
+    // 2026-11-25: 지역업체 지분 후보 — 시작값(val), 그 아래 5%단위(45,40,35…), 하한은 지역의무지분(최소지분율보다 작으면 최소지분율).
+    // 지역의무지분 미입력이면 시작값만(기존 동작). 각 후보로 지역 지분을 넣어보고 우선협정업체가 '필요' 후보가 되는 첫 값을 반환, 없으면 null.
+    function regionShareSteps(){
+      var arr=[val];
+      var 의무=Number(state.bid.지역의무지분)||0;
+      if(!(의무>0))return arr;
+      var lower=Math.max(의무,Number(state.bid.최소지분율)||0);
+      if(!(lower<val-1e-9))return arr;
+      for(var v=floor5Below(val);v>=lower-1e-9;v-=5)arr.push(v);
+      if(arr[arr.length-1]>lower+1e-9)arr.push(lower);
+      return arr;
+    }
+    function pickRegionShareForPartner(name,chkSi){
+      var steps=regionShareSteps();
+      for(var i=0;i<steps.length;i++){
+        지역s.지분율=steps[i];
+        if(isEligibleForNeedType(name,calc,ci,chkSi))return steps[i];
+      }
+      지역s.지분율=val;
+      return null;
+    }
 
     var _jongKey=(calc.공종||'전기').indexOf('전기')>=0?'전기':((calc.공종||'').indexOf('통신')>=0?'통신':'소방');
     var 우선협정명=dbEntry?(dbEntry[_jongKey+'_우선협정']||'').trim():'';
@@ -10665,10 +10686,14 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
     var _dupSi=[];
     combo.slots.forEach(function(s3,si3){if(si3!==지역si&&(s3.업체명||'').trim()===우선협정명)_dupSi.push(si3);});
     if(_dupSi.length){
-      combo.slots[_dupSi[0]].지분율=Math.max(0,100-val);
-      combo.slots[_dupSi[0]].isRec=true;
       for(var _k=1;_k<_dupSi.length;_k++)combo.slots[_dupSi[_k]]=emptySlot();
-      toast('자동분배 완료 (우선협정업체 이미 있음 — 지분만 갱신)','ok');
+      var _valD=pickRegionShareForPartner(우선협정명,_dupSi[0]);
+      var _fitD=_valD!=null;
+      if(_valD==null)_valD=val;
+      지역s.지분율=_valD;
+      combo.slots[_dupSi[0]].지분율=Math.max(0,100-_valD);
+      combo.slots[_dupSi[0]].isRec=true;
+      toast('자동분배 완료 (우선협정업체 이미 있음 — 지분만 갱신'+(_fitD&&_valD!==val?', 지역업체 '+TRIMDEC(val)+'%→'+TRIMDEC(_valD)+'% 조정':'')+')','ok');
       save();refreshCombos();
       return;
     }
@@ -10678,9 +10703,13 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
     // (예: 충남 공고에서 충남 단독가능 업체가 우선협정으로 등록돼 있으면 '필요' 목록에서 빠지므로 투입하지 않음)
     var ppCo=state.db.find(function(x){return x.업체명===우선협정명;});
     var _chkSi=emptySi>=0?emptySi:combo.slots.length; // 빈 슬롯이 없으면 새로 추가될 위치 기준(제외할 행 없음)
-    if(!ppCo||!isEligibleForNeedType(우선협정명,calc,ci,_chkSi)){
+    // 2026-11-25: 약정/기본지분율로 우선협정업체가 '필요' 후보에서 빠지면, 지역업체 지분을 5%단위로 낮춰가며
+    // (예: 49→45→40→35→30) 지역의무지분까지 재시도 — 우선협정업체와 적격 통과 가능한 첫 지분율을 채택.
+    var _valP=ppCo?pickRegionShareForPartner(우선협정명,_chkSi):null;
+    if(_valP==null){
+      지역s.지분율=val;
       toast(!ppCo?('우선협정업체 "'+우선협정명+'"이(가) 업체DB에 없어 투입하지 않았습니다 (지역업체 지분만 입력)')
-                 :('우선협정업체 "'+우선협정명+'"은(는) 필요 유형 후보가 아니라 투입하지 않았습니다 (지역업체 지분만 입력)'),'bad');
+                 :('우선협정업체 "'+우선협정명+'"은(는) 지역업체 지분을 지역의무지분까지 낮춰도 필요 유형 후보가 아니라 투입하지 않았습니다 (지역업체 지분만 입력)'),'bad');
       save();refreshCombos();
       return;
     }
@@ -10688,10 +10717,11 @@ function recommendRegional(ci){ return withLegacyDBIfNeeded(function(){
       if(combo.slots.length<MAX_SLOTS){combo.slots.push(emptySlot());emptySi=combo.slots.length-1;}
       else{toast('빈 슬롯이 없습니다 (최대 '+MAX_SLOTS+'개)','bad');save();refreshCombos();return;}
     }
-    var 잔여지분=Math.max(0,100-val);
+    지역s.지분율=_valP;
+    var 잔여지분=Math.max(0,100-_valP);
     combo.slots[emptySi]=buildSlotFromDb(ppCo,잔여지분,'필요');
 
-    toast('자동분배 완료 (지역업체+우선협정업체)','ok');
+    toast('자동분배 완료 (지역업체+우선협정업체'+(_valP!==val?', 지역업체 '+TRIMDEC(val)+'%→'+TRIMDEC(_valP)+'% 조정':'')+')','ok');
     save();refreshCombos();
     return;
   }
