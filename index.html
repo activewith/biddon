@@ -134,10 +134,6 @@ tr.hover:hover{background:#f8fafc}
 .combo-sent-time{margin-left:auto;font-size:11px;font-weight:600;color:#0f172a;background:#fff;border:1px solid var(--border);border-radius:4px;padding:1px 6px;position:relative;z-index:6;white-space:nowrap}
 .combo-sent-time+.combo-sent-lbl{margin-left:0}
 /* 2026-11-20: 조합 순서 이동(▲▼/위치 선택) + 비교 조합 */
-.combo-move{display:inline-flex;align-items:center;gap:2px;position:relative;z-index:6}
-.combo-move button{padding:0 5px;height:20px;font-size:10px;line-height:18px;border:1px solid var(--border);background:#fff;border-radius:4px;cursor:pointer;color:#334155}
-.combo-move button:disabled{opacity:.35;cursor:default}
-.combo-move select{height:20px;font-size:11px;padding:0 2px;border:1px solid var(--border);border-radius:4px;background:#fff;font-family:inherit;max-width:86px}
 .combo-cmp-lbl{display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;font-weight:700;color:#9a3412;background:#fff;border:1px solid #fdba74;border-radius:5px;padding:1px 7px;position:relative;z-index:6;user-select:none}
 .combo-cmp-lbl input{width:14px;height:14px;margin:0;cursor:pointer}
 .combo.compare{border:3px solid #ea580c!important;box-shadow:0 0 0 1px rgba(234,88,12,.25)!important}
@@ -145,7 +141,6 @@ tr.hover:hover{background:#f8fafc}
 .combo-cmp-divider{font-size:12px;font-weight:700;color:#c2410c;text-align:center;border-top:2px dashed #fb923c;padding-top:4px;margin-top:4px}
 .combo-head{background:#f1f5f9;padding:6px 10px;display:flex;align-items:center;gap:10px;font-weight:600;font-size:12px;flex-wrap:wrap}
 .combo-head .name{flex:0 0 auto}
-.combo-head .combo-move{margin-left:-4px}
 .combo-head .name{font-size:13px;color:#0f172a}
 .combo-actions-row{background:#f1f5f9;padding:4px 10px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .combo-actions-row .need-txt{font-size:10px;color:#92400e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0}
@@ -9666,12 +9661,10 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   if(window.__CT_RETURN_ONLY)return txt; // 2026-10-16: 공고취소 시 텍스트만 받아 취소공고로 보관(팝업 없음)
   // 팝업으로 표시 — 2개 이상 조합에 들어간 업체는 굵게, 부적격 조합 줄은 전체 적색
   var _dupHas=false;
-  // 2026-11-27: 조합 줄 앞에 ▲▼ 이동 버튼(편집 불가 영역, 복사/저장 텍스트에서는 제외). 같은 그룹(일반/비교) 안에서만 이동.
-  function _ctGrpPos(ci){
-    var cmp=!!(state.combos[ci]&&state.combos[ci].비교),g=[];
-    state.combos.forEach(function(cb,i){if(!!cb.비교!==cmp)return;if(!calcSlot(cb,c).ROW.some(function(rw){return(rw.업체명||'').trim()!=='';}))return;g.push(i);});
-    return {first:g[0]===ci,last:g[g.length-1]===ci,n:g.length};
-  }
+  // 2026-11-27: 조합 줄 앞 ⠿ 손잡이를 잡고 줄을 끌어 원하는 위치에 놓으면 조합 순서 이동(편집 불가 영역, 복사/저장 텍스트에서는 제외).
+  // 같은 그룹(일반/비교) 안에서만 이동. 조합 줄은 span.ct-ln(data-ci, data-cmp)으로 감싼다.
+  var _ctGrpN={0:0,1:0};
+  _rawTxt.split('\n').forEach(function(ln){var mm=/^\uE004(\d+)\uE005/.exec(ln);if(mm)_ctGrpN[state.combos[+mm[1]]&&state.combos[+mm[1]].비교?1:0]++;});
   var _ctMvHas=false;
   var _ctHtml=_rawTxt.split('\n').map(function(ln){
     var mvCi=null,mm=/^\uE004(\d+)\uE005/.exec(ln);
@@ -9680,13 +9673,12 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
     var h=_ctLineHtml(ln);
     h=bad?'<span style="color:#dc2626">'+h+'</span>':h;
     if(mvCi!=null){
-      var gp=_ctGrpPos(mvCi);
-      if(gp.n>1){
+      var cmpG=state.combos[mvCi]&&state.combos[mvCi].비교?1:0;
+      if(_ctGrpN[cmpG]>1){
         _ctMvHas=true;
-        h='<span class="ct-mv" contenteditable="false" style="user-select:none;display:inline-block;margin-right:6px;vertical-align:middle">'+
-          '<button type="button" data-ct-mv="'+mvCi+'" data-dir="up" title="조합 #'+(mvCi+1)+' 위로"'+(gp.first?' disabled':'')+' style="font-size:9px;line-height:1;padding:1px 4px;margin-right:2px;border:1px solid #cbd5e1;border-radius:3px;background:'+(gp.first?'#f1f5f9;color:#cbd5e1':'#eff6ff;color:#1d4ed8;cursor:pointer')+'">▲</button>'+
-          '<button type="button" data-ct-mv="'+mvCi+'" data-dir="down" title="조합 #'+(mvCi+1)+' 아래로"'+(gp.last?' disabled':'')+' style="font-size:9px;line-height:1;padding:1px 4px;border:1px solid #cbd5e1;border-radius:3px;background:'+(gp.last?'#f1f5f9;color:#cbd5e1':'#eff6ff;color:#1d4ed8;cursor:pointer')+'">▼</button>'+
-        '</span>'+h;
+        h='<span class="ct-ln" data-ci="'+mvCi+'" data-cmp="'+cmpG+'">'+
+          '<span class="ct-mv" contenteditable="false" data-ct-grip="'+mvCi+'" title="잡고 끌어서 조합 순서 이동" style="user-select:none;display:inline-block;margin-right:6px;padding:0 4px;color:#64748b;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:3px;cursor:grab;font-size:11px;line-height:14px">⠿</span>'+
+          h+'</span>';
       }
     }
     return h;
@@ -9704,9 +9696,9 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
       '<button id="m-ct-close" class="btn btn-ghost" style="padding:2px 8px">닫기</button>'+
     '</div>'+
     '<div style="padding:12px 16px">'+
-      '<div id="m-ct-txt" contenteditable="true" spellcheck="false" style="width:100%;height:340px;overflow:auto;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;resize:vertical;line-height:1.6;box-sizing:border-box;white-space:pre;outline:none;background:#fff">'+_ctHtml+'</div>'+
+      '<div id="m-ct-txt" contenteditable="true" spellcheck="false" style="position:relative;width:100%;height:340px;overflow:auto;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;resize:vertical;line-height:1.6;box-sizing:border-box;white-space:pre;outline:none;background:#fff">'+_ctHtml+'</div>'+
       ((_dupHas||_badHas)?'<div style="font-size:11px;color:#64748b;margin-top:4px">※ '+(_dupHas?'<b>굵게</b> = 다른 조합과 중복된 업체':'')+(_dupHas&&_badHas?' · ':'')+(_badHas?'<span style="color:#dc2626">적색 줄</span> = 부적격 조합':'')+' (복사/저장 텍스트에는 서식 없음)</div>':'')+
-      (_ctMvHas?'<div style="font-size:11px;color:#64748b;margin-top:2px">※ 줄 앞 ▲▼ = 조합 순서 이동(조합슬롯 순서도 함께 바뀜, 비교 조합끼리만 이동). 이동하면 창에서 직접 고친 내용은 초기화됩니다. 복사/저장 텍스트에는 ▲▼ 없음.</div>':'')+
+      (_ctMvHas?'<div style="font-size:11px;color:#64748b;margin-top:2px">※ 줄 앞 ⠿ 를 잡고 끌어 놓으면 조합 순서 이동(조합슬롯 순서도 함께 바뀜, 비교 조합끼리만 이동). 이동하면 창에서 직접 고친 내용은 초기화됩니다. 복사/저장 텍스트에는 ⠿ 없음.</div>':'')+
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">'+
         '<button class="btn btn-ghost" id="m-ct-copy" style="padding:4px 12px;font-size:12px">📋 복사</button>'+
         '<button class="btn" id="m-ct-save" style="background:#059669;padding:4px 14px;font-size:13px;font-weight:700">💾 저장</button>'+
@@ -9715,7 +9707,7 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   '</div></div>';
   document.getElementById('m-ct-close').onclick=function(){mr.innerHTML='';};
   mr.querySelector('.modal-back').addEventListener('click',function(ev){if(ev.target===this)mr.innerHTML='';});
-  // 2026-11-27: ▲▼ 버튼을 뺀 텍스트 — 복제본에서 .ct-mv 제거 후 화면 밖에 잠시 붙여 innerText(줄바꿈 반영) 추출
+  // 2026-11-27: ⠿ 손잡이를 뺀 텍스트 — 복제본에서 .ct-mv 제거 후 화면 밖에 잠시 붙여 innerText(줄바꿈 반영) 추출
   function _ctPlainText(){
     var t=document.getElementById('m-ct-txt');
     if(!t.querySelector('.ct-mv'))return t.innerText;
@@ -9726,24 +9718,35 @@ function exportCombosText(){ return withLegacyDBIfNeeded(function(){
   }
   var _ctBox=document.getElementById('m-ct-txt');
   if(window.__CT_SCROLL!=null){_ctBox.scrollTop=window.__CT_SCROLL;window.__CT_SCROLL=null;}
-  _ctBox.addEventListener('mousedown',function(ev){if(ev.target.closest('.ct-mv'))ev.preventDefault();});
-  _ctBox.addEventListener('click',function(ev){
-    var bt=ev.target.closest('[data-ct-mv]');if(!bt)return;
-    ev.preventDefault();if(bt.disabled)return;
-    var ci=Number(bt.dataset.ctMv),dir=bt.dataset.dir,cmp=!!state.combos[ci].비교;
-    // 빈 조합은 TXT에 안 보이므로 건너뛰고, 보이는 바로 위/아래 조합 기준으로 이동
-    var vis=[];state.combos.forEach(function(cb,i){if(!!cb.비교!==cmp)return;if(!calcSlot(cb,calcBid()).ROW.some(function(rw){return(rw.업체명||'').trim()!=='';}))return;vis.push(i);});
-    var p=vis.indexOf(ci),ok=false;
-    if(dir==='up'&&p>0){
-      // 보이는 이전 조합(k) 바로 앞에 두기 = k 앞의 같은 그룹 조합(j) 뒤로, 없으면 그룹 맨 앞으로
-      var k=vis[p-1],j=-1;for(var q=k-1;q>=0;q--){if(!!state.combos[q].비교===cmp){j=q;break;}}
-      ok=moveCombo(ci,j<0?'front':j);
+  _ctBox.addEventListener('mousedown',function(ev){
+    var grip=ev.target.closest('[data-ct-grip]');if(!grip||ev.button!==0)return;
+    ev.preventDefault();
+    var srcLn=grip.closest('.ct-ln'),ci=Number(grip.dataset.ctGrip),cmpG=srcLn.dataset.cmp;
+    var lns=Array.prototype.filter.call(_ctBox.querySelectorAll('.ct-ln'),function(x){return x.dataset.cmp===cmpG;});
+    var ind=document.createElement('div');
+    ind.style.cssText='position:absolute;left:4px;right:4px;height:0;border-top:2px solid #2563eb;pointer-events:none;display:none;z-index:3';
+    _ctBox.appendChild(ind);
+    srcLn.style.background='#dbeafe';grip.style.cursor='grabbing';document.body.style.cursor='grabbing';
+    var drop=null; // {before: ci | null(=그룹 맨 끝)}
+    function onMove(e){
+      var br=_ctBox.getBoundingClientRect();
+      if(e.clientY<br.top+24)_ctBox.scrollTop-=12;else if(e.clientY>br.bottom-24)_ctBox.scrollTop+=12;
+      var tgt=null,y=null;
+      for(var i=0;i<lns.length;i++){var r=lns[i].getBoundingClientRect();if(e.clientY<r.top+r.height/2){tgt=lns[i];y=r.top;break;}}
+      if(!tgt){var lr=lns[lns.length-1].getBoundingClientRect();y=lr.bottom;}
+      drop={before:tgt?Number(tgt.dataset.ci):null};
+      ind.style.top=(y-br.top+_ctBox.scrollTop-1)+'px';ind.style.display='block';
     }
-    else if(dir==='down'&&p>=0&&p<vis.length-1)ok=moveCombo(ci,vis[p+1]);
-    if(!ok)return;
-    save();refreshCombos();
-    window.__CT_SCROLL=_ctBox.scrollTop;
-    exportCombosText();
+    function onUp(){
+      document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);
+      document.body.style.cursor='';ind.remove();srcLn.style.background='';grip.style.cursor='grab';
+      if(drop&&ctDropCombo(ci,drop.before)){
+        save();refreshCombos();
+        window.__CT_SCROLL=_ctBox.scrollTop;
+        exportCombosText();
+      }
+    }
+    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
   });
   document.getElementById('m-ct-copy').onclick=function(){
     copyToClipboard(_ctPlainText(), '복사 완료');
@@ -10444,19 +10447,20 @@ function moveCombo(from,target){
   normalizeComboOrder(arr);
   return true;
 }
-// 조합 이동 컨트롤 HTML(▲▼ + "위치" 선택)
-function comboMoveHtml(ci){
-  var arr=state.combos,cmp=!!arr[ci].비교,grp=[];
-  arr.forEach(function(c,i){if(!!c.비교===cmp)grp.push(i);});
-  var pos=grp.indexOf(ci);
-  var opts='<option value="">위치</option>';
-  if(pos>0)opts+='<option value="front">맨 앞으로</option>';
-  grp.forEach(function(k,gi){if(k===ci||gi===pos-1)return;opts+='<option value="'+k+'">#'+(k+1)+' 뒤로</option>';});
-  return '<span class="combo-move" title="조합 순서 이동 — 조합결과TXT 표시 순서도 이 순서를 따릅니다'+(cmp?' (비교 조합끼리만 이동)':' (비교 조합은 항상 맨 아래)')+'">'+
-    '<button type="button" data-move-combo="'+ci+'" data-dir="up"'+(pos<=0?' disabled':'')+'>▲</button>'+
-    '<button type="button" data-move-combo="'+ci+'" data-dir="down"'+(pos>=grp.length-1?' disabled':'')+'>▼</button>'+
-    (grp.length>1?'<select class="combo-move-sel" data-ci="'+ci+'">'+opts+'</select>':'')+
-  '</span>';
+// 2026-11-27: 조합결과TXT 드래그 이동 — 조합 ci를 같은 그룹의 조합 beforeCi 바로 앞으로(beforeCi==null이면 그룹 맨 끝으로).
+// TXT에 안 보이는 빈 조합이 사이에 있어도 '보이는 위치' 기준으로 놓인다.
+function ctDropCombo(ci,beforeCi){
+  var arr=state.combos;if(!arr[ci])return false;
+  var cmp=!!arr[ci].비교;
+  if(beforeCi===ci)return false;
+  if(beforeCi==null){
+    var last=-1;arr.forEach(function(c,i){if(!!c.비교===cmp)last=i;});
+    return last!==ci&&moveCombo(ci,last);
+  }
+  if(!arr[beforeCi]||!!arr[beforeCi].비교!==cmp)return false;
+  var j=-1;for(var q=beforeCi-1;q>=0;q--){if(q!==ci&&!!arr[q].비교===cmp){j=q;break;}}
+  if(j<0)return moveCombo(ci,'front');
+  return moveCombo(ci,j);
 }
 
 function refreshCombos(){ return withLegacyDBIfNeeded(function(){
@@ -10512,7 +10516,7 @@ function refreshCombos(){ return withLegacyDBIfNeeded(function(){
     var scoreFootHtml=buildScoreFootHtml(calc,result);
     card.innerHTML=
       '<div class="combo-head">'+
-        '<span class="name">조합 #'+(ci+1)+'</span>'+comboMoveHtml(ci)+
+        '<span class="name">조합 #'+(ci+1)+'</span>'+
         '<label class="combo-cmp-lbl" title="비교 조합 — 체크하면 맨 아래로 이동하고, 조합결과TXT에서 -비교- 아래에 따로 표시됩니다">'+
           '<input type="checkbox" class="combo-cmp-chk" data-ci="'+ci+'"'+(combo.비교?' checked':'')+'>비교'+
         '</label>'+status+
@@ -11516,17 +11520,6 @@ function bind(){
       if(ncard)ncard.scrollIntoView({behavior:'smooth',block:'nearest'});
       return;
     }
-    // 2026-11-20: 조합 위치 선택("#k 뒤로"/"맨 앞으로")
-    if(t.classList.contains('combo-move-sel')){
-      var mvi=Number(t.dataset.ci),mobj=state.combos[mvi],mv=t.value;
-      if(!mv)return;
-      if(moveCombo(mvi,mv==='front'?'front':Number(mv))){
-        save();refreshCombos();
-        var mcard=$('#combos').querySelector('.combo[data-ci="'+state.combos.indexOf(mobj)+'"]');
-        if(mcard)mcard.scrollIntoView({behavior:'smooth',block:'nearest'});
-      }else t.value='';
-      return;
-    }
     // 조합별 안내(URL) 개별표시 체크박스 — 체크 시 이 조합의 확정메모를 현재 적격기준의 안내(URL)로 채움(전체표시와는 OR 조건).
     // 2026-09-16: 해제하면 확정메모를 비움 — 단, 전체표시(state.bid.표시안내URL)가 켜져 있으면 OR 조건상 여전히
     // 표시 대상이므로 clearGuideUrlFromCombo 내부에서 지우지 않고 유지함.
@@ -11639,17 +11632,6 @@ function bind(){
     if((e.target.value||'').trim())e.target.dispatchEvent(new Event('input'));
   });
   $('#combos').addEventListener('click',function(e){
-    var mvBtn=e.target.closest('[data-move-combo]');
-    if(mvBtn){
-      if(mvBtn.disabled)return;
-      var _mvi=Number(mvBtn.dataset.moveCombo),_mobj=state.combos[_mvi];
-      if(moveCombo(_mvi,mvBtn.dataset.dir)){
-        save();refreshCombos();
-        var _mc=$('#combos').querySelector('.combo[data-ci="'+state.combos.indexOf(_mobj)+'"]');
-        if(_mc)_mc.scrollIntoView({behavior:'smooth',block:'nearest'});
-      }
-      return;
-    }
     var lhcalcBtn=e.target.closest('[data-lhcalc]');if(lhcalcBtn){showLHComboPop(Number(lhcalcBtn.dataset.lhcalc));return;}
     var faBtn=e.target.closest('[data-forcealloc]');if(faBtn){if(!faBtn.disabled)toggleForceAlloc(Number(faBtn.dataset.forcealloc));return;}
     var railBtn=e.target.closest('[data-railtech]');if(railBtn){applyRailTechToCombo(Number(railBtn.dataset.railtech));return;}
